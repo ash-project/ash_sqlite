@@ -5,6 +5,10 @@
 [![Coverage Status](https://coveralls.io/repos/github/ash-project/ash_sqlite/badge.svg?branch=main)](https://coveralls.io/github/ash-project/ash_sqlite?branch=main)
 [![Hex version badge](https://img.shields.io/hexpm/v/ash_sqlite.svg)](https://hex.pm/packages/ash_sqlite)
 
+## Notice: UNSTABLE
+
+This is a brand new data layer that was copied/extracted from `ash_postgres`. More than half of the tests are failing. We don't yet know which parts do/don't work.
+
 ## DSL
 
 See the DSL documentation in `AshSqlite.DataLayer` for DSL documentation
@@ -17,8 +21,7 @@ Add `ash_qlite` to your `mix.exs` file.
 {:ash_sqlite, "~> 0.1.0"}
 ```
 
-To use this data layer, you need to chage your Ecto Repo's from `use Ecto.Repo`,
-to `use Sqlite.Repo`. because AshSqlite adds functionality to Ecto Repos.
+To use this data layer, you need to chage your Ecto Repo's from `use Ecto.Repo`, to `use Sqlite.Repo`. because AshSqlite adds functionality to Ecto Repos.
 
 Then, configure each of your `Ash.Resource` resources by adding `use Ash.Resource, data_layer: AshSqlite.DataLayer` like so:
 
