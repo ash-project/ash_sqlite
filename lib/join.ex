@@ -1,6 +1,6 @@
 defmodule AshSqlite.Join do
   @moduledoc false
-  import Ecto.Query, only: [from: 2, subquery: 1]
+  import Ecto.Query, only: [from: 2]
 
   alias Ash.Query.{BooleanExpression, Not, Ref}
 
@@ -175,10 +175,7 @@ defmodule AshSqlite.Join do
       %{valid?: true} = query ->
         ash_query = query
 
-        initial_query = %{
-          AshSqlite.DataLayer.resource_to_query(resource, nil)
-          | prefix: Map.get(root_query, :prefix)
-        }
+        initial_query = AshSqlite.DataLayer.resource_to_query(resource, nil)
 
         case Ash.Query.data_layer_query(query,
                initial_query: initial_query
@@ -334,16 +331,6 @@ defmodule AshSqlite.Join do
     end
   end
 
-  def set_join_prefix(join_query, query, resource) do
-      %{
-        join_query
-        | prefix:
-            AshSqlite.DataLayer.Info.schema(resource) ||
-            AshSqlite.DataLayer.Info.repo(resource).config()[:default_prefix] ||
-              "public"
-      }
-  end
-
   defp can_inner_join?(path, expr, seen_an_or? \\ false)
 
   defp can_inner_join?(path, %{expression: expr}, seen_an_or?),
@@ -463,7 +450,7 @@ defmodule AshSqlite.Join do
          path,
          kind,
          source,
-         filter
+         _filter
        ) do
     full_path = path ++ [relationship.name]
     initial_ash_bindings = query.__ash_bindings__
@@ -471,13 +458,6 @@ defmodule AshSqlite.Join do
     binding_data = %{type: kind, path: full_path, source: source}
 
     query = AshSqlite.DataLayer.add_binding(query, binding_data)
-
-    used_calculations =
-      Ash.Filter.used_calculations(
-        filter,
-        relationship.destination,
-        full_path
-      )
 
     use_root_query_bindings? = true
 
@@ -500,7 +480,6 @@ defmodule AshSqlite.Join do
         relationship_destination =
           relationship_destination
           |> Ecto.Queryable.to_query()
-          |> set_join_prefix(query, relationship.destination)
 
         binding_kinds =
           case kind do
@@ -548,7 +527,7 @@ defmodule AshSqlite.Join do
          path,
          kind,
          source,
-         filter
+         _filter
        ) do
     join_relationship =
       Ash.Resource.Info.relationship(relationship.source, relationship.join_relationship)
@@ -569,13 +548,6 @@ defmodule AshSqlite.Join do
         source: source
       })
       |> AshSqlite.DataLayer.add_binding(binding_data)
-
-    used_calculations =
-      Ash.Filter.used_calculations(
-        filter,
-        relationship.destination,
-        full_path
-      )
 
     use_root_query_bindings? = true
 
@@ -603,13 +575,10 @@ defmodule AshSqlite.Join do
       relationship_through =
         relationship_through
         |> Ecto.Queryable.to_query()
-        |> set_join_prefix(query, relationship.through)
 
       relationship_destination =
         relationship_destination
         |> Ecto.Queryable.to_query()
-        |> set_join_prefix(query, relationship.destination)
-
       binding_kinds =
         case kind do
           :left ->
@@ -670,7 +639,7 @@ defmodule AshSqlite.Join do
          path,
          kind,
          source,
-         filter
+         _filter
        ) do
     full_path = path ++ [relationship.name]
     initial_ash_bindings = query.__ash_bindings__
@@ -678,13 +647,6 @@ defmodule AshSqlite.Join do
     binding_data = %{type: kind, path: full_path, source: source}
 
     query = AshSqlite.DataLayer.add_binding(query, binding_data)
-
-    used_calculations =
-      Ash.Filter.used_calculations(
-        filter,
-        relationship.destination,
-        full_path
-      )
 
     use_root_query_bindings? = true
 
@@ -707,7 +669,6 @@ defmodule AshSqlite.Join do
         relationship_destination =
           relationship_destination
           |> Ecto.Queryable.to_query()
-          |> set_join_prefix(query, relationship.destination)
 
         binding_kinds =
           case kind do

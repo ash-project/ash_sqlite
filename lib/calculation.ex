@@ -5,7 +5,7 @@ defmodule AshSqlite.Calculation do
 
   def add_calculations(query, [], _, _), do: {:ok, query}
 
-  def add_calculations(query, calculations, resource, source_binding) do
+  def add_calculations(query, calculations, resource, _source_binding) do
     query = AshSqlite.DataLayer.default_bindings(query, resource)
 
     query =

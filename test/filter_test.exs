@@ -741,7 +741,7 @@ defmodule AshSqlite.FilterTest do
     end
   end
 
-  describe "like and ilike" do
+  describe "like" do
     test "like builds and matches" do
       Post
       |> Ash.Changeset.new(%{title: "MaTcH"})
@@ -757,54 +757,6 @@ defmodule AshSqlite.FilterTest do
       results =
         Post
         |> Ash.Query.filter(like(title, "%atc%"))
-        |> Api.read!()
-
-      assert [] = results
-    end
-
-    test "ilike builds and matches" do
-      Post
-      |> Ash.Changeset.new(%{title: "MaTcH"})
-      |> Api.create!()
-
-      results =
-        Post
-        |> Ash.Query.filter(ilike(title, "%aTc%"))
-        |> Api.read!()
-
-      assert [%Post{title: "MaTcH"}] = results
-
-      results =
-        Post
-        |> Ash.Query.filter(ilike(title, "%atc%"))
-        |> Api.read!()
-
-      assert [%Post{title: "MaTcH"}] = results
-    end
-  end
-
-  describe "trigram_similarity" do
-    test "it works on matches" do
-      Post
-      |> Ash.Changeset.new(%{title: "match"})
-      |> Api.create!()
-
-      results =
-        Post
-        |> Ash.Query.filter(trigram_similarity(title, "match") > 0.9)
-        |> Api.read!()
-
-      assert [%Post{title: "match"}] = results
-    end
-
-    test "it works on non-matches" do
-      Post
-      |> Ash.Changeset.new(%{title: "match"})
-      |> Api.create!()
-
-      results =
-        Post
-        |> Ash.Query.filter(trigram_similarity(title, "match") < 0.1)
         |> Api.read!()
 
       assert [] = results

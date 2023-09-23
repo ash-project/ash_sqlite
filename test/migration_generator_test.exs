@@ -151,86 +151,6 @@ defmodule AshSqlite.MigrationGeneratorTest do
     end
   end
 
-  describe "creating initial snapshots for resources with a schema" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-
-      defposts do
-        sqlite do
-          migration_types(second_title: {:varchar, 16})
-          schema("example")
-        end
-
-        identities do
-          identity(:title, [:title])
-        end
-
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:title, :string)
-          attribute(:second_title, :string)
-        end
-      end
-
-      defapi([Post])
-
-      Mix.shell(Mix.Shell.Process)
-
-      {:ok, _} =
-        Ecto.Adapters.SQL.query(
-          AshSqlite.TestRepo,
-          """
-          CREATE SCHEMA IF NOT EXISTS example;
-          """
-        )
-
-      AshSqlite.MigrationGenerator.generate(Api,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
-        quiet: true,
-        format: false
-      )
-
-      :ok
-    end
-
-    test "the migration sets up resources correctly" do
-      # the snapshot exists and contains valid json
-      assert File.read!(Path.wildcard("test_snapshots_path/test_repo/posts/*.json"))
-             |> Jason.decode!(keys: :atoms!)
-
-      assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
-
-      file_contents = File.read!(file)
-
-      # the migration creates the table
-      assert file_contents =~ "create table(:posts, primary_key: false, prefix: \"example\") do"
-
-      # the migration sets up the custom_indexes
-      assert file_contents =~
-               ~S{create index(:posts, ["id"], name: "test_unique_index", unique: true, prefix: "example")}
-
-      assert file_contents =~ ~S{create index(:posts, ["id"]}
-
-      # the migration adds the id, with its default
-      assert file_contents =~
-               ~S[add :id, :uuid, null: false, default: fragment("uuid_generate_v4()"), primary_key: true]
-
-      # the migration adds other attributes
-      assert file_contents =~ ~S[add :title, :text]
-
-      # the migration adds custom attributes
-      assert file_contents =~ ~S[add :second_title, :varchar, size: 16]
-
-      # the migration creates unique_indexes based on the identities of the resource
-      assert file_contents =~
-               ~S{create unique_index(:posts, [:title], name: "posts_title_index", prefix: "example")}
-    end
-  end
-
   describe "custom_indexes with `concurrently: true`" do
     setup do
       on_exit(fn ->
@@ -272,68 +192,6 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert file =~ ~S[@disable_ddl_transaction true]
 
       assert file =~ ~S<create index(:posts, ["title"], concurrently: true)>
-    end
-  end
-
-  describe "creating follow up migrations with a schema" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-
-      defposts do
-        sqlite do
-          schema("example")
-        end
-
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:title, :string)
-        end
-      end
-
-      defapi([Post])
-
-      Mix.shell(Mix.Shell.Process)
-
-        AshSqlite.MigrationGenerator.generate(Api,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
-        quiet: true,
-        format: false
-      )
-
-      :ok
-    end
-
-    test "when renaming a field, it asks if you are renaming it, and renames it if you are" do
-      defposts do
-        sqlite do
-          schema("example")
-        end
-
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:name, :string, allow_nil?: false)
-        end
-      end
-
-      defapi([Post])
-
-      send(self(), {:mix_shell_input, :yes?, true})
-
-        AshSqlite.MigrationGenerator.generate(Api,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
-        quiet: true,
-        format: false
-      )
-
-      assert [_file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
-
-      assert File.read!(file2) =~ ~S[rename table(:posts, prefix: "example"), :title, to: :name]
     end
   end
 
@@ -539,93 +397,6 @@ defmodule AshSqlite.MigrationGeneratorTest do
                ~S[add :subject, :text, null: false]
     end
 
-    test "when multiple schemas apply to the same table, all attributes are added" do
-      defposts do
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:title, :string)
-          attribute(:foobar, :string)
-        end
-      end
-
-      defposts Post2 do
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:name, :string)
-        end
-      end
-
-      defapi([Post, Post2])
-
-        AshSqlite.MigrationGenerator.generate(Api,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
-        quiet: true,
-        format: false
-      )
-
-      assert [_file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
-
-      assert File.read!(file2) =~
-               ~S[add :foobar, :text]
-
-      assert File.read!(file2) =~
-               ~S[add :foobar, :text]
-    end
-
-    test "when multiple schemas apply to the same table, all identities are added" do
-      defposts do
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:title, :string)
-        end
-
-        identities do
-          identity(:unique_title, [:title])
-        end
-      end
-
-      defposts Post2 do
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:name, :string)
-        end
-
-        identities do
-          identity(:unique_name, [:name])
-        end
-      end
-
-      defapi([Post, Post2])
-
-        AshSqlite.MigrationGenerator.generate(Api,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
-        quiet: true,
-        format: false
-      )
-
-      assert [file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
-
-      file1_content = File.read!(file1)
-
-      assert file1_content =~
-               "create unique_index(:posts, [:title], name: \"posts_title_index\")"
-
-      file2_content = File.read!(file2)
-
-      assert file2_content =~
-               "drop_if_exists unique_index(:posts, [:title], name: \"posts_title_index\")"
-
-      assert file2_content =~
-               "create unique_index(:posts, [:name], name: \"posts_unique_name_index\")"
-
-      assert file2_content =~
-               "create unique_index(:posts, [:title], name: \"posts_unique_title_index\")"
-    end
-
     test "when an attribute exists only on some of the resources that use the same table, it isn't marked as null: false" do
       defposts do
         attributes do
@@ -767,7 +538,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
 
       assert File.read!(file) =~
-               ~S[references(:posts, column: :id, name: "posts_post_id_fkey", type: :uuid, prefix: "public")]
+               ~S[references(:posts, column: :id, name: "posts_post_id_fkey", type: :uuid)]
     end
 
     test "references are inferred automatically if the attribute has a different type" do
@@ -802,7 +573,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
 
       assert File.read!(file) =~
-               ~S[references(:posts, column: :id, name: "posts_post_id_fkey", type: :text, prefix: "public")]
+               ~S[references(:posts, column: :id, name: "posts_post_id_fkey", type: :text)]
     end
 
     test "when modified, the foreign key is dropped before modification" do
@@ -866,7 +637,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
                |> File.read!()
 
       assert file =~
-               ~S[references(:posts, column: :id, name: "special_post_fkey", type: :uuid, prefix: "public", on_delete: :delete_all, on_update: :update_all)]
+               ~S[references(:posts, column: :id, name: "special_post_fkey", type: :uuid, on_delete: :delete_all, on_update: :update_all)]
 
       assert file =~ ~S[drop constraint(:posts, "posts_post_id_fkey")]
 
@@ -1078,7 +849,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
 
       assert File.read!(file) =~
-               ~S[references(:post_comments, column: :id, name: "posts_best_comment_id_fkey", type: :uuid, prefix: "public")]
+               ~S[references(:post_comments, column: :id, name: "posts_best_comment_id_fkey", type: :uuid)]
     end
   end
 
@@ -1277,7 +1048,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert after_index_drop =~ ~S[modify :id, :uuid, null: true, primary_key: false]
 
       assert after_index_drop =~
-               ~S[modify :post_id, references(:posts, column: :id, name: "comments_post_id_fkey", type: :uuid, prefix: "public")]
+               ~S[modify :post_id, references(:posts, column: :id, name: "comments_post_id_fkey", type: :uuid)]
     end
   end
 end

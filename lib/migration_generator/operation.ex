@@ -20,9 +20,6 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     def maybe_add_null(false), do: "null: false"
     def maybe_add_null(_), do: nil
 
-    def maybe_add_prefix(nil), do: nil
-    def maybe_add_prefix(prefix), do: "prefix: #{prefix}"
-
     def in_quotes(nil), do: nil
     def in_quotes(value), do: "\"#{value}\""
 
@@ -70,12 +67,12 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
   defmodule CreateTable do
     @moduledoc false
-    defstruct [:table, :schema, :multitenancy, :old_multitenancy]
+    defstruct [:table, :multitenancy, :old_multitenancy]
   end
 
   defmodule AddAttribute do
     @moduledoc false
-    defstruct [:attribute, :table, :schema, :multitenancy, :old_multitenancy]
+    defstruct [:attribute, :table,  :multitenancy, :old_multitenancy]
 
     import Helper
 
@@ -87,7 +84,6 @@ defmodule AshSqlite.MigrationGenerator.Operation do
                 %{
                   table: table,
                   destination_attribute: reference_attribute,
-                  schema: destination_schema,
                   multitenancy: %{strategy: :attribute, attribute: destination_attribute}
                 } = reference
             } = attribute
@@ -110,7 +106,6 @@ defmodule AshSqlite.MigrationGenerator.Operation do
           with_match,
           "name: #{inspect(reference.name)}",
           "type: #{inspect(reference_type(attribute, reference))}",
-          option("prefix", destination_schema),
           on_delete(reference),
           on_update(reference),
           size
@@ -129,7 +124,6 @@ defmodule AshSqlite.MigrationGenerator.Operation do
               references:
                 %{
                   table: table,
-                  schema: destination_schema,
                   destination_attribute: destination_attribute
                 } = reference
             } = attribute
@@ -146,7 +140,6 @@ defmodule AshSqlite.MigrationGenerator.Operation do
           "column: #{inspect(destination_attribute)}",
           "name: #{inspect(reference.name)}",
           "type: #{inspect(reference_type(attribute, reference))}",
-          option("prefix", destination_schema),
           size,
           on_delete(reference),
           on_update(reference)
@@ -214,7 +207,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
   defmodule AlterDeferrability do
     @moduledoc false
-    defstruct [:table, :schema, :references, :direction, no_phase: true]
+    defstruct [:table, :references, :direction, no_phase: true]
 
     def up(%{direction: :up, table: table, references: %{name: name, deferrable: true}}) do
       "execute(\"ALTER TABLE #{table} alter CONSTRAINT #{name} DEFERRABLE INITIALLY IMMEDIATE\");"
@@ -240,7 +233,6 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       :old_attribute,
       :new_attribute,
       :table,
-      :schema,
       :multitenancy,
       :old_multitenancy
     ]
@@ -280,13 +272,12 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     def up(%{
           multitenancy: multitenancy,
           old_attribute: old_attribute,
-          new_attribute: attribute,
-          schema: schema
-        }) do
+          new_attribute: attribute
+    }) do
       type_or_reference =
         if AshSqlite.MigrationGenerator.has_reference?(multitenancy, attribute) and
              Map.get(old_attribute, :references) != Map.get(attribute, :references) do
-          reference(multitenancy, attribute, schema)
+          reference(multitenancy, attribute)
         else
           inspect(attribute.type)
         end
@@ -301,17 +292,10 @@ defmodule AshSqlite.MigrationGenerator.Operation do
                %{
                  multitenancy: %{strategy: :attribute, attribute: destination_attribute},
                  table: table,
-                 schema: destination_schema,
                  destination_attribute: reference_attribute
                } = reference
-           } = attribute,
-           schema
-         ) do
-      destination_schema =
-        if schema != destination_schema do
-          destination_schema
-        end
-
+           } = attribute
+    ) do
       with_match =
         if destination_attribute != reference_attribute do
           "with: [#{as_atom(source_attribute)}: :#{as_atom(destination_attribute)}], match: :full"
@@ -328,7 +312,6 @@ defmodule AshSqlite.MigrationGenerator.Operation do
         "name: #{inspect(reference.name)}",
         "type: #{inspect(reference_type(attribute, reference))}",
         size,
-        option("prefix", destination_schema),
         on_delete(reference),
         on_update(reference),
         ")"
@@ -341,17 +324,10 @@ defmodule AshSqlite.MigrationGenerator.Operation do
              references:
                %{
                  table: table,
-                 destination_attribute: destination_attribute,
-                 schema: destination_schema
+                 destination_attribute: destination_attribute
                } = reference
-           } = attribute,
-           schema
-         ) do
-      destination_schema =
-        if schema != destination_schema do
-          destination_schema
-        end
-
+           } = attribute
+    ) do
       size =
         if attribute[:size] do
           "size: #{attribute[:size]}"
@@ -362,7 +338,6 @@ defmodule AshSqlite.MigrationGenerator.Operation do
         "name: #{inspect(reference.name)}",
         "type: #{inspect(reference_type(attribute, reference))}",
         size,
-        option("prefix", destination_schema),
         on_delete(reference),
         on_update(reference),
         ")"
@@ -385,12 +360,12 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     # We only run this migration in one direction, based on the input
     # This is because the creation of a foreign key is handled by `references/3`
     # We only need to drop it before altering an attribute with `references/3`
-    defstruct [:attribute, :schema, :table, :multitenancy, :direction, no_phase: true]
+    defstruct [:attribute,  :table, :multitenancy, :direction, no_phase: true]
 
     import Helper
 
-    def up(%{table: table, schema: schema, attribute: %{references: reference}, direction: :up}) do
-      "drop constraint(:#{as_atom(table)}, #{join([inspect(reference.name), option("prefix", schema)])})"
+    def up(%{table: table, attribute: %{references: reference}, direction: :up}) do
+      "drop constraint(:#{as_atom(table)}, #{join([inspect(reference.name)])})"
     end
 
     def up(_) do
@@ -399,11 +374,10 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
     def down(%{
           table: table,
-          schema: schema,
           attribute: %{references: reference},
           direction: :down
         }) do
-      "drop constraint(:#{as_atom(table)}, #{join([inspect(reference.name), option("prefix", schema)])})"
+      "drop constraint(:#{as_atom(table)}, #{join([inspect(reference.name)])})"
     end
 
     def down(_) do
@@ -417,7 +391,6 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       :old_attribute,
       :new_attribute,
       :table,
-      :schema,
       :multitenancy,
       :old_multitenancy,
       no_phase: true
@@ -428,10 +401,9 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     def up(%{
           old_attribute: old_attribute,
           new_attribute: new_attribute,
-          schema: schema,
           table: table
         }) do
-      table_statement = join([":#{as_atom(table)}", option("prefix", schema)])
+      table_statement = join([":#{as_atom(table)}"])
 
       "rename table(#{table_statement}), #{inspect(old_attribute.source)}, to: #{inspect(new_attribute.source)}"
     end
@@ -448,7 +420,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
   defmodule RemoveAttribute do
     @moduledoc false
-    defstruct [:attribute, :schema, :table, :multitenancy, :old_multitenancy, commented?: true]
+    defstruct [:attribute,  :table, :multitenancy, :old_multitenancy, commented?: true]
 
     def up(%{attribute: attribute, commented?: true}) do
       """
@@ -482,12 +454,11 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       prefix <> "\n" <> contents
     end
 
-    def down(%{attribute: attribute, multitenancy: multitenancy, table: table, schema: schema}) do
+    def down(%{attribute: attribute, multitenancy: multitenancy, table: table}) do
       AshSqlite.MigrationGenerator.Operation.AddAttribute.up(
         %AshSqlite.MigrationGenerator.Operation.AddAttribute{
           attribute: attribute,
           table: table,
-          schema: schema,
           multitenancy: multitenancy
         }
       )
@@ -496,14 +467,13 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
   defmodule AddUniqueIndex do
     @moduledoc false
-    defstruct [:identity, :table, :schema, :multitenancy, :old_multitenancy, no_phase: true]
+    defstruct [:identity, :table, :multitenancy, :old_multitenancy, no_phase: true]
 
     import Helper
 
     def up(%{
           identity: %{name: name, keys: keys, base_filter: base_filter, index_name: index_name},
           table: table,
-          schema: schema,
           multitenancy: multitenancy
         }) do
       keys =
@@ -518,16 +488,15 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       index_name = index_name || "#{table}_#{name}_index"
 
       if base_filter do
-        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], where: \"#{base_filter}\", #{join(["name: \"#{index_name}\"", option("prefix", schema)])})"
+        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], where: \"#{base_filter}\", #{join(["name: \"#{index_name}\""])})"
       else
-        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\"", option("prefix", schema)])})"
+        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\""])})"
       end
     end
 
     def down(%{
           identity: %{name: name, keys: keys, index_name: index_name},
           table: table,
-          schema: schema,
           multitenancy: multitenancy
         }) do
       keys =
@@ -541,7 +510,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
       index_name = index_name || "#{table}_#{name}_index"
 
-      "drop_if_exists unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\"", option("prefix", schema)])})"
+      "drop_if_exists unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\""])})"
     end
   end
 
@@ -589,13 +558,12 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
   defmodule AddCustomIndex do
     @moduledoc false
-    defstruct [:table, :schema, :index, :base_filter, :multitenancy, no_phase: true]
+    defstruct [:table, :index, :base_filter, :multitenancy, no_phase: true]
     import Helper
 
     def up(%{
           index: index,
           table: table,
-          schema: schema,
           base_filter: base_filter,
           multitenancy: multitenancy
         }) do
@@ -621,10 +589,8 @@ defmodule AshSqlite.MigrationGenerator.Operation do
           option(:unique, index.unique),
           option(:concurrently, index.concurrently),
           option(:using, index.using),
-          option(:prefix, index.prefix),
           option(:where, index.where),
-          option(:include, index.include),
-          option(:prefix, schema)
+          option(:include, index.include)
         ])
 
       if opts == "",
@@ -633,7 +599,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
           "create index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{opts})"
     end
 
-    def down(%{schema: schema, index: index, table: table, multitenancy: multitenancy}) do
+    def down(%{index: index, table: table, multitenancy: multitenancy}) do
       index_name = AshSqlite.CustomIndex.name(table, index)
 
       keys =
@@ -645,20 +611,16 @@ defmodule AshSqlite.MigrationGenerator.Operation do
             Enum.map(index.fields, &to_string/1)
         end
 
-      "drop_if_exists index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\"", option(:prefix, schema)])})"
+      "drop_if_exists index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\""])})"
     end
   end
 
   defmodule RemovePrimaryKey do
     @moduledoc false
-    defstruct [:schema, :table, no_phase: true]
+    defstruct [:table, no_phase: true]
 
-    def up(%{schema: schema, table: table}) do
-      if schema do
-        "drop constraint(#{inspect(table)}, \"#{table}_pkey\", prefix: \"#{schema}\")"
-      else
-        "drop constraint(#{inspect(table)}, \"#{table}_pkey\")"
-      end
+    def up(%{ table: table}) do
+      "drop constraint(#{inspect(table)}, \"#{table}_pkey\")"
     end
 
     def down(_) do
@@ -668,27 +630,23 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
   defmodule RemovePrimaryKeyDown do
     @moduledoc false
-    defstruct [:schema, :table, no_phase: true]
+    defstruct [:table, no_phase: true]
 
     def up(_) do
       ""
     end
 
-    def down(%{schema: schema, table: table}) do
-      if schema do
-        "drop constraint(#{inspect(table)}, \"#{table}_pkey\", prefix: \"#{schema}\")"
-      else
+    def down(%{table: table}) do
         "drop constraint(#{inspect(table)}, \"#{table}_pkey\")"
-      end
     end
   end
 
   defmodule RemoveCustomIndex do
     @moduledoc false
-    defstruct [:schema, :table, :index, :base_filter, :multitenancy, no_phase: true]
+    defstruct [:table, :index, :base_filter, :multitenancy, no_phase: true]
     import Helper
 
-    def up(%{index: index, table: table, multitenancy: multitenancy, schema: schema}) do
+    def up(%{index: index, table: table, multitenancy: multitenancy}) do
       index_name = AshSqlite.CustomIndex.name(table, index)
 
       keys =
@@ -700,13 +658,12 @@ defmodule AshSqlite.MigrationGenerator.Operation do
             Enum.map(index.fields, &to_string/1)
         end
 
-      "drop_if_exists index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\"", option(:prefix, schema)])})"
+      "drop_if_exists index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\""])})"
     end
 
     def down(%{
           index: index,
           table: table,
-          schema: schema,
           base_filter: base_filter,
           multitenancy: multitenancy
         }) do
@@ -732,10 +689,8 @@ defmodule AshSqlite.MigrationGenerator.Operation do
           option(:unique, index.unique),
           option(:concurrently, index.concurrently),
           option(:using, index.using),
-          option(:prefix, index.prefix),
           option(:where, index.where),
-          option(:include, index.include),
-          option(:prefix, schema)
+          option(:include, index.include)
         ])
 
       if opts == "" do
@@ -752,55 +707,43 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       :new_identity,
       :old_identity,
       :table,
-      :schema,
       :multitenancy,
       :old_multitenancy,
       no_phase: true
     ]
 
-    defp prefix_name(name, prefix) do
-      if prefix do
-        "#{prefix}.#{name}"
-      else
-        name
-      end
-    end
-
     def up(%{
           old_identity: %{index_name: old_index_name, name: old_name},
           new_identity: %{index_name: new_index_name},
-          schema: schema,
           table: table
         }) do
       old_index_name = old_index_name || "#{table}_#{old_name}_index"
 
-      "execute(\"ALTER INDEX #{prefix_name(old_index_name, schema)} " <>
-        "RENAME TO #{prefix_name(new_index_name, schema)}\")\n"
+      "execute(\"ALTER INDEX #{old_index_name} " <>
+        "RENAME TO #{new_index_name}\")\n"
     end
 
     def down(%{
           old_identity: %{index_name: old_index_name, name: old_name},
           new_identity: %{index_name: new_index_name},
-          schema: schema,
           table: table
         }) do
       old_index_name = old_index_name || "#{table}_#{old_name}_index"
 
-      "execute(\"ALTER INDEX #{prefix_name(new_index_name, schema)} " <>
-        "RENAME TO #{prefix_name(old_index_name, schema)}\")\n"
+      "execute(\"ALTER INDEX #{new_index_name} " <>
+        "RENAME TO #{old_index_name}\")\n"
     end
   end
 
   defmodule RemoveUniqueIndex do
     @moduledoc false
-    defstruct [:identity, :schema, :table, :multitenancy, :old_multitenancy, no_phase: true]
+    defstruct [:identity, :table, :multitenancy, :old_multitenancy, no_phase: true]
 
     import Helper
 
     def up(%{
           identity: %{name: name, keys: keys, index_name: index_name},
           table: table,
-          schema: schema,
           old_multitenancy: multitenancy
         }) do
       keys =
@@ -814,13 +757,12 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
       index_name = index_name || "#{table}_#{name}_index"
 
-      "drop_if_exists unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\"", option(:prefix, schema)])})"
+      "drop_if_exists unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\""])})"
     end
 
     def down(%{
           identity: %{name: name, keys: keys, base_filter: base_filter, index_name: index_name},
           table: table,
-          schema: schema,
           multitenancy: multitenancy
         }) do
       keys =
@@ -835,21 +777,20 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       index_name = index_name || "#{table}_#{name}_index"
 
       if base_filter do
-        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], where: \"#{base_filter}\", #{join(["name: \"#{index_name}\"", option(:prefix, schema)])})"
+        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], where: \"#{base_filter}\", #{join(["name: \"#{index_name}\""])})"
       else
-        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\"", option(:prefix, schema)])})"
+        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\""])})"
       end
     end
   end
 
   defmodule AddCheckConstraint do
     @moduledoc false
-    defstruct [:table, :schema, :constraint, :multitenancy, :old_multitenancy, no_phase: true]
+    defstruct [:table, :constraint, :multitenancy, :old_multitenancy, no_phase: true]
 
     import Helper
 
     def up(%{
-          schema: schema,
           constraint: %{
             name: name,
             check: check,
@@ -858,29 +799,28 @@ defmodule AshSqlite.MigrationGenerator.Operation do
           table: table
         }) do
       if base_filter do
-        "create constraint(:#{as_atom(table)}, :#{as_atom(name)}, #{join(["check: \"#{base_filter} AND #{check}\")", option(:prefix, schema)])}"
+        "create constraint(:#{as_atom(table)}, :#{as_atom(name)}, #{join(["check: \"#{base_filter} AND #{check}\")"])}"
       else
-        "create constraint(:#{as_atom(table)}, :#{as_atom(name)}, #{join(["check: \"#{check}\")", option(:prefix, schema)])}"
+        "create constraint(:#{as_atom(table)}, :#{as_atom(name)}, #{join(["check: \"#{check}\")"])}"
       end
     end
 
     def down(%{
           constraint: %{name: name},
-          schema: schema,
           table: table
         }) do
-      "drop_if_exists constraint(:#{as_atom(table)}, #{join([":#{as_atom(name)}", option(:prefix, schema)])})"
+      "drop_if_exists constraint(:#{as_atom(table)}, #{join([":#{as_atom(name)}"])})"
     end
   end
 
   defmodule RemoveCheckConstraint do
     @moduledoc false
-    defstruct [:table, :schema, :constraint, :multitenancy, :old_multitenancy, no_phase: true]
+    defstruct [:table,  :constraint, :multitenancy, :old_multitenancy, no_phase: true]
 
     import Helper
 
-    def up(%{constraint: %{name: name}, schema: schema, table: table}) do
-      "drop_if_exists constraint(:#{as_atom(table)}, #{join([":#{as_atom(name)}", option(:prefix, schema)])})"
+    def up(%{constraint: %{name: name}, table: table}) do
+      "drop_if_exists constraint(:#{as_atom(table)}, #{join([":#{as_atom(name)}"])})"
     end
 
     def down(%{
@@ -889,13 +829,12 @@ defmodule AshSqlite.MigrationGenerator.Operation do
             check: check,
             base_filter: base_filter
           },
-          schema: schema,
           table: table
         }) do
       if base_filter do
-        "create constraint(:#{as_atom(table)}, :#{as_atom(name)}, #{join(["check: \"#{base_filter} AND #{check}\")", option(:prefix, schema)])}"
+        "create constraint(:#{as_atom(table)}, :#{as_atom(name)}, #{join(["check: \"#{base_filter} AND #{check}\")"])}"
       else
-        "create constraint(:#{as_atom(table)}, :#{as_atom(name)}, #{join(["check: \"#{check}\")", option(:prefix, schema)])}"
+        "create constraint(:#{as_atom(table)}, :#{as_atom(name)}, #{join(["check: \"#{check}\")"])}"
       end
     end
   end

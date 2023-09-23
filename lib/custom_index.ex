@@ -7,7 +7,6 @@ defmodule AshSqlite.CustomIndex do
     :unique,
     :concurrently,
     :using,
-    :prefix,
     :where,
     :include,
     :message
@@ -39,10 +38,6 @@ defmodule AshSqlite.CustomIndex do
     using: [
       type: :string,
       doc: "configures the index type."
-    ],
-    prefix: [
-      type: :string,
-      doc: "specify an optional prefix for the index."
     ],
     where: [
       type: :string,

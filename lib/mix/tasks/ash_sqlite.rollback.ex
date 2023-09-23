@@ -35,7 +35,6 @@ defmodule Mix.Tasks.AshSqlite.Rollback do
     * `--step` / `-n` - revert n number of applied migrations
     * `--to` / `-v` - revert all migrations down to and including version
     * `--quiet` - do not log migration commands
-    * `--prefix` - the prefix to run migrations on
     * `--pool-size` - the pool size if the repository is started only for the task (defaults to 1)
     * `--log-sql` - log the raw sql migrations are running
   """
@@ -50,7 +49,6 @@ defmodule Mix.Tasks.AshSqlite.Rollback do
           to: :integer,
           start: :boolean,
           quiet: :boolean,
-          prefix: :string,
           pool_size: :integer,
           log_sql: :boolean
         ],

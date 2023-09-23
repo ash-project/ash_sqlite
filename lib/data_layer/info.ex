@@ -13,10 +13,6 @@ defmodule AshSqlite.DataLayer.Info do
     Extension.get_opt(resource, [:sqlite], :table, nil, true)
   end
 
-  @doc "The configured schema for a resource"
-  def schema(resource) do
-    Extension.get_opt(resource, [:sqlite], :schema, nil, true)
-  end
 
   @doc "The configured references for a resource"
   def references(resource) do

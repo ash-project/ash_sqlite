@@ -15,7 +15,6 @@ defmodule Mix.Tasks.AshSqlite.Migrate do
     step: :integer,
     to: :integer,
     quiet: :boolean,
-    prefix: :string,
     pool_size: :integer,
     log_sql: :boolean,
     strict_version_order: :boolean,

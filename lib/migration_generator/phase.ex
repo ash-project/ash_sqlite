@@ -3,30 +3,20 @@ defmodule AshSqlite.MigrationGenerator.Phase do
 
   defmodule Create do
     @moduledoc false
-    defstruct [:table, :schema, :multitenancy, operations: [], commented?: false]
+    defstruct [:table, :multitenancy, operations: [], commented?: false]
 
     import AshSqlite.MigrationGenerator.Operation.Helper, only: [as_atom: 1]
 
-    def up(%{schema: schema, table: table, operations: operations, multitenancy: multitenancy}) do
-        opts =
-          if schema do
-            ", prefix: \"#{schema}\""
-          else
-            ""
-          end
+    def up(%{table: table, operations: operations}) do
+        opts = ""
 
         "create table(:#{as_atom(table)}, primary_key: false#{opts}) do\n" <>
           Enum.map_join(operations, "\n", fn operation -> operation.__struct__.up(operation) end) <>
           "\nend"
     end
 
-    def down(%{schema: schema, table: table, multitenancy: multitenancy}) do
-        opts =
-          if schema do
-            ", prefix: \"#{schema}\""
-          else
-            ""
-          end
+    def down(%{ table: table}) do
+        opts = ""
 
         "drop table(:#{as_atom(table)}#{opts})"
     end
@@ -34,11 +24,11 @@ defmodule AshSqlite.MigrationGenerator.Phase do
 
   defmodule Alter do
     @moduledoc false
-    defstruct [:schema, :table, :multitenancy, operations: [], commented?: false]
+    defstruct [:table, :multitenancy, operations: [], commented?: false]
 
     import AshSqlite.MigrationGenerator.Operation.Helper, only: [as_atom: 1]
 
-    def up(%{table: table, schema: schema, operations: operations, multitenancy: multitenancy}) do
+    def up(%{table: table, operations: operations}) do
       body =
         operations
         |> Enum.map_join("\n", fn operation -> operation.__struct__.up(operation) end)
@@ -47,12 +37,7 @@ defmodule AshSqlite.MigrationGenerator.Phase do
       if body == "" do
         ""
       else
-          opts =
-            if schema do
-              ", prefix: \"#{schema}\""
-            else
-              ""
-            end
+          opts = ""
 
           "alter table(:#{as_atom(table)}#{opts}) do\n" <>
             body <>
@@ -60,7 +45,7 @@ defmodule AshSqlite.MigrationGenerator.Phase do
       end
     end
 
-    def down(%{table: table, schema: schema, operations: operations, multitenancy: multitenancy}) do
+    def down(%{table: table, operations: operations}) do
       body =
         operations
         |> Enum.reverse()
@@ -70,12 +55,7 @@ defmodule AshSqlite.MigrationGenerator.Phase do
       if body == "" do
         ""
       else
-        opts =
-          if schema do
-            ", prefix: \"#{schema}\""
-          else
-            ""
-          end
+        opts = ""
 
         "alter table(:#{as_atom(table)}#{opts}) do\n" <>
           body <>

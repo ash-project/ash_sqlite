@@ -56,19 +56,6 @@ defmodule AshSqlite.Expr do
 
   defp do_dynamic_expr(
          query,
-         %TrigramSimilarity{arguments: [arg1, arg2], embedded?: pred_embedded?},
-         bindings,
-         embedded?,
-         _type
-       ) do
-    arg1 = do_dynamic_expr(query, arg1, bindings, pred_embedded? || embedded?, :string)
-    arg2 = do_dynamic_expr(query, arg2, bindings, pred_embedded? || embedded?, :string)
-
-    Ecto.Query.dynamic(fragment("similarity(?, ?)", ^arg1, ^arg2))
-  end
-
-  defp do_dynamic_expr(
-         query,
          %Like{arguments: [arg1, arg2], embedded?: pred_embedded?},
          bindings,
          embedded?,
@@ -956,13 +943,6 @@ defmodule AshSqlite.Expr do
         [first_relationship.name]
       )
 
-    used_calculations =
-      Ash.Filter.used_calculations(
-        filter,
-        first_relationship.destination,
-        []
-      )
-
     {:ok, filtered} =
       source
       |> set_parent_path(query)
@@ -1251,14 +1231,6 @@ defmodule AshSqlite.Expr do
   @doc false
   def validate_type!(_query, _type, _context) do
     :ok
-  end
-
-  defp maybe_type(dynamic, nil, _query), do: dynamic
-
-  defp maybe_type(dynamic, type, query) do
-    validate_type!(query, type, type)
-
-    Ecto.Query.dynamic(type(^dynamic, ^type))
   end
 
   defp maybe_sanitize_list(query, value, bindings, embedded?, type) do

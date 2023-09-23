@@ -5,7 +5,6 @@ defmodule AshSqlite.Test.Profile do
 
   sqlite do
     table("profile")
-    schema("profiles")
     repo(AshSqlite.TestRepo)
   end
 

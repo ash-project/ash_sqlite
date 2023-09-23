@@ -536,7 +536,7 @@ defmodule AshSqlite.MigrationGenerator do
     grouped =
       snapshots
       |> Enum.group_by(fn snapshot ->
-        {snapshot.table, snapshot.schema}
+        snapshot.table
       end)
 
     old_snapshots =
@@ -679,8 +679,7 @@ defmodule AshSqlite.MigrationGenerator do
           on_delete: merge_uniq!(references, table, :on_delete, name),
           on_update: merge_uniq!(references, table, :on_update, name),
           name: merge_uniq!(references, table, :name, name),
-          table: merge_uniq!(references, table, :table, name),
-          schema: merge_uniq!(references, table, :schema, name)
+          table: merge_uniq!(references, table, :table, name)
         }
     end
   end
@@ -1049,7 +1048,6 @@ defmodule AshSqlite.MigrationGenerator do
              attribute: %{
                source: name
              },
-             schema: schema,
              table: table
            } = add
            | rest
@@ -1062,7 +1060,7 @@ defmodule AshSqlite.MigrationGenerator do
         false
 
       op ->
-        op.table == table && op.schema == schema
+        op.table == table
     end)
     |> Enum.with_index()
     |> Enum.find(fn
@@ -1101,45 +1099,45 @@ defmodule AshSqlite.MigrationGenerator do
 
   defp group_into_phases(
          [
-           %Operation.CreateTable{table: table, schema: schema, multitenancy: multitenancy} | rest
+           %Operation.CreateTable{table: table, multitenancy: multitenancy} | rest
          ],
          nil,
          acc
        ) do
     group_into_phases(
       rest,
-      %Phase.Create{table: table, schema: schema, multitenancy: multitenancy},
+      %Phase.Create{table: table, multitenancy: multitenancy},
       acc
     )
   end
 
   defp group_into_phases(
-         [%Operation.AddAttribute{table: table, schema: schema} = op | rest],
-         %{table: table, schema: schema} = phase,
+         [%Operation.AddAttribute{table: table} = op | rest],
+         %{table: table} = phase,
          acc
        ) do
     group_into_phases(rest, %{phase | operations: [op | phase.operations]}, acc)
   end
 
   defp group_into_phases(
-         [%Operation.AlterAttribute{table: table, schema: schema} = op | rest],
-         %Phase.Alter{table: table, schema: schema} = phase,
+         [%Operation.AlterAttribute{table: table} = op | rest],
+         %Phase.Alter{table: table} = phase,
          acc
        ) do
     group_into_phases(rest, %{phase | operations: [op | phase.operations]}, acc)
   end
 
   defp group_into_phases(
-         [%Operation.RenameAttribute{table: table, schema: schema} = op | rest],
-         %Phase.Alter{table: table, schema: schema} = phase,
+         [%Operation.RenameAttribute{table: table} = op | rest],
+         %Phase.Alter{table: table} = phase,
          acc
        ) do
     group_into_phases(rest, %{phase | operations: [op | phase.operations]}, acc)
   end
 
   defp group_into_phases(
-         [%Operation.RemoveAttribute{table: table, schema: schema} = op | rest],
-         %{table: table, schema: schema} = phase,
+         [%Operation.RemoveAttribute{table: table} = op | rest],
+         %{table: table} = phase,
          acc
        ) do
     group_into_phases(rest, %{phase | operations: [op | phase.operations]}, acc)
@@ -1153,8 +1151,7 @@ defmodule AshSqlite.MigrationGenerator do
     phase = %Phase.Alter{
       operations: [operation],
       multitenancy: operation.multitenancy,
-      table: operation.table,
-      schema: operation.schema
+      table: operation.table
     }
 
     group_into_phases(rest, phase, acc)
@@ -1220,27 +1217,25 @@ defmodule AshSqlite.MigrationGenerator do
        do: true
 
   defp after?(
-         %Operation.AddAttribute{attribute: %{order: l}, table: table, schema: schema},
-         %Operation.AddAttribute{attribute: %{order: r}, table: table, schema: schema}
+         %Operation.AddAttribute{attribute: %{order: l}, table: table},
+         %Operation.AddAttribute{attribute: %{order: r}, table: table}
        ),
        do: l > r
 
   defp after?(
          %Operation.RenameUniqueIndex{
-           table: table,
-           schema: schema
+           table: table
          },
-         %{table: table, schema: schema}
+         %{table: table}
        ) do
     true
   end
 
   defp after?(
          %Operation.AddUniqueIndex{
-           table: table,
-           schema: schema
+           table: table
          },
-         %{table: table, schema: schema}
+         %{table: table}
        ) do
     true
   end
@@ -1249,10 +1244,9 @@ defmodule AshSqlite.MigrationGenerator do
          %Operation.AddCheckConstraint{
            constraint: %{attribute: attribute_or_attributes},
            table: table,
-           multitenancy: multitenancy,
-           schema: schema
+           multitenancy: multitenancy
          },
-         %Operation.AddAttribute{table: table, attribute: %{source: source}, schema: schema}
+         %Operation.AddAttribute{table: table, attribute: %{source: source}}
        ) do
     source in List.wrap(attribute_or_attributes) ||
       (multitenancy.attribute && multitenancy.attribute in List.wrap(attribute_or_attributes))
@@ -1260,10 +1254,9 @@ defmodule AshSqlite.MigrationGenerator do
 
   defp after?(
          %Operation.AddCustomIndex{
-           table: table,
-           schema: schema
+           table: table
          },
-         %Operation.AddAttribute{table: table, schema: schema}
+         %Operation.AddAttribute{table: table}
        ) do
     true
   end
@@ -1271,14 +1264,12 @@ defmodule AshSqlite.MigrationGenerator do
   defp after?(
          %Operation.AddCustomIndex{
            table: table,
-           schema: schema,
            index: %{
              concurrently: true
            }
          },
          %Operation.AddCustomIndex{
            table: table,
-           schema: schema,
            index: %{
              concurrently: false
            }
@@ -1288,10 +1279,9 @@ defmodule AshSqlite.MigrationGenerator do
   end
 
   defp after?(
-         %Operation.AddCheckConstraint{table: table, schema: schema, constraint: %{name: name}},
+         %Operation.AddCheckConstraint{table: table, constraint: %{name: name}},
          %Operation.RemoveCheckConstraint{
            table: table,
-           schema: schema,
            constraint: %{
              name: name
            }
@@ -1302,22 +1292,20 @@ defmodule AshSqlite.MigrationGenerator do
   defp after?(
          %Operation.RemoveCheckConstraint{
            table: table,
-           schema: schema,
            constraint: %{
              name: name
            }
          },
-         %Operation.AddCheckConstraint{table: table, schema: schema, constraint: %{name: name}}
+         %Operation.AddCheckConstraint{table: table, constraint: %{name: name}}
        ),
        do: false
 
   defp after?(
          %Operation.AddCheckConstraint{
            constraint: %{attribute: attribute_or_attributes},
-           table: table,
-           schema: schema
+           table: table
          },
-         %Operation.AlterAttribute{table: table, new_attribute: %{source: source}, schema: schema}
+         %Operation.AlterAttribute{table: table, new_attribute: %{source: source}}
        ) do
     source in List.wrap(attribute_or_attributes)
   end
@@ -1325,28 +1313,26 @@ defmodule AshSqlite.MigrationGenerator do
   defp after?(
          %Operation.AddCheckConstraint{
            constraint: %{attribute: attribute_or_attributes},
-           table: table,
-           schema: schema
+           table: table
          },
          %Operation.RenameAttribute{
            table: table,
-           new_attribute: %{source: source},
-           schema: schema
+           new_attribute: %{source: source}
          }
        ) do
     source in List.wrap(attribute_or_attributes)
   end
 
   defp after?(
-         %Operation.RemoveUniqueIndex{table: table, schema: schema},
-         %Operation.AddUniqueIndex{table: table, schema: schema}
+         %Operation.RemoveUniqueIndex{table: table},
+         %Operation.AddUniqueIndex{table: table}
        ) do
     false
   end
 
   defp after?(
-         %Operation.RemoveUniqueIndex{table: table, schema: schema},
-         %{table: table, schema: schema}
+         %Operation.RemoveUniqueIndex{table: table},
+         %{table: table}
        ) do
     true
   end
@@ -1354,10 +1340,9 @@ defmodule AshSqlite.MigrationGenerator do
   defp after?(
          %Operation.RemoveCheckConstraint{
            constraint: %{attribute: attributes},
-           table: table,
-           schema: schema
+           table: table
          },
-         %Operation.RemoveAttribute{table: table, attribute: %{source: source}, schema: schema}
+         %Operation.RemoveAttribute{table: table, attribute: %{source: source}}
        ) do
     source in List.wrap(attributes)
   end
@@ -1365,30 +1350,26 @@ defmodule AshSqlite.MigrationGenerator do
   defp after?(
          %Operation.RemoveCheckConstraint{
            constraint: %{attribute: attributes},
-           table: table,
-           schema: schema
+           table: table
          },
          %Operation.RenameAttribute{
            table: table,
-           old_attribute: %{source: source},
-           schema: schema
+           old_attribute: %{source: source}
          }
        ) do
     source in List.wrap(attributes)
   end
 
-  defp after?(%Operation.AlterAttribute{table: table, schema: schema}, %Operation.DropForeignKey{
+  defp after?(%Operation.AlterAttribute{table: table}, %Operation.DropForeignKey{
          table: table,
-         schema: schema,
          direction: :up
        }),
        do: true
 
   defp after?(
-         %Operation.AlterAttribute{table: table, schema: schema},
+         %Operation.AlterAttribute{table: table},
          %Operation.DropForeignKey{
            table: table,
-           schema: schema,
            direction: :down
          }
        ),
@@ -1397,17 +1378,15 @@ defmodule AshSqlite.MigrationGenerator do
   defp after?(
          %Operation.DropForeignKey{
            table: table,
-           schema: schema,
            direction: :down
          },
-         %Operation.AlterAttribute{table: table, schema: schema}
+         %Operation.AlterAttribute{table: table}
        ),
        do: true
 
-  defp after?(%Operation.AddAttribute{table: table, schema: schema}, %Operation.CreateTable{
-         table: table,
-         schema: schema
-       }) do
+  defp after?(%Operation.AddAttribute{table: table}, %Operation.CreateTable{
+         table: table
+  }) do
     true
   end
 
@@ -1424,25 +1403,22 @@ defmodule AshSqlite.MigrationGenerator do
   defp after?(
          %Operation.AddAttribute{
            table: table,
-           schema: schema,
            attribute: %{
              primary_key?: false
            }
          },
-         %Operation.AddAttribute{schema: schema, table: table, attribute: %{primary_key?: true}}
+         %Operation.AddAttribute{table: table, attribute: %{primary_key?: true}}
        ),
        do: true
 
   defp after?(
          %Operation.AddAttribute{
            table: table,
-           schema: schema,
            attribute: %{
              primary_key?: true
            }
          },
          %Operation.RemoveAttribute{
-           schema: schema,
            table: table,
            attribute: %{primary_key?: true}
          }
@@ -1452,13 +1428,11 @@ defmodule AshSqlite.MigrationGenerator do
   defp after?(
          %Operation.AddAttribute{
            table: table,
-           schema: schema,
            attribute: %{
              primary_key?: true
            }
          },
          %Operation.AlterAttribute{
-           schema: schema,
            table: table,
            new_attribute: %{primary_key?: false},
            old_attribute: %{primary_key?: true}
@@ -1469,13 +1443,11 @@ defmodule AshSqlite.MigrationGenerator do
   defp after?(
          %Operation.AddAttribute{
            table: table,
-           schema: schema,
            attribute: %{
              primary_key?: true
            }
          },
          %Operation.AlterAttribute{
-           schema: schema,
            table: table,
            new_attribute: %{primary_key?: false},
            old_attribute: %{primary_key?: true}
@@ -1485,13 +1457,11 @@ defmodule AshSqlite.MigrationGenerator do
 
   defp after?(
          %Operation.RemoveAttribute{
-           schema: schema,
            table: table,
            attribute: %{primary_key?: true}
          },
          %Operation.AlterAttribute{
            table: table,
-           schema: schema,
            new_attribute: %{
              primary_key?: true
            },
@@ -1504,7 +1474,6 @@ defmodule AshSqlite.MigrationGenerator do
 
   defp after?(
          %Operation.AlterAttribute{
-           schema: schema,
            table: table,
            new_attribute: %{primary_key?: false},
            old_attribute: %{
@@ -1513,7 +1482,6 @@ defmodule AshSqlite.MigrationGenerator do
          },
          %Operation.AlterAttribute{
            table: table,
-           schema: schema,
            new_attribute: %{
              primary_key?: true
            },
@@ -1526,7 +1494,6 @@ defmodule AshSqlite.MigrationGenerator do
 
   defp after?(
          %Operation.AlterAttribute{
-           schema: schema,
            table: table,
            new_attribute: %{primary_key?: false},
            old_attribute: %{
@@ -1535,7 +1502,6 @@ defmodule AshSqlite.MigrationGenerator do
          },
          %Operation.AddAttribute{
            table: table,
-           schema: schema,
            attribute: %{
              primary_key?: true
            }
@@ -1546,13 +1512,11 @@ defmodule AshSqlite.MigrationGenerator do
   defp after?(
          %Operation.AlterAttribute{
            table: table,
-           schema: schema,
            new_attribute: %{primary_key?: false},
            old_attribute: %{primary_key?: true}
          },
          %Operation.AddAttribute{
            table: table,
-           schema: schema,
            attribute: %{
              primary_key?: true
            }
@@ -1619,10 +1583,9 @@ defmodule AshSqlite.MigrationGenerator do
        ),
        do: true
 
-  defp after?(%Operation.AddCheckConstraint{table: table, schema: schema}, %Operation.CreateTable{
-         table: table,
-         schema: schema
-       }) do
+  defp after?(%Operation.AddCheckConstraint{table: table}, %Operation.CreateTable{
+         table: table
+  }) do
     true
   end
 
@@ -1650,21 +1613,10 @@ defmodule AshSqlite.MigrationGenerator do
 
   defp do_fetch_operations(snapshot, existing_snapshot, opts, acc \\ [])
 
-  defp do_fetch_operations(
-         %{schema: new_schema} = snapshot,
-         %{schema: old_schema},
-         opts,
-         []
-       )
-       when new_schema != old_schema do
-    do_fetch_operations(snapshot, nil, opts, [])
-  end
-
   defp do_fetch_operations(snapshot, nil, opts, acc) do
     empty_snapshot = %{
       attributes: [],
       identities: [],
-      schema: nil,
       custom_indexes: [],
       custom_statements: [],
       check_constraints: [],
@@ -1682,7 +1634,6 @@ defmodule AshSqlite.MigrationGenerator do
     do_fetch_operations(snapshot, empty_snapshot, opts, [
       %Operation.CreateTable{
         table: snapshot.table,
-        schema: snapshot.schema,
         multitenancy: snapshot.multitenancy,
         old_multitenancy: empty_snapshot.multitenancy
       }
@@ -1737,7 +1688,6 @@ defmodule AshSqlite.MigrationGenerator do
         %Operation.AddCustomIndex{
           index: custom_index,
           table: snapshot.table,
-          schema: snapshot.schema,
           multitenancy: snapshot.multitenancy,
           base_filter: snapshot.base_filter
         }
@@ -1754,7 +1704,6 @@ defmodule AshSqlite.MigrationGenerator do
         %Operation.RemoveCustomIndex{
           index: custom_index,
           table: old_snapshot.table,
-          schema: old_snapshot.schema,
           multitenancy: old_snapshot.multitenancy,
           base_filter: old_snapshot.base_filter
         }
@@ -1775,8 +1724,7 @@ defmodule AshSqlite.MigrationGenerator do
       |> Enum.map(fn identity ->
         %Operation.RemoveUniqueIndex{
           identity: identity,
-          table: snapshot.table,
-          schema: snapshot.schema
+          table: snapshot.table
         }
       end)
 
@@ -1799,7 +1747,6 @@ defmodule AshSqlite.MigrationGenerator do
         %Operation.RenameUniqueIndex{
           old_identity: old_identity,
           new_identity: new_identity,
-          schema: snapshot.schema,
           table: snapshot.table
         }
       end)
@@ -1819,7 +1766,6 @@ defmodule AshSqlite.MigrationGenerator do
       |> Enum.map(fn identity ->
         %Operation.AddUniqueIndex{
           identity: identity,
-          schema: snapshot.schema,
           table: snapshot.table
         }
       end)
@@ -1834,8 +1780,7 @@ defmodule AshSqlite.MigrationGenerator do
       |> Enum.map(fn constraint ->
         %Operation.AddCheckConstraint{
           constraint: constraint,
-          table: snapshot.table,
-          schema: snapshot.schema
+          table: snapshot.table
         }
       end)
 
@@ -1849,8 +1794,7 @@ defmodule AshSqlite.MigrationGenerator do
       |> Enum.map(fn old_constraint ->
         %Operation.RemoveCheckConstraint{
           constraint: old_constraint,
-          table: old_snapshot.table,
-          schema: old_snapshot.schema
+          table: old_snapshot.table
         }
       end)
 
@@ -1930,8 +1874,8 @@ defmodule AshSqlite.MigrationGenerator do
 
       if must_drop_pkey? do
         [
-          %Operation.RemovePrimaryKey{schema: snapshot.schema, table: snapshot.table},
-          %Operation.RemovePrimaryKeyDown{schema: snapshot.schema, table: snapshot.table}
+          %Operation.RemovePrimaryKey{ table: snapshot.table},
+          %Operation.RemovePrimaryKeyDown{ table: snapshot.table}
         ]
       else
         []
@@ -1970,8 +1914,7 @@ defmodule AshSqlite.MigrationGenerator do
         %Operation.RenameAttribute{
           new_attribute: new,
           old_attribute: old,
-          table: snapshot.table,
-          schema: snapshot.schema
+          table: snapshot.table
         }
       end)
 
@@ -1983,13 +1926,11 @@ defmodule AshSqlite.MigrationGenerator do
               [
                 %Operation.AlterDeferrability{
                   table: snapshot.table,
-                  schema: snapshot.schema,
                   references: attribute.references,
                   direction: :up
                 },
                 %Operation.AlterDeferrability{
                   table: snapshot.table,
-                  schema: snapshot.schema,
                   references: Map.get(attribute, :references),
                   direction: :down
                 }
@@ -2001,19 +1942,16 @@ defmodule AshSqlite.MigrationGenerator do
           [
             %Operation.AddAttribute{
               attribute: Map.delete(attribute, :references),
-              schema: snapshot.schema,
               table: snapshot.table
             },
             %Operation.AlterAttribute{
               old_attribute: Map.delete(attribute, :references),
               new_attribute: attribute,
-              schema: snapshot.schema,
               table: snapshot.table
             },
             %Operation.DropForeignKey{
               attribute: attribute,
               table: snapshot.table,
-              schema: snapshot.schema,
               multitenancy: Map.get(attribute, :multitenancy),
               direction: :down
             }
@@ -2022,8 +1960,7 @@ defmodule AshSqlite.MigrationGenerator do
           [
             %Operation.AddAttribute{
               attribute: attribute,
-              table: snapshot.table,
-              schema: snapshot.schema
+              table: snapshot.table
             }
           ]
         end
@@ -2036,13 +1973,11 @@ defmodule AshSqlite.MigrationGenerator do
             [
               %Operation.AlterDeferrability{
                 table: snapshot.table,
-                schema: snapshot.schema,
                 references: new_attribute.references,
                 direction: :up
               },
               %Operation.AlterDeferrability{
                 table: snapshot.table,
-                schema: snapshot.schema,
                 references: Map.get(old_attribute, :references),
                 direction: :down
               }
@@ -2060,7 +1995,6 @@ defmodule AshSqlite.MigrationGenerator do
               [
                 %Operation.AlterDeferrability{
                   table: snapshot.table,
-                  schema: snapshot.schema,
                   references: new_attribute.references,
                   direction: :up
                 }
@@ -2072,14 +2006,12 @@ defmodule AshSqlite.MigrationGenerator do
               %Operation.DropForeignKey{
                 attribute: old_attribute,
                 table: snapshot.table,
-                schema: snapshot.schema,
                 multitenancy: old_snapshot.multitenancy,
                 direction: :up
               },
               %Operation.AlterAttribute{
                 new_attribute: new_attribute,
                 old_attribute: old_attribute,
-                schema: snapshot.schema,
                 table: snapshot.table
               }
             ] ++ redo_deferrability
@@ -2089,7 +2021,6 @@ defmodule AshSqlite.MigrationGenerator do
               %Operation.DropForeignKey{
                 attribute: new_attribute,
                 table: snapshot.table,
-                schema: snapshot.schema,
                 multitenancy: snapshot.multitenancy,
                 direction: :down
               }
@@ -2105,7 +2036,6 @@ defmodule AshSqlite.MigrationGenerator do
             %Operation.AlterAttribute{
               new_attribute: Map.delete(new_attribute, :references),
               old_attribute: Map.delete(old_attribute, :references),
-              schema: snapshot.schema,
               table: snapshot.table
             }
           ]
@@ -2118,7 +2048,6 @@ defmodule AshSqlite.MigrationGenerator do
         %Operation.RemoveAttribute{
           attribute: attribute,
           table: snapshot.table,
-          schema: snapshot.schema,
           commented?: !opts.drop_columns
         }
       end)
@@ -2157,7 +2086,7 @@ defmodule AshSqlite.MigrationGenerator do
     left != right
   end
 
-  defp clean_for_equality(attribute, repo) do
+  defp clean_for_equality(attribute, _repo) do
     cond do
       attribute[:source] ->
         Map.put(attribute, :name, attribute[:source])
@@ -2173,7 +2102,6 @@ defmodule AshSqlite.MigrationGenerator do
       true ->
         attribute
     end
-    |> add_schema(repo)
     |> add_ignore()
     |> then(fn
       # only :integer cares about `destination_attribute_generated`
@@ -2196,25 +2124,12 @@ defmodule AshSqlite.MigrationGenerator do
     attribute
   end
 
-  defp add_schema(%{references: references} = attribute, repo) when is_map(references) do
-    schema = Map.get(references, :schema) || repo.config()[:default_prefix] || "public"
-
-    %{
-      attribute
-      | references: Map.put(references, :schema, schema)
-    }
-  end
-
-  defp add_schema(attribute, _) do
-    attribute
-  end
-
   def changing_multitenancy_affects_identities?(snapshot, old_snapshot) do
     snapshot.multitenancy != old_snapshot.multitenancy ||
       snapshot.base_filter != old_snapshot.base_filter
   end
 
-  def has_reference?(multitenancy, attribute) do
+  def has_reference?(_multitenancy, attribute) do
     not is_nil(Map.get(attribute, :references))
   end
 
@@ -2367,8 +2282,7 @@ defmodule AshSqlite.MigrationGenerator do
       |> Enum.map(fn relationship ->
         resource
         |> do_snapshot(
-          relationship.context[:data_layer][:table],
-          relationship.context[:data_layer][:schema]
+          relationship.context[:data_layer][:table]
         )
         |> Map.update!(:identities, fn identities ->
           identity_index_names = AshSqlite.DataLayer.Info.identity_index_names(resource)
@@ -2405,7 +2319,6 @@ defmodule AshSqlite.MigrationGenerator do
                 destination_attribute_generated: source_attribute.generated?,
                 multitenancy: multitenancy(relationship.source),
                 table: AshSqlite.DataLayer.Info.table(relationship.source),
-                schema: AshSqlite.DataLayer.Info.schema(relationship.source),
                 on_delete: AshSqlite.DataLayer.Info.polymorphic_on_delete(relationship.source),
                 on_update: AshSqlite.DataLayer.Info.polymorphic_on_update(relationship.source),
                 primary_key?: source_attribute.primary_key?,
@@ -2424,12 +2337,11 @@ defmodule AshSqlite.MigrationGenerator do
     end
   end
 
-  defp do_snapshot(resource, table, schema \\ nil) do
+  defp do_snapshot(resource, table) do
     snapshot = %{
       attributes: attributes(resource, table),
       identities: identities(resource),
       table: table || AshSqlite.DataLayer.Info.table(resource),
-      schema: schema || AshSqlite.DataLayer.Info.schema(resource),
       check_constraints: check_constraints(resource),
       custom_indexes: custom_indexes(resource),
       custom_statements: custom_statements(resource),
@@ -2617,12 +2529,6 @@ defmodule AshSqlite.MigrationGenerator do
             on_update: configured_reference.on_update,
             name: configured_reference.name,
             primary_key?: destination_attribute.primary_key?,
-            schema:
-              relationship.context[:data_layer][:schema] ||
-                AshSqlite.DataLayer.Info.schema(relationship.destination) ||
-                AshSqlite.DataLayer.Info.repo(relationship.destination).config()[
-                  :default_prefix
-                ],
             table:
               relationship.context[:data_layer][:table] ||
                 AshSqlite.DataLayer.Info.table(relationship.destination)
@@ -2641,10 +2547,6 @@ defmodule AshSqlite.MigrationGenerator do
         on_delete: nil,
         on_update: nil,
         deferrable: false,
-        schema:
-          relationship.context[:data_layer][:schema] ||
-            AshSqlite.DataLayer.Info.schema(relationship.destination) ||
-            AshSqlite.DataLayer.Info.repo(relationship.destination).config()[:default_prefix],
         name: nil,
         ignore?: false
       })
@@ -2847,7 +2749,6 @@ defmodule AshSqlite.MigrationGenerator do
   defp sanitize_snapshot(snapshot) do
     snapshot
     |> Map.put_new(:has_create_action, true)
-    |> Map.put_new(:schema, nil)
     |> Map.update!(:identities, fn identities ->
       Enum.map(identities, &load_identity(&1, snapshot.table))
     end)
@@ -2961,7 +2862,6 @@ defmodule AshSqlite.MigrationGenerator do
           "initially" -> :initially
           other -> other
         end)
-        |> Map.put_new(:schema, nil)
         |> Map.put_new(:destination_attribute_default, "nil")
         |> Map.put_new(:destination_attribute_generated, false)
         |> Map.put_new(:on_delete, nil)

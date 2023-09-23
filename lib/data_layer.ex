@@ -393,7 +393,7 @@ defmodule AshSqlite.DataLayer do
       AshSqlite.DataLayer.Info.repo(resource) == AshSqlite.DataLayer.Info.repo(other_resource)
   end
 
-  def can?(resource, {:lateral_join, _}) do
+  def can?(_resource, {:lateral_join, _}) do
     false
   end
 
@@ -466,13 +466,6 @@ defmodule AshSqlite.DataLayer do
           data_layer_query
           | from: %{data_layer_query.from | source: {context[:data_layer][:table], resource}}
         }
-      else
-        data_layer_query
-      end
-
-    data_layer_query =
-      if context[:data_layer][:schema] do
-        Ecto.Query.put_query_prefix(data_layer_query, to_string(context[:data_layer][:schema]))
       else
         data_layer_query
       end
@@ -551,13 +544,9 @@ defmodule AshSqlite.DataLayer do
   defp no_table?(%{from: %{source: {"", _}}}), do: true
   defp no_table?(_), do: false
 
-  defp repo_opts(timeout, nil, resource) do
-    if schema = AshSqlite.DataLayer.Info.schema(resource) do
-      [prefix: schema]
-    else
+  defp repo_opts(timeout, nil, _resource) do
       []
-    end
-    |> add_timeout(timeout)
+      |> add_timeout(timeout)
   end
 
   defp repo_opts(timeout, _resource) do
@@ -576,28 +565,6 @@ defmodule AshSqlite.DataLayer do
       AshSqlite.Functions.Fragment,
       AshSqlite.Functions.Like,
     ]
-  end
-
-  defp add_exists_aggs(result, resource, query, exists) do
-    repo = dynamic_repo(resource, query)
-    repo_opts = repo_opts(nil, nil, resource)
-
-    Enum.reduce(exists, result, fn agg, result ->
-      {:ok, filtered} =
-        case agg do
-          %{query: %{filter: filter}} when not is_nil(filter) ->
-            filter(query, filter, resource)
-
-          _ ->
-            {:ok, query}
-        end
-
-      Map.put(
-        result || %{},
-        agg.name,
-        repo.exists?(filtered, repo_opts)
-      )
-    end)
   end
 
   @impl true
@@ -796,48 +763,12 @@ defmodule AshSqlite.DataLayer do
     {:error, Ash.Error.to_ash_error(error, stacktrace)}
   end
 
-  defp constraints_to_errors(%{constraints: user_constraints} = changeset, action, constraints) do
-    Enum.map(constraints, fn {type, constraint} ->
-      user_constraint =
-        Enum.find(user_constraints, fn c ->
-          case {c.type, c.constraint, c.match} do
-            {^type, ^constraint, :exact} -> true
-            {^type, cc, :suffix} -> String.ends_with?(constraint, cc)
-            {^type, cc, :prefix} -> String.starts_with?(constraint, cc)
-            {^type, %Regex{} = r, _match} -> Regex.match?(r, constraint)
-            _ -> false
-          end
-        end)
-
-      case user_constraint do
-        %{field: field, error_message: error_message, type: type, constraint: constraint} ->
-          Ash.Error.Changes.InvalidAttribute.exception(
-            field: field,
-            message: error_message,
-            private_vars: [
-              constraint: constraint,
-              constraint_type: type
-            ]
-          )
-
-        nil ->
-          Ecto.ConstraintError.exception(
-            action: action,
-            type: type,
-            constraint: constraint,
-            changeset: changeset
-          )
-      end
-    end)
-  end
-
   defp set_table(record, changeset, operation, table_error?) do
     if AshSqlite.DataLayer.Info.polymorphic?(record.__struct__) do
       table =
         changeset.context[:data_layer][:table] ||
           AshSqlite.DataLayer.Info.table(record.__struct__)
 
-      record =
         if table do
           Ecto.put_meta(record, source: table)
         else
@@ -848,16 +779,7 @@ defmodule AshSqlite.DataLayer do
           end
         end
 
-      prefix =
-        changeset.context[:data_layer][:schema] ||
-          AshSqlite.DataLayer.Info.schema(record.__struct__)
-
-      if prefix do
-        Ecto.put_meta(record, prefix: table)
-      else
-        record
-      end
-    else
+        else
       record
     end
   end
@@ -1212,12 +1134,6 @@ defmodule AshSqlite.DataLayer do
       atomics_result =
         Enum.reduce_while(changeset.atomics, {:ok, query, []}, fn {field, expr},
                                                                   {:ok, query, set} ->
-          used_calculations =
-            Ash.Filter.used_calculations(
-              expr,
-              resource
-            )
-
           with {:ok, query} <-
                  AshSqlite.Join.join_all_relationships(
                    query,
@@ -1640,12 +1556,6 @@ defmodule AshSqlite.DataLayer do
   @impl true
   def filter(query, filter, resource, opts \\ []) do
     query = default_bindings(query, resource)
-
-    used_calculations =
-      Ash.Filter.used_calculations(
-        filter,
-        resource
-      )
 
     query
     |> AshSqlite.Join.join_all_relationships(filter, opts)

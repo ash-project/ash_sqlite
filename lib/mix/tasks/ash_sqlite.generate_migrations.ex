@@ -43,7 +43,6 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
 
   #### Conflicts/Multiple Resources
 
-  The migration generator can support multiple schemas using the same table.
   It will raise on conflicts that it can't resolve, like the same field with different
   types. It will prompt to resolve conflicts that can be resolved with human input.
   For example, if you remove an attribute and add an attribute, it will ask you if you are renaming
