@@ -67,13 +67,13 @@ defmodule Mix.Tasks.AshSqlite.Rollback do
       |> AshSqlite.MixHelpers.delete_arg("--apis")
       |> AshSqlite.MixHelpers.delete_arg("--migrations-path")
 
-      for repo <- repos do
-        Mix.Task.run(
-          "ecto.rollback",
-          repo_args ++ rest_opts ++ ["--migrations-path", migrations_path(opts, repo)]
-        )
+    for repo <- repos do
+      Mix.Task.run(
+        "ecto.rollback",
+        repo_args ++ rest_opts ++ ["--migrations-path", migrations_path(opts, repo)]
+      )
 
-        Mix.Task.reenable("ecto.rollback")
-      end
+      Mix.Task.reenable("ecto.rollback")
+    end
   end
 end

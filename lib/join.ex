@@ -579,6 +579,7 @@ defmodule AshSqlite.Join do
       relationship_destination =
         relationship_destination
         |> Ecto.Queryable.to_query()
+
       binding_kinds =
         case kind do
           :left ->

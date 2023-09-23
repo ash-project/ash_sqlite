@@ -25,7 +25,7 @@ defmodule AshSqlite.MigrationGenerator do
 
     all_resources = Enum.uniq(Enum.flat_map(apis, &Ash.Api.Info.resources/1))
 
-     snapshots =
+    snapshots =
       all_resources
       |> Enum.filter(fn resource ->
         Ash.DataLayer.data_layer(resource) == AshSqlite.DataLayer &&
@@ -142,8 +142,6 @@ defmodule AshSqlite.MigrationGenerator do
     Path.join([Mix.Project.deps_paths()[app] || File.cwd!(), "priv", "resource_snapshots"])
   end
 
-  @latest_ash_functions_version 1
-
   defp create_extension_migrations(repos, opts) do
     for repo <- repos do
       snapshot_path = snapshot_path(opts, repo)
@@ -158,7 +156,7 @@ defmodule AshSqlite.MigrationGenerator do
           []
         end
 
-      {extensions_snapshot, installed_extensions} =
+      {_extensions_snapshot, installed_extensions} =
         case installed_extensions do
           installed when is_list(installed) ->
             {%{
@@ -185,15 +183,6 @@ defmodule AshSqlite.MigrationGenerator do
         requesteds
         |> Enum.filter(fn {name, _extension} -> !Enum.member?(installed_extensions, name) end)
         |> Enum.map(fn {_name, extension} -> extension end)
-
-      to_install =
-        if "ash-functions" in requesteds &&
-             extensions_snapshot[:ash_functions_version] !=
-               @latest_ash_functions_version do
-          Enum.uniq(["ash-functions" | to_install])
-        else
-          to_install
-        end
 
       if Enum.empty?(to_install) do
         Mix.shell().info("No extensions to install")
@@ -227,26 +216,20 @@ defmodule AshSqlite.MigrationGenerator do
 
         install =
           Enum.map_join(to_install, "\n", fn
-            "ash-functions" ->
-              install_ash_functions(extensions_snapshot[:ash_functions_version])
-
             {_ext_name, version, up_fn, _down_fn} when is_function(up_fn, 1) ->
               up_fn.(version)
 
             extension ->
-              "execute(\"CREATE EXTENSION IF NOT EXISTS \\\"#{extension}\\\"\")"
+              raise "only custom extensions supported currently. Got #{inspect(extension)}"
           end)
 
         uninstall =
           Enum.map_join(to_install, "\n", fn
-            "ash-functions" ->
-              "execute(\"DROP FUNCTION IF EXISTS ash_elixir_and(BOOLEAN, ANYCOMPATIBLE), ash_elixir_and(ANYCOMPATIBLE, ANYCOMPATIBLE), ash_elixir_or(ANYCOMPATIBLE, ANYCOMPATIBLE), ash_elixir_or(BOOLEAN, ANYCOMPATIBLE)\")"
-
             {_ext_name, version, _up_fn, down_fn} when is_function(down_fn, 1) ->
               down_fn.(version)
 
             extension ->
-              "# execute(\"DROP EXTENSION IF EXISTS \\\"#{extension}\\\"\")"
+              raise "only custom extensions supported currently. Got #{inspect(extension)}"
           end)
 
         contents = """
@@ -277,8 +260,7 @@ defmodule AshSqlite.MigrationGenerator do
           Jason.encode!(
             %{
               installed: installed
-            }
-            |> set_ash_functions(installed),
+            },
             pretty: true
           )
 
@@ -286,122 +268,6 @@ defmodule AshSqlite.MigrationGenerator do
         create_file(snapshot_file, snapshot_contents, force: true)
         create_file(migration_file, contents)
       end
-    end
-  end
-
-  defp install_ash_functions(nil) do
-    """
-    execute(\"\"\"
-    CREATE OR REPLACE FUNCTION ash_elixir_or(left BOOLEAN, in right ANYCOMPATIBLE, out f1 ANYCOMPATIBLE)
-    AS $$ SELECT COALESCE(NULLIF($1, FALSE), $2) $$
-    LANGUAGE SQL
-    IMMUTABLE;
-    \"\"\")
-
-    execute(\"\"\"
-    CREATE OR REPLACE FUNCTION ash_elixir_or(left ANYCOMPATIBLE, in right ANYCOMPATIBLE, out f1 ANYCOMPATIBLE)
-    AS $$ SELECT COALESCE($1, $2) $$
-    LANGUAGE SQL
-    IMMUTABLE;
-    \"\"\")
-
-    execute(\"\"\"
-    CREATE OR REPLACE FUNCTION ash_elixir_and(left BOOLEAN, in right ANYCOMPATIBLE, out f1 ANYCOMPATIBLE) AS $$
-      SELECT CASE
-        WHEN $1 IS TRUE THEN $2
-        ELSE $1
-      END $$
-    LANGUAGE SQL
-    IMMUTABLE;
-    \"\"\")
-
-    execute(\"\"\"
-    CREATE OR REPLACE FUNCTION ash_elixir_and(left ANYCOMPATIBLE, in right ANYCOMPATIBLE, out f1 ANYCOMPATIBLE) AS $$
-      SELECT CASE
-        WHEN $1 IS NOT NULL THEN $2
-        ELSE $1
-      END $$
-    LANGUAGE SQL
-    IMMUTABLE;
-    \"\"\")
-
-    execute(\"\"\"
-    CREATE OR REPLACE FUNCTION ash_trim_whitespace(arr text[])
-    RETURNS text[] AS $$
-    DECLARE
-        start_index INT = 1;
-        end_index INT = array_length(arr, 1);
-    BEGIN
-        WHILE start_index <= end_index AND arr[start_index] = '' LOOP
-            start_index := start_index + 1;
-        END LOOP;
-
-        WHILE end_index >= start_index AND arr[end_index] = '' LOOP
-            end_index := end_index - 1;
-        END LOOP;
-
-        IF start_index > end_index THEN
-            RETURN ARRAY[]::text[];
-        ELSE
-            RETURN arr[start_index : end_index];
-        END IF;
-    END; $$
-    LANGUAGE plpgsql
-    IMMUTABLE;
-    \"\"\")
-    """
-  end
-
-  defp install_ash_functions(0) do
-    """
-    execute(\"\"\"
-    ALTER FUNCTION ash_elixir_or(left BOOLEAN, in right ANYCOMPATIBLE, out f1 ANYCOMPATIBLE) IMMUTABLE
-    \"\"\")
-
-    execute(\"\"\"
-    ALTER FUNCTION ash_elixir_or(left ANYCOMPATIBLE, in right ANYCOMPATIBLE, out f1 ANYCOMPATIBLE) IMMUTABLE
-    \"\"\")
-
-    execute(\"\"\"
-    ALTER FUNCTION ash_elixir_and(left BOOLEAN, in right ANYCOMPATIBLE, out f1 ANYCOMPATIBLE) IMMUTABLE
-    \"\"\")
-
-    execute(\"\"\"
-    ALTER FUNCTION ash_elixir_and(left ANYCOMPATIBLE, in right ANYCOMPATIBLE, out f1 ANYCOMPATIBLE) IMMUTABLE
-    \"\"\")
-
-    execute(\"\"\"
-    CREATE OR REPLACE FUNCTION ash_trim_whitespace(arr text[])
-    RETURNS text[] AS $$
-    DECLARE
-        start_index INT = 1;
-        end_index INT = array_length(arr, 1);
-    BEGIN
-        WHILE start_index <= end_index AND arr[start_index] = '' LOOP
-            start_index := start_index + 1;
-        END LOOP;
-
-        WHILE end_index >= start_index AND arr[end_index] = '' LOOP
-            end_index := end_index - 1;
-        END LOOP;
-
-        IF start_index > end_index THEN
-            RETURN ARRAY[]::text[];
-        ELSE
-            RETURN arr[start_index : end_index];
-        END IF;
-    END; $$
-    LANGUAGE plpgsql
-    IMMUTABLE;
-    \"\"\")
-    """
-  end
-
-  defp set_ash_functions(snapshot, installed_extensions) do
-    if "ash-functions" in installed_extensions do
-      Map.put(snapshot, :ash_functions_version, @latest_ash_functions_version)
-    else
-      snapshot
     end
   end
 
@@ -442,44 +308,13 @@ defmodule AshSqlite.MigrationGenerator do
           end
 
           operations
-          |> split_into_migrations()
-          |> Enum.each(fn operations ->
-            run_without_transaction? =
-              Enum.any?(operations, fn
-                %Operation.AddCustomIndex{index: %{concurrently: true}} ->
-                  true
-
-                _ ->
-                  false
-              end)
-
-            operations
-            |> organize_operations
-            |> build_up_and_down()
-            |> write_migration!(repo, opts, run_without_transaction?)
-          end)
+          |> organize_operations
+          |> build_up_and_down()
+          |> write_migration!(repo, opts, false)
 
           create_new_snapshot(snapshots, repo_name(repo), opts)
       end
     end)
-  end
-
-  defp split_into_migrations(operations) do
-    operations
-    |> Enum.split_with(fn
-      %Operation.AddCustomIndex{index: %{concurrently: true}} ->
-        true
-
-      _ ->
-        false
-    end)
-    |> case do
-      {[], ops} ->
-        [ops]
-
-      {concurrent_indexes, ops} ->
-        [ops, concurrent_indexes]
-    end
   end
 
   defp add_order_to_operations({snapshot, operations}) do
@@ -828,13 +663,13 @@ defmodule AshSqlite.MigrationGenerator do
     config = repo.config()
     app = Keyword.fetch!(config, :otp_app)
 
-      if opts.migration_path do
-        opts.migration_path
-      else
-        Path.join([Mix.Project.deps_paths()[app] || File.cwd!(), "priv"])
-      end
-      |> Path.join(repo_name)
-      |> Path.join("migrations")
+    if opts.migration_path do
+      opts.migration_path
+    else
+      Path.join([Mix.Project.deps_paths()[app] || File.cwd!(), "priv"])
+    end
+    |> Path.join(repo_name)
+    |> Path.join("migrations")
   end
 
   defp repo_name(repo) do
@@ -877,7 +712,7 @@ defmodule AshSqlite.MigrationGenerator do
       |> Path.join(migration_name <> ".exs")
 
     module_name =
-        Module.concat([repo, Migrations, Macro.camelize(last_part)])
+      Module.concat([repo, Migrations, Macro.camelize(last_part)])
 
     module_attributes =
       if run_without_transaction? do
@@ -953,9 +788,9 @@ defmodule AshSqlite.MigrationGenerator do
         snapshot_binary = snapshot_to_binary(snapshot)
 
         snapshot_folder =
-            opts
-            |> snapshot_path(snapshot.repo)
-            |> Path.join(repo_name)
+          opts
+          |> snapshot_path(snapshot.repo)
+          |> Path.join(repo_name)
 
         snapshot_file = Path.join(snapshot_folder, "#{snapshot.table}/#{timestamp()}.json")
 
@@ -1104,9 +939,20 @@ defmodule AshSqlite.MigrationGenerator do
          nil,
          acc
        ) do
+    # this is kind of a hack
+    {has_to_be_in_this_phase, rest} =
+      Enum.split_with(rest, fn
+        %Operation.AddAttribute{table: ^table} -> true
+        _ -> false
+      end)
+
     group_into_phases(
       rest,
-      %Phase.Create{table: table, multitenancy: multitenancy},
+      %Phase.Create{
+        table: table,
+        multitenancy: multitenancy,
+        operations: has_to_be_in_this_phase
+      },
       acc
     )
   end
@@ -1241,86 +1087,12 @@ defmodule AshSqlite.MigrationGenerator do
   end
 
   defp after?(
-         %Operation.AddCheckConstraint{
-           constraint: %{attribute: attribute_or_attributes},
-           table: table,
-           multitenancy: multitenancy
-         },
-         %Operation.AddAttribute{table: table, attribute: %{source: source}}
-       ) do
-    source in List.wrap(attribute_or_attributes) ||
-      (multitenancy.attribute && multitenancy.attribute in List.wrap(attribute_or_attributes))
-  end
-
-  defp after?(
          %Operation.AddCustomIndex{
            table: table
          },
          %Operation.AddAttribute{table: table}
        ) do
     true
-  end
-
-  defp after?(
-         %Operation.AddCustomIndex{
-           table: table,
-           index: %{
-             concurrently: true
-           }
-         },
-         %Operation.AddCustomIndex{
-           table: table,
-           index: %{
-             concurrently: false
-           }
-         }
-       ) do
-    true
-  end
-
-  defp after?(
-         %Operation.AddCheckConstraint{table: table, constraint: %{name: name}},
-         %Operation.RemoveCheckConstraint{
-           table: table,
-           constraint: %{
-             name: name
-           }
-         }
-       ),
-       do: true
-
-  defp after?(
-         %Operation.RemoveCheckConstraint{
-           table: table,
-           constraint: %{
-             name: name
-           }
-         },
-         %Operation.AddCheckConstraint{table: table, constraint: %{name: name}}
-       ),
-       do: false
-
-  defp after?(
-         %Operation.AddCheckConstraint{
-           constraint: %{attribute: attribute_or_attributes},
-           table: table
-         },
-         %Operation.AlterAttribute{table: table, new_attribute: %{source: source}}
-       ) do
-    source in List.wrap(attribute_or_attributes)
-  end
-
-  defp after?(
-         %Operation.AddCheckConstraint{
-           constraint: %{attribute: attribute_or_attributes},
-           table: table
-         },
-         %Operation.RenameAttribute{
-           table: table,
-           new_attribute: %{source: source}
-         }
-       ) do
-    source in List.wrap(attribute_or_attributes)
   end
 
   defp after?(
@@ -1335,29 +1107,6 @@ defmodule AshSqlite.MigrationGenerator do
          %{table: table}
        ) do
     true
-  end
-
-  defp after?(
-         %Operation.RemoveCheckConstraint{
-           constraint: %{attribute: attributes},
-           table: table
-         },
-         %Operation.RemoveAttribute{table: table, attribute: %{source: source}}
-       ) do
-    source in List.wrap(attributes)
-  end
-
-  defp after?(
-         %Operation.RemoveCheckConstraint{
-           constraint: %{attribute: attributes},
-           table: table
-         },
-         %Operation.RenameAttribute{
-           table: table,
-           old_attribute: %{source: source}
-         }
-       ) do
-    source in List.wrap(attributes)
   end
 
   defp after?(%Operation.AlterAttribute{table: table}, %Operation.DropForeignKey{
@@ -1386,7 +1135,7 @@ defmodule AshSqlite.MigrationGenerator do
 
   defp after?(%Operation.AddAttribute{table: table}, %Operation.CreateTable{
          table: table
-  }) do
+       }) do
     true
   end
 
@@ -1583,21 +1332,12 @@ defmodule AshSqlite.MigrationGenerator do
        ),
        do: true
 
-  defp after?(%Operation.AddCheckConstraint{table: table}, %Operation.CreateTable{
-         table: table
-  }) do
-    true
-  end
-
   defp after?(
          %Operation.AlterAttribute{new_attribute: %{references: references}, table: table},
          %{table: table}
        )
        when not is_nil(references),
        do: true
-
-  defp after?(%Operation.AddCheckConstraint{}, _), do: true
-  defp after?(%Operation.RemoveCheckConstraint{}, _), do: true
 
   defp after?(_, _), do: false
 
@@ -1619,7 +1359,6 @@ defmodule AshSqlite.MigrationGenerator do
       identities: [],
       custom_indexes: [],
       custom_statements: [],
-      check_constraints: [],
       table: snapshot.table,
       repo: snapshot.repo,
       base_filter: nil,
@@ -1770,33 +1509,6 @@ defmodule AshSqlite.MigrationGenerator do
         }
       end)
 
-    constraints_to_add =
-      snapshot.check_constraints
-      |> Enum.reject(fn constraint ->
-        Enum.find(old_snapshot.check_constraints, fn old_constraint ->
-          old_constraint.check == constraint.check && old_constraint.name == constraint.name
-        end)
-      end)
-      |> Enum.map(fn constraint ->
-        %Operation.AddCheckConstraint{
-          constraint: constraint,
-          table: snapshot.table
-        }
-      end)
-
-    constraints_to_remove =
-      old_snapshot.check_constraints
-      |> Enum.reject(fn old_constraint ->
-        Enum.find(snapshot.check_constraints, fn constraint ->
-          old_constraint.check == constraint.check && old_constraint.name == constraint.name
-        end)
-      end)
-      |> Enum.map(fn old_constraint ->
-        %Operation.RemoveCheckConstraint{
-          constraint: old_constraint,
-          table: old_snapshot.table
-        }
-      end)
 
     [
       pkey_operations,
@@ -1804,8 +1516,6 @@ defmodule AshSqlite.MigrationGenerator do
       attribute_operations,
       unique_indexes_to_add,
       unique_indexes_to_rename,
-      constraints_to_remove,
-      constraints_to_add,
       custom_indexes_to_add,
       custom_indexes_to_remove,
       custom_statements_to_add,
@@ -1874,8 +1584,8 @@ defmodule AshSqlite.MigrationGenerator do
 
       if must_drop_pkey? do
         [
-          %Operation.RemovePrimaryKey{ table: snapshot.table},
-          %Operation.RemovePrimaryKeyDown{ table: snapshot.table}
+          %Operation.RemovePrimaryKey{table: snapshot.table},
+          %Operation.RemovePrimaryKeyDown{table: snapshot.table}
         ]
       else
         []
@@ -1921,32 +1631,9 @@ defmodule AshSqlite.MigrationGenerator do
     add_attribute_events =
       Enum.flat_map(attributes_to_add, fn attribute ->
         if attribute.references do
-          reference_ops =
-            if attribute.references.deferrable do
-              [
-                %Operation.AlterDeferrability{
-                  table: snapshot.table,
-                  references: attribute.references,
-                  direction: :up
-                },
-                %Operation.AlterDeferrability{
-                  table: snapshot.table,
-                  references: Map.get(attribute, :references),
-                  direction: :down
-                }
-              ]
-            else
-              []
-            end
-
           [
             %Operation.AddAttribute{
-              attribute: Map.delete(attribute, :references),
-              table: snapshot.table
-            },
-            %Operation.AlterAttribute{
-              old_attribute: Map.delete(attribute, :references),
-              new_attribute: attribute,
+              attribute: attribute,
               table: snapshot.table
             },
             %Operation.DropForeignKey{
@@ -1955,7 +1642,7 @@ defmodule AshSqlite.MigrationGenerator do
               multitenancy: Map.get(attribute, :multitenancy),
               direction: :down
             }
-          ] ++ reference_ops
+          ]
         else
           [
             %Operation.AddAttribute{
@@ -2137,9 +1824,9 @@ defmodule AshSqlite.MigrationGenerator do
     repo_name = snapshot.repo |> Module.split() |> List.last() |> Macro.underscore()
 
     folder =
-        opts
-        |> snapshot_path(snapshot.repo)
-        |> Path.join(repo_name)
+      opts
+      |> snapshot_path(snapshot.repo)
+      |> Path.join(repo_name)
 
     snapshot_folder = Path.join(folder, snapshot.table)
 
@@ -2281,9 +1968,7 @@ defmodule AshSqlite.MigrationGenerator do
       |> Enum.uniq()
       |> Enum.map(fn relationship ->
         resource
-        |> do_snapshot(
-          relationship.context[:data_layer][:table]
-        )
+        |> do_snapshot(relationship.context[:data_layer][:table])
         |> Map.update!(:identities, fn identities ->
           identity_index_names = AshSqlite.DataLayer.Info.identity_index_names(resource)
 
@@ -2342,7 +2027,6 @@ defmodule AshSqlite.MigrationGenerator do
       attributes: attributes(resource, table),
       identities: identities(resource),
       table: table || AshSqlite.DataLayer.Info.table(resource),
-      check_constraints: check_constraints(resource),
       custom_indexes: custom_indexes(resource),
       custom_statements: custom_statements(resource),
       repo: AshSqlite.DataLayer.Info.repo(resource),
@@ -2363,48 +2047,6 @@ defmodule AshSqlite.MigrationGenerator do
     resource
     |> Ash.Resource.Info.actions()
     |> Enum.any?(&(&1.type == :create))
-  end
-
-  defp check_constraints(resource) do
-    resource
-    |> AshSqlite.DataLayer.Info.check_constraints()
-    |> Enum.filter(& &1.check)
-    |> case do
-      [] ->
-        []
-
-      constraints ->
-        base_filter = Ash.Resource.Info.base_filter(resource)
-
-        if base_filter && !AshSqlite.DataLayer.Info.base_filter_sql(resource) do
-          raise """
-          Cannot create a check constraint for a resource with a base filter without also configuring `base_filter_sql`.
-
-          You must provide the `base_filter_sql` option, or manually create add the check constraint to your migrations.
-          """
-        end
-
-        constraints
-    end
-    |> Enum.map(fn constraint ->
-      attributes =
-        constraint.attribute
-        |> List.wrap()
-        |> Enum.map(fn attribute ->
-          attr =
-            resource
-            |> Ash.Resource.Info.attribute(attribute)
-
-          attr.source || attr.name
-        end)
-
-      %{
-        name: constraint.name,
-        attribute: attributes,
-        check: constraint.check,
-        base_filter: AshSqlite.DataLayer.Info.base_filter_sql(resource)
-      }
-    end)
   end
 
   defp custom_indexes(resource) do
@@ -2590,7 +2232,7 @@ defmodule AshSqlite.MigrationGenerator do
   defp foreign_key?(relationship) do
     Ash.DataLayer.data_layer(relationship.source) == AshSqlite.DataLayer &&
       AshSqlite.DataLayer.Info.repo(relationship.source) ==
-      AshSqlite.DataLayer.Info.repo(relationship.destination)
+        AshSqlite.DataLayer.Info.repo(relationship.destination)
   end
 
   defp identities(resource) do
@@ -2646,20 +2288,9 @@ defmodule AshSqlite.MigrationGenerator do
     |> Enum.map(&Map.put(&1, :base_filter, AshSqlite.DataLayer.Info.base_filter_sql(resource)))
   end
 
-  @uuid_functions [&Ash.UUID.generate/0, &Ecto.UUID.generate/0]
 
-  defp default(%{name: name, default: default}, resource, repo) when is_function(default) do
-    configured_default(resource, name) ||
-      cond do
-        default in @uuid_functions && "uuid-ossp" in (repo.config()[:installed_extensions] || []) ->
-          ~S[fragment("uuid_generate_v4()")]
-
-        default == (&DateTime.utc_now/0) ->
-          ~S[fragment("now()")]
-
-        true ->
-          "nil"
-      end
+  defp default(%{name: name, default: default}, resource, _repo) when is_function(default) do
+    configured_default(resource, name) || "nil"
   end
 
   defp default(%{name: name, default: {_, _, _}}, resource, _),
@@ -2770,8 +2401,6 @@ defmodule AshSqlite.MigrationGenerator do
     |> Map.update!(:custom_indexes, &load_custom_indexes/1)
     |> Map.put_new(:custom_statements, [])
     |> Map.update!(:custom_statements, &load_custom_statements/1)
-    |> Map.put_new(:check_constraints, [])
-    |> Map.update!(:check_constraints, &load_check_constraints/1)
     |> Map.update!(:repo, &String.to_atom/1)
     |> Map.put_new(:multitenancy, %{
       attribute: nil,
@@ -2780,16 +2409,6 @@ defmodule AshSqlite.MigrationGenerator do
     })
     |> Map.update!(:multitenancy, &load_multitenancy/1)
     |> Map.put_new(:base_filter, nil)
-  end
-
-  defp load_check_constraints(constraints) do
-    Enum.map(constraints, fn constraint ->
-      Map.update!(constraint, :attribute, fn attribute ->
-        attribute
-        |> List.wrap()
-        |> Enum.map(&String.to_atom/1)
-      end)
-    end)
   end
 
   defp load_custom_indexes(custom_indexes) do

@@ -93,7 +93,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       Mix.shell(Mix.Shell.Process)
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -151,50 +151,6 @@ defmodule AshSqlite.MigrationGeneratorTest do
     end
   end
 
-  describe "custom_indexes with `concurrently: true`" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-
-      defposts do
-        sqlite do
-          custom_indexes do
-            # need one without any opts
-            index([:title], concurrently: true)
-          end
-        end
-
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:title, :string)
-        end
-      end
-
-      defapi([Post])
-      Mix.shell(Mix.Shell.Process)
-
-        AshSqlite.MigrationGenerator.generate(Api,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
-        quiet: true,
-        format: false
-      )
-    end
-
-    test "it creates multiple migration files" do
-      assert [_, custom_index_migration] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
-
-      file = File.read!(custom_index_migration)
-
-      assert file =~ ~S[@disable_ddl_transaction true]
-
-      assert file =~ ~S<create index(:posts, ["title"], concurrently: true)>
-    end
-  end
-
   describe "creating follow up migrations" do
     setup do
       on_exit(fn ->
@@ -217,7 +173,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       Mix.shell(Mix.Shell.Process)
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -245,7 +201,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defapi([Post])
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -274,7 +230,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defapi([Post])
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -300,7 +256,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       send(self(), {:mix_shell_input, :yes?, true})
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -325,7 +281,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       send(self(), {:mix_shell_input, :yes?, false})
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -353,7 +309,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
       send(self(), {:mix_shell_input, :yes?, true})
       send(self(), {:mix_shell_input, :prompt, "subject"})
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -383,7 +339,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       send(self(), {:mix_shell_input, :yes?, false})
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -414,7 +370,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defapi([Post, Post2])
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -449,7 +405,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       Mix.shell(Mix.Shell.Process)
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -528,7 +484,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defapi([Post, Post2])
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -563,7 +519,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defapi([Post, Post2])
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -598,7 +554,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defapi([Post, Post2])
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -647,133 +603,6 @@ defmodule AshSqlite.MigrationGeneratorTest do
                String.split(down_code, "drop constraint(:posts, \"special_post_fkey\")")
 
       assert after_drop =~ ~S[references(:posts]
-    end
-  end
-
-  describe "check constraints" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-    end
-
-    test "when added, the constraint is created" do
-      defposts do
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:price, :integer)
-        end
-
-        sqlite do
-          check_constraints do
-            check_constraint(:price, "price_must_be_positive", check: "price > 0")
-          end
-        end
-      end
-
-      defapi([Post])
-
-        AshSqlite.MigrationGenerator.generate(Api,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
-        quiet: true,
-        format: false
-      )
-
-      assert file =
-               "test_migration_path/**/*_migrate_resources*.exs"
-               |> Path.wildcard()
-               |> Enum.sort()
-               |> Enum.at(0)
-               |> File.read!()
-
-      assert file =~
-               ~S[create constraint(:posts, :price_must_be_positive, check: "price > 0")]
-
-      defposts do
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:price, :integer)
-        end
-
-        sqlite do
-          check_constraints do
-            check_constraint(:price, "price_must_be_positive", check: "price > 1")
-          end
-        end
-      end
-
-      defapi([Post])
-
-        AshSqlite.MigrationGenerator.generate(Api,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
-        quiet: true,
-        format: false
-      )
-
-      assert file =
-               "test_migration_path/**/*_migrate_resources*.exs"
-               |> Path.wildcard()
-               |> Enum.sort()
-               |> Enum.at(1)
-               |> File.read!()
-
-      assert [_, down] = String.split(file, "def down do")
-
-      assert [_, remaining] =
-               String.split(down, "drop_if_exists constraint(:posts, :price_must_be_positive)")
-
-      assert remaining =~
-               ~S[create constraint(:posts, :price_must_be_positive, check: "price > 0")]
-    end
-
-    test "when removed, the constraint is dropped before modification" do
-      defposts do
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:price, :integer)
-        end
-
-        sqlite do
-          check_constraints do
-            check_constraint(:price, "price_must_be_positive", check: "price > 0")
-          end
-        end
-      end
-
-      defapi([Post])
-
-        AshSqlite.MigrationGenerator.generate(Api,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
-        quiet: true,
-        format: false
-      )
-
-      defposts do
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:price, :integer)
-        end
-      end
-
-      AshSqlite.MigrationGenerator.generate(Api,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
-        quiet: true,
-        format: false
-      )
-
-      assert file =
-               "test_migration_path/**/*_migrate_resources*.exs"
-               |> Path.wildcard()
-               |> Enum.sort()
-               |> Enum.at(1)
-
-      assert File.read!(file) =~
-               ~S[drop_if_exists constraint(:posts, :price_must_be_positive)]
     end
   end
 
@@ -835,7 +664,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defapi([Post, Comment])
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -880,7 +709,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defapi([Post])
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -989,7 +818,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       Mix.shell(Mix.Shell.Process)
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -1028,7 +857,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defapi([Post, Comment])
 
-        AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Api,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,

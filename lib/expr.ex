@@ -385,24 +385,7 @@ defmodule AshSqlite.Expr do
          type
        ) do
     if options[:trim?] do
-      require_ash_functions!(query, "string_split(..., trim?: true)")
-
-      do_dynamic_expr(
-        query,
-        %Fragment{
-          embedded?: pred_embedded?,
-          arguments: [
-            raw: "ash_trim_whitespace(string_to_array(",
-            expr: string,
-            raw: ", NULLIF(",
-            expr: delimiter,
-            raw: ", '')))"
-          ]
-        },
-        bindings,
-        embedded?,
-        type
-      )
+      raise "trim?: true not supported by AshSqlite"
     else
       do_dynamic_expr(
         query,
@@ -641,44 +624,10 @@ defmodule AshSqlite.Expr do
         )
 
       :|| ->
-        require_ash_functions!(query, "||")
-
-        do_dynamic_expr(
-          query,
-          %Fragment{
-            embedded?: pred_embedded?,
-            arguments: [
-              raw: "ash_elixir_or(",
-              casted_expr: left_expr,
-              raw: ", ",
-              casted_expr: right_expr,
-              raw: ")"
-            ]
-          },
-          bindings,
-          embedded?,
-          type
-        )
+        raise "|| operator not supported by AshSqlite"
 
       :&& ->
-        require_ash_functions!(query, "&&")
-
-        do_dynamic_expr(
-          query,
-          %Fragment{
-            embedded?: pred_embedded?,
-            arguments: [
-              raw: "ash_elixir_and(",
-              casted_expr: left_expr,
-              raw: ", ",
-              casted_expr: right_expr,
-              raw: ")"
-            ]
-          },
-          bindings,
-          embedded?,
-          type
-        )
+        raise "&& operator not supported by AshSqlite"
 
       other ->
         raise "Operator not implemented #{other}"
@@ -1286,19 +1235,6 @@ defmodule AshSqlite.Expr do
       Ecto.Query.dynamic(type(^expr, ^type))
     else
       expr
-    end
-  end
-
-  defp require_ash_functions!(query, operator) do
-    installed_extensions =
-      AshSqlite.DataLayer.Info.repo(query.__ash_bindings__.resource).installed_extensions()
-
-    unless "ash-functions" in installed_extensions do
-      raise """
-      Cannot use `#{operator}` without adding the extension `ash-functions` to your repo.
-
-      Add it to the list in `installed_extensions/0` and generate migrations.
-      """
     end
   end
 

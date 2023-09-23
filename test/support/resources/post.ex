@@ -18,17 +18,9 @@ defmodule AshSqlite.Test.Post do
     repo(AshSqlite.TestRepo)
     base_filter_sql("type = 'sponsored'")
 
-    check_constraints do
-      check_constraint(:price, "price_must_be_positive",
-        message: "yo, bad price",
-        check: "price > 0"
-      )
-    end
-
     custom_indexes do
       index([:uniq_custom_one, :uniq_custom_two],
         unique: true,
-        concurrently: true,
         message: "dude what the heck"
       )
     end
@@ -46,7 +38,7 @@ defmodule AshSqlite.Test.Post do
     end
 
     read :paginated do
-      pagination(offset?: true, required?: true, countable: true)
+      pagination(offset?: true, required?: true)
     end
 
     create :create do

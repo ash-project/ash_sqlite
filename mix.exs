@@ -43,7 +43,10 @@ defmodule AshSqlite.MixProject do
 
   if Mix.env() == :test do
     def application() do
-      [applications: [:ecto, :ecto_sql, :jason, :ash, :postgrex], mod: {AshSqlite.TestApp, []}]
+      [
+        applications: [:ecto, :ecto_sql, :ecto_sqlite3, :jason, :ash],
+        mod: {AshSqlite.TestApp, []}
+      ]
     end
   end
 
@@ -145,7 +148,6 @@ defmodule AshSqlite.MixProject do
         ],
         Introspection: [
           AshSqlite.DataLayer.Info,
-          AshSqlite.CheckConstraint,
           AshSqlite.CustomExtension,
           AshSqlite.CustomIndex,
           AshSqlite.Reference,
@@ -173,7 +175,6 @@ defmodule AshSqlite.MixProject do
       {:ecto_sqlite3, "~> 0.11"},
       {:ecto, "~> 3.9"},
       {:jason, "~> 1.0"},
-      {:postgrex, ">= 0.0.0"},
       {:ash, ash_version("~> 2.14 and >= 2.14.18")},
       {:git_ops, "~> 2.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.22", only: [:dev, :test], runtime: false},

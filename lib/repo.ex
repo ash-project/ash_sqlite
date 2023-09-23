@@ -50,7 +50,6 @@ defmodule AshSqlite.Repo do
 
       def installed_extensions, do: []
       def migrations_path, do: nil
-      def default_prefix, do: "public"
       def override_migration_type(type), do: type
       def min_pg_version, do: 10
 
@@ -59,7 +58,6 @@ defmodule AshSqlite.Repo do
           config
           |> Keyword.put(:installed_extensions, installed_extensions())
           |> Keyword.put(:migrations_path, migrations_path())
-          |> Keyword.put(:default_prefix, default_prefix())
 
         {:ok, new_config}
       end
@@ -164,7 +162,6 @@ defmodule AshSqlite.Repo do
       defoverridable init: 2,
                      on_transaction_begin: 1,
                      installed_extensions: 0,
-                     default_prefix: 0,
                      override_migration_type: 1,
                      min_pg_version: 0
     end

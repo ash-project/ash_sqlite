@@ -102,13 +102,13 @@ defmodule Mix.Tasks.AshSqlite.Migrate do
       |> AshSqlite.MixHelpers.delete_arg("--apis")
       |> AshSqlite.MixHelpers.delete_arg("--migrations-path")
 
-      for repo <- repos do
-        Mix.Task.run(
-          "ecto.migrate",
-          repo_args ++ rest_opts ++ ["--migrations-path", migrations_path(opts, repo)]
-        )
+    for repo <- repos do
+      Mix.Task.run(
+        "ecto.migrate",
+        repo_args ++ rest_opts ++ ["--migrations-path", migrations_path(opts, repo)]
+      )
 
-        Mix.Task.reenable("ecto.migrate")
-      end
+      Mix.Task.reenable("ecto.migrate")
+    end
   end
 end

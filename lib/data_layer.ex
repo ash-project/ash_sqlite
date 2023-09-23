@@ -136,44 +136,6 @@ defmodule AshSqlite.DataLayer do
     ]
   }
 
-  @check_constraint %Spark.Dsl.Entity{
-    name: :check_constraint,
-    describe: """
-    Add a check constraint to be validated.
-
-    If a check constraint exists on the table but not in this section, and it produces an error, a runtime error will be raised.
-
-    Provide a list of attributes instead of a single attribute to add the message to multiple attributes.
-
-    By adding the `check` option, the migration generator will include it when generating migrations.
-    """,
-    examples: [
-      """
-      check_constraint :price, "price_must_be_positive", check: "price > 0", message: "price must be positive"
-      """
-    ],
-    args: [:attribute, :name],
-    target: AshSqlite.CheckConstraint,
-    schema: AshSqlite.CheckConstraint.schema()
-  }
-
-  @check_constraints %Spark.Dsl.Section{
-    name: :check_constraints,
-    describe: """
-    A section for configuring the check constraints for a given table.
-
-    This can be used to automatically create those check constraints, or just to provide message when they are raised
-    """,
-    examples: [
-      """
-      check_constraints do
-        check_constraint :price, "price_must_be_positive", check: "price > 0", message: "price must be positive"
-      end
-      """
-    ],
-    entities: [@check_constraint]
-  }
-
   @references %Spark.Dsl.Section{
     name: :references,
     describe: """
@@ -217,8 +179,7 @@ defmodule AshSqlite.DataLayer do
     sections: [
       @custom_indexes,
       @custom_statements,
-      @references,
-      @check_constraints
+      @references
     ],
     modules: [
       :repo
@@ -364,20 +325,9 @@ defmodule AshSqlite.DataLayer do
   import Ecto.Query, only: [from: 2, subquery: 1]
 
   @impl true
-  def can?(_, :async_engine), do: true
+  def can?(_, :async_engine), do: false
   def can?(_, :bulk_create), do: true
-  def can?(_, {:lock, :for_update}), do: true
-
-  def can?(_, {:lock, string}) do
-    string = String.trim_trailing(string, " NOWAIT")
-
-    String.upcase(string) in [
-      "FOR UPDATE",
-      "FOR NO KEY UPDATE",
-      "FOR SHARE",
-      "FOR KEY SHARE"
-    ]
-  end
+  def can?(_, {:lock, _}), do: false
 
   def can?(_, :transact), do: true
   def can?(_, :composite_primary_key), do: true
@@ -470,7 +420,7 @@ defmodule AshSqlite.DataLayer do
         data_layer_query
       end
 
-    default_bindings(data_layer_query, resource, context)
+    {:ok, default_bindings(data_layer_query, resource, context)}
   end
 
   @impl true
@@ -545,8 +495,8 @@ defmodule AshSqlite.DataLayer do
   defp no_table?(_), do: false
 
   defp repo_opts(timeout, nil, _resource) do
-      []
-      |> add_timeout(timeout)
+    []
+    |> add_timeout(timeout)
   end
 
   defp repo_opts(timeout, _resource) do
@@ -563,7 +513,7 @@ defmodule AshSqlite.DataLayer do
   def functions(_resource) do
     [
       AshSqlite.Functions.Fragment,
-      AshSqlite.Functions.Like,
+      AshSqlite.Functions.Like
     ]
   end
 
@@ -623,7 +573,6 @@ defmodule AshSqlite.DataLayer do
         else
           {:ok,
            Stream.zip_with(results, changesets, fn result, changeset ->
-
              Ash.Resource.put_metadata(
                result,
                :bulk_create_index,
@@ -717,7 +666,6 @@ defmodule AshSqlite.DataLayer do
       |> Map.update!(:filters, &Map.merge(&1, filters))
       |> add_configured_foreign_key_constraints(record.__struct__)
       |> add_unique_indexes(record.__struct__, changeset)
-      |> add_check_constraints(record.__struct__)
       |> add_exclusion_constraints(record.__struct__)
 
     case type do
@@ -769,17 +717,16 @@ defmodule AshSqlite.DataLayer do
         changeset.context[:data_layer][:table] ||
           AshSqlite.DataLayer.Info.table(record.__struct__)
 
-        if table do
-          Ecto.put_meta(record, source: table)
+      if table do
+        Ecto.put_meta(record, source: table)
+      else
+        if table_error? do
+          raise_table_error!(changeset.resource, operation)
         else
-          if table_error? do
-            raise_table_error!(changeset.resource, operation)
-          else
-            record
-          end
+          record
         end
-
-        else
+      end
+    else
       record
     end
   end
@@ -846,21 +793,6 @@ defmodule AshSqlite.DataLayer do
   end
 
   def to_ecto(other), do: other
-
-  defp add_check_constraints(changeset, resource) do
-    resource
-    |> AshSqlite.DataLayer.Info.check_constraints()
-    |> Enum.reduce(changeset, fn constraint, changeset ->
-      constraint.attribute
-      |> List.wrap()
-      |> Enum.reduce(changeset, fn attribute, changeset ->
-        Ecto.Changeset.check_constraint(changeset, attribute,
-          name: constraint.name,
-          message: constraint.message || "is invalid"
-        )
-      end)
-    end)
-  end
 
   defp add_exclusion_constraints(changeset, resource) do
     resource
@@ -999,34 +931,34 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def upsert(resource, changeset, keys \\ nil) do
-      keys = keys || Ash.Resource.Info.primary_key(resource)
+    keys = keys || Ash.Resource.Info.primary_key(resource)
 
-      explicitly_changing_attributes =
-        Enum.map(
-          Map.keys(changeset.attributes) -- Map.get(changeset, :defaults, []) -- keys,
-          fn key ->
-            {key, Ash.Changeset.get_attribute(changeset, key)}
-          end
-        )
+    explicitly_changing_attributes =
+      Enum.map(
+        Map.keys(changeset.attributes) -- Map.get(changeset, :defaults, []) -- keys,
+        fn key ->
+          {key, Ash.Changeset.get_attribute(changeset, key)}
+        end
+      )
 
-      on_conflict =
-        changeset
-        |> update_defaults()
-        |> Keyword.merge(explicitly_changing_attributes)
+    on_conflict =
+      changeset
+      |> update_defaults()
+      |> Keyword.merge(explicitly_changing_attributes)
 
-      case bulk_create(resource, [changeset], %{
-             single?: true,
-             upsert?: true,
-             upsert_keys: keys,
-             upsert_fields: Keyword.keys(on_conflict),
-             return_records?: true
-           }) do
-        {:ok, [result]} ->
-          {:ok, result}
+    case bulk_create(resource, [changeset], %{
+           single?: true,
+           upsert?: true,
+           upsert_keys: keys,
+           upsert_fields: Keyword.keys(on_conflict),
+           return_records?: true
+         }) do
+      {:ok, [result]} ->
+        {:ok, result}
 
-        {:error, error} ->
-          {:error, error}
-      end
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   defp conflict_target(resource, keys) do
@@ -1265,41 +1197,6 @@ defmodule AshSqlite.DataLayer do
   end
 
   @impl true
-  def lock(query, :for_update, _) do
-    if query.distinct do
-      new_query =
-        Ecto.Query.lock(%{query | distinct: nil}, [{^0, a}], fragment("FOR UPDATE OF ?", a))
-
-      q = from(row in subquery(new_query), [])
-      {:ok, %{q | distinct: query.distinct}}
-    else
-      {:ok, Ecto.Query.lock(query, [{^0, a}], fragment("FOR UPDATE OF ?", a))}
-    end
-  end
-
-  @locks [
-    "FOR UPDATE",
-    "FOR NO KEY UPDATE",
-    "FOR SHARE",
-    "FOR KEY SHARE"
-  ]
-
-  for lock <- @locks do
-    frag = "#{lock} OF ?"
-
-    def lock(query, unquote(lock), _) do
-      {:ok, Ecto.Query.lock(query, [{^0, a}], fragment(unquote(frag), a))}
-    end
-
-    frag = "#{lock} OF ? NOWAIT"
-    lock = "#{lock} NOWAIT"
-
-    def lock(query, unquote(lock), _) do
-      {:ok, Ecto.Query.lock(query, [{^0, a}], fragment(unquote(frag), a))}
-    end
-  end
-
-  @impl true
   def sort(query, sort, _resource) do
     {:ok, Map.update!(query, :__ash_bindings__, &Map.put(&1, :sort, sort))}
   end
@@ -1374,7 +1271,6 @@ defmodule AshSqlite.DataLayer do
                   :with_ctes,
                   :limit,
                   :offset,
-                  :lock,
                   :preload,
                   :update,
                   :where

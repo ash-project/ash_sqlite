@@ -1,0 +1,62 @@
+{
+  "attributes": [
+    {
+      "default": "nil",
+      "size": null,
+      "type": "uuid",
+      "source": "id",
+      "references": null,
+      "primary_key?": true,
+      "allow_nil?": false,
+      "generated?": false
+    },
+    {
+      "default": "nil",
+      "size": null,
+      "type": "bigint",
+      "source": "score",
+      "references": null,
+      "primary_key?": false,
+      "allow_nil?": true,
+      "generated?": false
+    },
+    {
+      "default": "nil",
+      "size": null,
+      "type": "uuid",
+      "source": "resource_id",
+      "references": {
+        "name": "post_ratings_resource_id_fkey",
+        "table": "posts",
+        "on_delete": null,
+        "on_update": null,
+        "destination_attribute_generated": false,
+        "destination_attribute_default": "nil",
+        "multitenancy": {
+          "global": null,
+          "attribute": null,
+          "strategy": null
+        },
+        "destination_attribute": "id",
+        "primary_key?": true,
+        "deferrable": false
+      },
+      "primary_key?": false,
+      "allow_nil?": true,
+      "generated?": false
+    }
+  ],
+  "table": "post_ratings",
+  "hash": "DE6056BA23D22810D95CCDB6FDF5F0FE9F558124FC8D9B08861B8F59099C0032",
+  "repo": "Elixir.AshSqlite.TestRepo",
+  "multitenancy": {
+    "global": null,
+    "attribute": null,
+    "strategy": null
+  },
+  "custom_indexes": [],
+  "base_filter": null,
+  "identities": [],
+  "custom_statements": [],
+  "has_create_action": true
+}

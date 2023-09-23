@@ -5,7 +5,6 @@ defmodule AshSqlite.CustomIndex do
     :fields,
     :name,
     :unique,
-    :concurrently,
     :using,
     :where,
     :include,
@@ -28,11 +27,6 @@ defmodule AshSqlite.CustomIndex do
     unique: [
       type: :boolean,
       doc: "indicates whether the index should be unique.",
-      default: false
-    ],
-    concurrently: [
-      type: :boolean,
-      doc: "indicates whether the index should be created/dropped concurrently.",
       default: false
     ],
     using: [

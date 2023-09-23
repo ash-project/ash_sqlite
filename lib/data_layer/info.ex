@@ -13,7 +13,6 @@ defmodule AshSqlite.DataLayer.Info do
     Extension.get_opt(resource, [:sqlite], :table, nil, true)
   end
 
-
   @doc "The configured references for a resource"
   def references(resource) do
     Extension.get_entities(resource, [:sqlite, :references])
@@ -41,10 +40,6 @@ defmodule AshSqlite.DataLayer.Info do
     Extension.get_opt(resource, [:sqlite], :migration_ignore_attributes, [])
   end
 
-  @doc "The configured check_constraints for a resource"
-  def check_constraints(resource) do
-    Extension.get_entities(resource, [:sqlite, :check_constraints])
-  end
 
   @doc "The configured custom_indexes for a resource"
   def custom_indexes(resource) do
@@ -120,5 +115,4 @@ defmodule AshSqlite.DataLayer.Info do
   def skip_unique_indexes(resource) do
     Extension.get_opt(resource, [:sqlite], :skip_unique_indexes, [])
   end
-
 end

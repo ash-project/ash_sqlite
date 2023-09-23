@@ -6,8 +6,4 @@ defmodule AshSqlite.TestRepo do
   def on_transaction_begin(data) do
     send(self(), data)
   end
-
-  def installed_extensions do
-    ["ash-functions", AshSqlite.TestCustomExtension]
-  end
 end

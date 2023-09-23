@@ -90,6 +90,6 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
       |> Keyword.put(:format, !opts[:no_format])
       |> Keyword.delete(:no_format)
 
-        AshSqlite.MigrationGenerator.generate(apis, opts)
+    AshSqlite.MigrationGenerator.generate(apis, opts)
   end
 end

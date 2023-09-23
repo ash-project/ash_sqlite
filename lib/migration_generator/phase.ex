@@ -8,17 +8,17 @@ defmodule AshSqlite.MigrationGenerator.Phase do
     import AshSqlite.MigrationGenerator.Operation.Helper, only: [as_atom: 1]
 
     def up(%{table: table, operations: operations}) do
-        opts = ""
+      opts = ""
 
-        "create table(:#{as_atom(table)}, primary_key: false#{opts}) do\n" <>
-          Enum.map_join(operations, "\n", fn operation -> operation.__struct__.up(operation) end) <>
-          "\nend"
+      "create table(:#{as_atom(table)}, primary_key: false#{opts}) do\n" <>
+        Enum.map_join(operations, "\n", fn operation -> operation.__struct__.up(operation) end) <>
+        "\nend"
     end
 
-    def down(%{ table: table}) do
-        opts = ""
+    def down(%{table: table}) do
+      opts = ""
 
-        "drop table(:#{as_atom(table)}#{opts})"
+      "drop table(:#{as_atom(table)}#{opts})"
     end
   end
 
@@ -37,11 +37,11 @@ defmodule AshSqlite.MigrationGenerator.Phase do
       if body == "" do
         ""
       else
-          opts = ""
+        opts = ""
 
-          "alter table(:#{as_atom(table)}#{opts}) do\n" <>
-            body <>
-            "\nend"
+        "alter table(:#{as_atom(table)}#{opts}) do\n" <>
+          body <>
+          "\nend"
       end
     end
 

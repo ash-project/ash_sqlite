@@ -123,7 +123,6 @@ defmodule AshSqlite.MixHelpers do
     opts[:migrations_path] || repo.config()[:migrations_path] || derive_migrations_path(repo)
   end
 
-
   def derive_migrations_path(repo) do
     config = repo.config()
     priv = config[:priv] || "priv/#{repo |> Module.split() |> List.last() |> Macro.underscore()}"

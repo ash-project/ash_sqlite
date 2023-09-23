@@ -21,29 +21,14 @@ if Mix.env() == :test do
   config :ash, :validate_api_config_inclusion?, false
 
   config :ash_sqlite, AshSqlite.TestRepo,
-    username: "sqlite",
-    database: "ash_sqlite",
-    hostname: "localhost",
-    pool: Ecto.Adapters.SQL.Sandbox
-
-  # sobelow_skip ["Config.Secrets"]
-  config :ash_sqlite, AshSqlite.TestRepo, password: "sqlite"
-
-  config :ash_sqlite, AshSqlite.TestRepo, migration_primary_key: [name: :id, type: :binary_id]
-
-  config :ash_sqlite, AshSqlite.TestNoSandboxRepo,
-    username: "sqlite",
-    database: "ash_sqlite_test",
-    hostname: "localhost"
-
-  # sobelow_skip ["Config.Secrets"]
-  config :ash_sqlite, AshSqlite.TestNoSandboxRepo, password: "sqlite"
-
-  config :ash_sqlite, AshSqlite.TestNoSandboxRepo,
+    database: Path.join(__DIR__, "../test/test.db"),
+    pool_size: 1,
+    migration_lock: false,
+    pool: Ecto.Adapters.SQL.Sandbox,
     migration_primary_key: [name: :id, type: :binary_id]
 
   config :ash_sqlite,
-    ecto_repos: [AshSqlite.TestRepo, AshSqlite.TestNoSandboxRepo],
+    ecto_repos: [AshSqlite.TestRepo],
     ash_apis: [
       AshSqlite.Test.Api
     ]

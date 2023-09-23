@@ -1,0 +1,87 @@
+{
+  "attributes": [
+    {
+      "default": "\"active\"",
+      "size": null,
+      "type": "text",
+      "source": "state",
+      "references": null,
+      "primary_key?": false,
+      "allow_nil?": true,
+      "generated?": false
+    },
+    {
+      "default": "nil",
+      "size": null,
+      "type": "uuid",
+      "source": "source_post_id",
+      "references": {
+        "name": "post_links_source_post_id_fkey",
+        "table": "posts",
+        "on_delete": null,
+        "on_update": null,
+        "destination_attribute_generated": null,
+        "destination_attribute_default": null,
+        "multitenancy": {
+          "global": null,
+          "attribute": null,
+          "strategy": null
+        },
+        "destination_attribute": "id",
+        "primary_key?": true,
+        "deferrable": false
+      },
+      "primary_key?": true,
+      "allow_nil?": false,
+      "generated?": false
+    },
+    {
+      "default": "nil",
+      "size": null,
+      "type": "uuid",
+      "source": "destination_post_id",
+      "references": {
+        "name": "post_links_destination_post_id_fkey",
+        "table": "posts",
+        "on_delete": null,
+        "on_update": null,
+        "destination_attribute_generated": null,
+        "destination_attribute_default": null,
+        "multitenancy": {
+          "global": null,
+          "attribute": null,
+          "strategy": null
+        },
+        "destination_attribute": "id",
+        "primary_key?": true,
+        "deferrable": false
+      },
+      "primary_key?": true,
+      "allow_nil?": false,
+      "generated?": false
+    }
+  ],
+  "table": "post_links",
+  "hash": "2583037B16689EDA7F8414C379C6D315D1E86BD4ED4FA6861E744F629E7CE8A3",
+  "repo": "Elixir.AshSqlite.TestRepo",
+  "multitenancy": {
+    "global": null,
+    "attribute": null,
+    "strategy": null
+  },
+  "custom_indexes": [],
+  "base_filter": null,
+  "identities": [
+    {
+      "name": "unique_link",
+      "keys": [
+        "source_post_id",
+        "destination_post_id"
+      ],
+      "base_filter": null,
+      "index_name": "post_links_unique_link_index"
+    }
+  ],
+  "custom_statements": [],
+  "has_create_action": true
+}

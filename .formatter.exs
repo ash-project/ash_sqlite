@@ -1,8 +1,6 @@
 spark_locals_without_parens = [
   base_filter_sql: 1,
   check: 1,
-  check_constraint: 2,
-  check_constraint: 3,
   code?: 1,
   concurrently: 1,
   create?: 1,
