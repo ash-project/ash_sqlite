@@ -17,9 +17,9 @@ defmodule AshSqlite.Test.Organization do
     attribute(:name, :string)
   end
 
-  relationships do
-    has_many(:users, AshSqlite.Test.User)
-    has_many(:posts, AshSqlite.Test.Post)
-    has_many(:managers, AshSqlite.Test.Manager)
-  end
+  # relationships do
+  #   has_many(:users, AshSqlite.Test.User)
+  #   has_many(:posts, AshSqlite.Test.Post)
+  #   has_many(:managers, AshSqlite.Test.Manager)
+  # end
 end

@@ -14,7 +14,7 @@ defmodule MyApp.Reaction do
   attributes do
     attribute(:resource_id, :uuid)
   end
-  
+
   ...
 end
 ```
@@ -78,5 +78,5 @@ end
 When a migration is marked as `polymorphic? true`, the migration generator will look at
 all resources that are related to it, that set the `%{data_layer: %{table: "table"}}` context.
 For each of those, a migration is generated/managed automatically. This means that adding reactions
-to a new resource is as easy as adding the relationship and table context, and then running 
+to a new resource is as easy as adding the relationship and table context, and then running
 `mix ash_sqlite.generate_migrations`.

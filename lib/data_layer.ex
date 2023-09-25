@@ -329,7 +329,7 @@ defmodule AshSqlite.DataLayer do
   def can?(_, :bulk_create), do: true
   def can?(_, {:lock, _}), do: false
 
-  def can?(_, :transact), do: true
+  def can?(_, :transact), do: false
   def can?(_, :composite_primary_key), do: true
   def can?(_, {:atomic, :update}), do: true
   def can?(_, :upsert), do: true
@@ -387,11 +387,6 @@ defmodule AshSqlite.DataLayer do
   def can?(_, :distinct), do: true
   def can?(_, {:sort, _}), do: true
   def can?(_, _), do: false
-
-  @impl true
-  def in_transaction?(resource) do
-    AshSqlite.DataLayer.Info.repo(resource).in_transaction?()
-  end
 
   @impl true
   def limit(query, nil, _), do: {:ok, query}
@@ -1572,29 +1567,6 @@ defmodule AshSqlite.DataLayer do
     }
 
     %{query | __ash_bindings__: new_ash_bindings}
-  end
-
-  @impl true
-  def transaction(resource, func, timeout \\ nil, reason \\ %{type: :custom, metadata: %{}}) do
-    repo =
-      case reason[:data_layer_context] do
-        %{repo: repo} when not is_nil(repo) ->
-          repo
-
-        _ ->
-          AshSqlite.DataLayer.Info.repo(resource)
-      end
-
-    func = fn ->
-      repo.on_transaction_begin(reason)
-      func.()
-    end
-
-    if timeout do
-      repo.transaction(func, timeout: timeout)
-    else
-      repo.transaction(func)
-    end
   end
 
   @impl true

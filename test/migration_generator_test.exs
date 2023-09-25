@@ -123,7 +123,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       # the migration adds the id, with its default
       assert file_contents =~
-               ~S[add :id, :uuid, null: false, default: fragment("uuid_generate_v4()"), primary_key: true]
+               ~S[add :id, :uuid, null: false, primary_key: true]
 
       # the migration adds the id, with its default
       assert file_contents =~

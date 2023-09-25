@@ -7,16 +7,6 @@ defmodule AshSqlite.Repo do
   You can use `Ecto.Repo`'s `init/2` to configure your repo like normal, but
   instead of returning `{:ok, config}`, use `super(config)` to pass the
   configuration to the `AshSqlite.Repo` implementation.
-
-  ## Transaction Hooks
-
-  You can define `on_transaction_begin/1`, which will be invoked whenever a transaction is started for Ash.
-
-  This will be invoked with a map containing a `type` key and metadata.
-
-  ```elixir
-  %{type: :create, %{resource: YourApp.YourResource, action: :action}}
-  ```
   """
 
   @doc "Use this to inform the data layer about what extensions are installed"
@@ -28,8 +18,6 @@ defmodule AshSqlite.Repo do
   Must be an integer greater than or equal to 13.
   """
   @callback min_pg_version() :: integer()
-
-  @callback on_transaction_begin(reason :: Ash.DataLayer.transaction_reason()) :: term
 
   @doc "The path where your migrations are stored"
   @callback migrations_path() :: String.t() | nil
@@ -61,8 +49,6 @@ defmodule AshSqlite.Repo do
 
         {:ok, new_config}
       end
-
-      def on_transaction_begin(_reason), do: :ok
 
       def insert(struct_or_changeset, opts \\ []) do
         struct_or_changeset
@@ -160,7 +146,6 @@ defmodule AshSqlite.Repo do
       def to_ecto(other), do: other
 
       defoverridable init: 2,
-                     on_transaction_begin: 1,
                      installed_extensions: 0,
                      override_migration_type: 1,
                      min_pg_version: 0

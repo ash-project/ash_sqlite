@@ -310,7 +310,7 @@ defmodule AshSqlite.MigrationGenerator do
           operations
           |> organize_operations
           |> build_up_and_down()
-          |> write_migration!(repo, opts, false)
+          |> write_migration!(repo, opts)
 
           create_new_snapshot(snapshots, repo_name(repo), opts)
       end
@@ -676,7 +676,7 @@ defmodule AshSqlite.MigrationGenerator do
     repo |> Module.split() |> List.last() |> Macro.underscore()
   end
 
-  defp write_migration!({up, down}, repo, opts, run_without_transaction?) do
+  defp write_migration!({up, down}, repo, opts) do
     migration_path = migration_path(opts, repo)
 
     {migration_name, last_part} =
@@ -714,14 +714,6 @@ defmodule AshSqlite.MigrationGenerator do
     module_name =
       Module.concat([repo, Migrations, Macro.camelize(last_part)])
 
-    module_attributes =
-      if run_without_transaction? do
-        """
-        @disable_ddl_transaction true
-        @disable_migration_lock true
-        """
-      end
-
     contents = """
     defmodule #{inspect(module_name)} do
       @moduledoc \"\"\"
@@ -731,8 +723,6 @@ defmodule AshSqlite.MigrationGenerator do
       \"\"\"
 
       use Ecto.Migration
-
-      #{module_attributes}
 
       def up do
         #{up}
@@ -1508,7 +1498,6 @@ defmodule AshSqlite.MigrationGenerator do
           table: snapshot.table
         }
       end)
-
 
     [
       pkey_operations,
@@ -2287,7 +2276,6 @@ defmodule AshSqlite.MigrationGenerator do
     end)
     |> Enum.map(&Map.put(&1, :base_filter, AshSqlite.DataLayer.Info.base_filter_sql(resource)))
   end
-
 
   defp default(%{name: name, default: default}, resource, _repo) when is_function(default) do
     configured_default(resource, name) || "nil"
