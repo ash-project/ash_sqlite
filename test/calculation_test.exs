@@ -3,7 +3,6 @@ defmodule AshSqlite.CalculationTest do
   alias AshSqlite.Test.{Account, Api, Author, Comment, Post, User}
 
   require Ash.Query
-  import Ash.Expr
 
   test "calculations can refer to embedded attributes" do
     author =
@@ -185,105 +184,50 @@ defmodule AshSqlite.CalculationTest do
     assert account.active
   end
 
-  describe "string join expression" do
-    test "no nil values" do
-      author =
-        Author
-        |> Ash.Changeset.for_create(:create, %{
-          first_name: "Bill",
-          last_name: "Jones",
-          bio: %{title: "Mr.", bio: "Bones"}
-        })
-        |> Api.create!()
+  # describe "string join expression" do
+  #   test "no nil values" do
+  #     author =
+  #       Author
+  #       |> Ash.Changeset.for_create(:create, %{
+  #         first_name: "Bill",
+  #         last_name: "Jones",
+  #         bio: %{title: "Mr.", bio: "Bones"}
+  #       })
+  #       |> Api.create!()
 
-      assert %{
-               full_name_with_nils: "Bill Jones",
-               full_name_with_nils_no_joiner: "BillJones"
-             } =
-               Author
-               |> Ash.Query.filter(id == ^author.id)
-               |> Ash.Query.load(:full_name_with_nils)
-               |> Ash.Query.load(:full_name_with_nils_no_joiner)
-               |> Api.read_one!()
-    end
+  #     assert %{
+  #              full_name_with_nils: "Bill Jones",
+  #              full_name_with_nils_no_joiner: "BillJones"
+  #            } =
+  #              Author
+  #              |> Ash.Query.filter(id == ^author.id)
+  #              |> Ash.Query.load(:full_name_with_nils)
+  #              |> Ash.Query.load(:full_name_with_nils_no_joiner)
+  #              |> Api.read_one!()
+  #   end
 
-    test "with nil value" do
-      author =
-        Author
-        |> Ash.Changeset.for_create(:create, %{
-          first_name: "Bill",
-          bio: %{title: "Mr.", bio: "Bones"}
-        })
-        |> Api.create!()
+  #   test "with nil value" do
+  #     author =
+  #       Author
+  #       |> Ash.Changeset.for_create(:create, %{
+  #         first_name: "Bill",
+  #         bio: %{title: "Mr.", bio: "Bones"}
+  #       })
+  #       |> Api.create!()
 
-      assert %{
-               full_name_with_nils: "Bill",
-               full_name_with_nils_no_joiner: "Bill"
-             } =
-               Author
-               |> Ash.Query.filter(id == ^author.id)
-               |> Ash.Query.load(:full_name_with_nils)
-               |> Ash.Query.load(:full_name_with_nils_no_joiner)
-               |> Api.read_one!()
-    end
-  end
+  #     Logger.configure(level: :debug)
 
-  test "arguments with cast_in_query?: false are not cast" do
-    Post
-    |> Ash.Changeset.new(%{title: "match", score: 42})
-    |> Api.create!()
-
-    Post
-    |> Ash.Changeset.new(%{title: "not", score: 42})
-    |> Api.create!()
-
-    assert [post] =
-             Post
-             |> Ash.Query.filter(similarity(search: expr(query(search: "match"))))
-             |> Api.read!()
-
-    assert post.title == "match"
-  end
-
-  describe "string split expression" do
-    test "with the default delimiter" do
-      author =
-        Author
-        |> Ash.Changeset.for_create(:create, %{
-          first_name: "Bill",
-          last_name: "Jones",
-          bio: %{title: "Mr.", bio: "Bones"}
-        })
-        |> Api.create!()
-
-      assert %{
-               split_full_name: ["Bill", "Jones"]
-             } =
-               Author
-               |> Ash.Query.filter(id == ^author.id)
-               |> Ash.Query.load(:split_full_name)
-               |> Api.read_one!()
-    end
-
-    test "trimming whitespace" do
-      author =
-        Author
-        |> Ash.Changeset.for_create(:create, %{
-          first_name: "Bill ",
-          last_name: "Jones ",
-          bio: %{title: "Mr.", bio: "Bones"}
-        })
-        |> Api.create!()
-
-      assert %{
-               split_full_name: ["Bill", "Jones"]
-             } =
-               Author
-               |> Ash.Query.filter(id == ^author.id)
-               |> Ash.Query.load([:split_full_name])
-               |> Api.read_one!()
-    end
-  end
+  #     assert %{
+  #              full_name_with_nils: "Bill",
+  #              full_name_with_nils_no_joiner: "Bill"
+  #            } =
+  #              Author
+  #              |> Ash.Query.filter(id == ^author.id)
+  #              |> Ash.Query.load(:full_name_with_nils)
+  #              |> Ash.Query.load(:full_name_with_nils_no_joiner)
+  #              |> Api.read_one!()
+  #   end
+  # end
 
   describe "-/1" do
     test "makes numbers negative" do

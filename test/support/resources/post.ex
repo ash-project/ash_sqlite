@@ -98,11 +98,6 @@ defmodule AshSqlite.Test.Post do
 
     belongs_to(:author, AshSqlite.Test.Author)
 
-    has_many :posts_with_matching_title, __MODULE__ do
-      no_attributes?(true)
-      filter(expr(parent(title) == title and parent(id) != id))
-    end
-
     has_many(:comments, AshSqlite.Test.Comment, destination_attribute: :post_id)
 
     has_many :comments_matching_post_title, AshSqlite.Test.Comment do

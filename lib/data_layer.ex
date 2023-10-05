@@ -322,7 +322,7 @@ defmodule AshSqlite.DataLayer do
     Mix.Task.run("ash_sqlite.drop", args)
   end
 
-  import Ecto.Query, only: [from: 2, subquery: 1]
+  import Ecto.Query, only: [from: 2]
 
   @impl true
   def can?(_, :async_engine), do: false

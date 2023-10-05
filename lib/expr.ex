@@ -7,17 +7,13 @@ defmodule AshSqlite.Expr do
 
   alias Ash.Query.Function.{
     Ago,
-    At,
     Contains,
     DateAdd,
     DateTimeAdd,
     FromNow,
     GetPath,
     If,
-    Length,
     Now,
-    StringJoin,
-    StringSplit,
     Today,
     Type
   }
@@ -234,29 +230,6 @@ defmodule AshSqlite.Expr do
 
   defp do_dynamic_expr(
          query,
-         %Length{arguments: [list], embedded?: pred_embedded?},
-         bindings,
-         embedded?,
-         type
-       ) do
-    do_dynamic_expr(
-      query,
-      %Fragment{
-        embedded?: pred_embedded?,
-        arguments: [
-          raw: "array_length((",
-          expr: list,
-          raw: "), 1)"
-        ]
-      },
-      bindings,
-      embedded?,
-      type
-    )
-  end
-
-  defp do_dynamic_expr(
-         query,
          %If{arguments: [condition, when_true, when_false], embedded?: pred_embedded?},
          bindings,
          embedded?,
@@ -319,82 +292,101 @@ defmodule AshSqlite.Expr do
     )
   end
 
-  defp do_dynamic_expr(
-         query,
-         %StringJoin{arguments: [values, joiner], embedded?: pred_embedded?},
-         bindings,
-         embedded?,
-         type
-       ) do
-    do_dynamic_expr(
-      query,
-      %Fragment{
-        embedded?: pred_embedded?,
-        arguments:
-          Enum.reduce(values, [raw: "(concat_ws(", expr: joiner], fn value, acc ->
-            acc ++ [raw: ", ", expr: value]
-          end) ++ [raw: "))"]
-      },
-      bindings,
-      embedded?,
-      type
-    )
-  end
+  # Wow, even this doesn't work, because of course it doesn't.
+  # Doing string joining properly requires a recursive "if not empty" check
+  # that honestly I don't have the energy to do right now.
+  # There are commented out tests for this in the calculation tests, make sure those pass, whoever feels like fixing this.
+  # defp do_dynamic_expr(
+  #        _query,
+  #        %StringJoin{arguments: [values | _], embedded?: _pred_embedded?} = string_join,
+  #        _bindings,
+  #        _embedded?,
+  #        _type
+  #      )
+  #      when not is_list(values) do
+  #   raise "SQLite can only join literal lists, not dynamic values. i.e `string_join([foo, bar])`, but not `string_join(something)`. Got #{inspect(string_join)}"
+  # end
 
-  defp do_dynamic_expr(
-         query,
-         %StringSplit{arguments: [string, delimiter, options], embedded?: pred_embedded?},
-         bindings,
-         embedded?,
-         type
-       ) do
-    if options[:trim?] do
-      raise "trim?: true not supported by AshSqlite"
-    else
-      do_dynamic_expr(
-        query,
-        %Fragment{
-          embedded?: pred_embedded?,
-          arguments: [
-            raw: "string_to_array(",
-            expr: string,
-            raw: ", NULLIF(",
-            expr: delimiter,
-            raw: ", ''))"
-          ]
-        },
-        bindings,
-        embedded?,
-        type
-      )
-    end
-  end
+  # defp do_dynamic_expr(
+  #        query,
+  #        %StringJoin{arguments: [values, joiner], embedded?: pred_embedded?},
+  #        bindings,
+  #        embedded?,
+  #        type
+  #      ) do
+  #   # Not optimal, but it works
+  #   last_value = :lists.last(values)
 
-  defp do_dynamic_expr(
-         query,
-         %StringJoin{arguments: [values], embedded?: pred_embedded?},
-         bindings,
-         embedded?,
-         type
-       ) do
-    do_dynamic_expr(
-      query,
-      %Fragment{
-        embedded?: pred_embedded?,
-        arguments:
-          [raw: "(concat("] ++
-            (values
-             |> Enum.reduce([], fn value, acc ->
-               acc ++ [expr: value]
-             end)
-             |> Enum.intersperse({:raw, ", "})) ++
-            [raw: "))"]
-      },
-      bindings,
-      embedded?,
-      type
-    )
-  end
+  #   values =
+  #     values
+  #     |> :lists.droplast()
+  #     |> Enum.map(&{:not_last, &1})
+  #     |> Enum.concat([{:last, last_value}])
+
+  #   do_dynamic_expr(
+  #     query,
+  #     %Fragment{
+  #       embedded?: pred_embedded?,
+  #       arguments:
+  #         Enum.reduce(values, [raw: "("], fn
+  #           {:last, value}, acc ->
+  #             acc ++
+  #               [
+  #                 raw: "COALESCE(",
+  #                 expr: value,
+  #                 raw: ", '')"
+  #               ]
+
+  #           {:not_last, value}, acc ->
+  #             acc ++
+  #               [
+  #                 raw: "(CASE ",
+  #                 expr: value,
+  #                 raw: " WHEN NULL THEN '' ELSE ",
+  #                 expr: value,
+  #                 raw: " || ",
+  #                 expr: joiner,
+  #                 raw: " END) || "
+  #               ]
+  #         end)
+  #         |> Enum.concat(raw: ")")
+  #     },
+  #     bindings,
+  #     embedded?,
+  #     type
+  #   )
+  # end
+
+  # defp do_dynamic_expr(
+  #        query,
+  #        %StringJoin{arguments: [values], embedded?: pred_embedded?},
+  #        bindings,
+  #        embedded?,
+  #        type
+  #      ) do
+  #   do_dynamic_expr(
+  #     query,
+  #     %Fragment{
+  #       embedded?: pred_embedded?,
+  #       arguments:
+  #         Enum.reduce(values, {[raw: "("], true}, fn value, {acc, first?} ->
+  #           add =
+  #             if first? do
+  #               [expr: value]
+  #             else
+  #               [raw: " || COALESCE(", expr: value, raw: ", '')"]
+  #             end
+
+  #           {acc ++ add, false}
+  #         end)
+  #         |> elem(0)
+  #         |> Enum.concat(raw: ")")
+  #     },
+  #     bindings,
+  #     embedded?,
+  #     type
+  #   )
+  # end
 
   # Sorry :(
   # This is bad to do, but is the only reasonable way I could find.
@@ -642,23 +634,21 @@ defmodule AshSqlite.Expr do
 
   defp do_dynamic_expr(
          query,
-         %Ash.CiString{string: string} = expression,
+         %Ash.CiString{string: string},
          bindings,
          embedded?,
          type
        ) do
     string = do_dynamic_expr(query, string, bindings, embedded?)
 
-    require_extension!(query, "citext", expression)
-
     do_dynamic_expr(
       query,
       %Fragment{
         embedded?: embedded?,
         arguments: [
-          raw: "",
+          raw: "(",
           casted_expr: string,
-          raw: "::citext"
+          raw: "collate nocase)"
         ]
       },
       bindings,
@@ -842,6 +832,10 @@ defmodule AshSqlite.Expr do
          embedded?,
          type
        ) do
+    if !bindings[:parent_bindings] do
+      raise "Used `parent/1` without parent context. AshSqlite is not capable of supporting `parent/1` in relationship where clauses yet."
+    end
+
     parent? = Map.get(bindings.parent_bindings, :parent_is_parent_as?, true)
 
     do_dynamic_expr(
@@ -1071,7 +1065,6 @@ defmodule AshSqlite.Expr do
         if is_list(other) do
           list_expr(query, other, bindings, true, type)
         else
-          IO.inspect(other, structs: false)
           raise "Unsupported expression in AshSqlite query: #{inspect(other)}"
         end
       else
@@ -1223,7 +1216,7 @@ defmodule AshSqlite.Expr do
           embedded?: pred_embedded?,
           arguments:
             [
-              raw: "jsonb_extract_path(",
+              raw: "json_extract(",
               expr: left,
               raw: ","
             ] ++ path_frags
@@ -1238,17 +1231,6 @@ defmodule AshSqlite.Expr do
       Ecto.Query.dynamic(type(^expr, ^type))
     else
       expr
-    end
-  end
-
-  defp require_extension!(query, extension, context) do
-    repo = AshSqlite.DataLayer.Info.repo(query.__ash_bindings__.resource)
-
-    unless extension in repo.installed_extensions() do
-      raise Ash.Error.Query.InvalidExpression,
-        expression: context,
-        message:
-          "The #{extension} extension needs to be installed before #{inspect(context)} can be used. Please add \"#{extension}\" to the list of installed_extensions in #{inspect(repo)}."
     end
   end
 

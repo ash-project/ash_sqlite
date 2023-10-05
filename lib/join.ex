@@ -425,7 +425,6 @@ defmodule AshSqlite.Join do
     #         Ash.Resource.Info.primary_key(joined_query.__ash_bindings__.resource)
     #       )
     #   )
-    #   |> IO.inspect()
     # else
     joined_query
     # end
