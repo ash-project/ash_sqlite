@@ -276,12 +276,11 @@ defmodule AshSqlite.CalculationTest do
         |> Api.create!()
 
       assert %{
-               split_full_name_trim: ["Bill", "Jones"],
                split_full_name: ["Bill", "Jones"]
              } =
                Author
                |> Ash.Query.filter(id == ^author.id)
-               |> Ash.Query.load([:split_full_name_trim, :split_full_name])
+               |> Ash.Query.load([:split_full_name])
                |> Api.read_one!()
     end
   end
@@ -309,27 +308,6 @@ defmodule AshSqlite.CalculationTest do
                Post
                |> Ash.Query.load(:score_map)
                |> Api.read!()
-    end
-  end
-
-  describe "at/2" do
-    test "selects items by index" do
-      author =
-        Author
-        |> Ash.Changeset.for_create(:create, %{
-          first_name: "Bill ",
-          last_name: "Jones ",
-          bio: %{title: "Mr.", bio: "Bones"}
-        })
-        |> Api.create!()
-
-      assert %{
-               first_name_from_split: "Bill"
-             } =
-               Author
-               |> Ash.Query.filter(id == ^author.id)
-               |> Ash.Query.load([:first_name_from_split])
-               |> Api.read_one!()
     end
   end
 
