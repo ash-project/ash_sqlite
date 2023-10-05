@@ -702,6 +702,55 @@ defmodule AshSqlite.DataLayer do
     )
   end
 
+  defp handle_raised_error(
+         %Exqlite.Error{
+           message: "FOREIGN KEY constraint failed"
+         },
+         stacktrace,
+         context,
+         resource
+       ) do
+    handle_raised_error(
+      Ash.Error.Changes.InvalidChanges.exception(
+        fields: Ash.Resource.Info.primary_key(resource),
+        message: "referenced something that does not exist"
+      ),
+      stacktrace,
+      context,
+      resource
+    )
+  end
+
+  defp handle_raised_error(
+         %Exqlite.Error{
+           message: "UNIQUE constraint failed: " <> fields
+         },
+         stacktrace,
+         context,
+         resource
+       ) do
+    fields
+    |> String.split(", ")
+    |> Enum.map(fn field ->
+      field |> String.split(".", trim: true) |> Enum.drop(1) |> Enum.at(0)
+    end)
+    |> Enum.map(fn field ->
+      Ash.Resource.Info.attribute(resource, field)
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(fn %{name: name} ->
+      Ash.Error.Changes.InvalidAttribute.exception(
+        field: name,
+        message: "has already been taken"
+      )
+    end)
+    |> handle_raised_error(
+      stacktrace,
+      context,
+      resource
+    )
+  end
+
   defp handle_raised_error(error, stacktrace, _ecto_changeset, _resource) do
     {:error, Ash.Error.to_ash_error(error, stacktrace)}
   end

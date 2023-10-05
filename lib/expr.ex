@@ -624,10 +624,48 @@ defmodule AshSqlite.Expr do
         )
 
       :|| ->
-        raise "|| operator not supported by AshSqlite"
+        do_dynamic_expr(
+          query,
+          %Fragment{
+            embedded?: pred_embedded?,
+            arguments: [
+              raw: "(CASE WHEN (",
+              casted_expr: left_expr,
+              raw: " == FALSE OR ",
+              casted_expr: left_expr,
+              raw: " IS NULL) THEN ",
+              casted_expr: right_expr,
+              raw: " ELSE ",
+              casted_expr: left_expr,
+              raw: "END)"
+            ]
+          },
+          bindings,
+          embedded?,
+          type
+        )
 
       :&& ->
-        raise "&& operator not supported by AshSqlite"
+        do_dynamic_expr(
+          query,
+          %Fragment{
+            embedded?: pred_embedded?,
+            arguments: [
+              raw: "(CASE WHEN (",
+              casted_expr: left_expr,
+              raw: " == FALSE OR ",
+              casted_expr: left_expr,
+              raw: " IS NULL) THEN ",
+              casted_expr: left_expr,
+              raw: " ELSE ",
+              casted_expr: right_expr,
+              raw: "END)"
+            ]
+          },
+          bindings,
+          embedded?,
+          type
+        )
 
       other ->
         raise "Operator not implemented #{other}"
