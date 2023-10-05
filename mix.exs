@@ -172,7 +172,7 @@ defmodule AshSqlite.MixProject do
   defp deps do
     [
       {:ecto_sql, "~> 3.9"},
-      {:ecto_sqlite3, "~> 0.11"},
+      {:ecto_sqlite3, path: "../ecto_sqlite3", override: true},
       {:ecto, "~> 3.9"},
       {:jason, "~> 1.0"},
       {:ash, ash_version("~> 2.14 and >= 2.14.18")},

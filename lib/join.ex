@@ -223,18 +223,24 @@ defmodule AshSqlite.Join do
          bindings,
          is_subquery?
        ) do
+    context =
+      ash_query.context
+      |> Map.update(
+        :parent_stack,
+        [relationship.source],
+        &[&1 | relationship.source]
+      )
+      |> Map.put(:resource, relationship.destination)
+
     filter =
       resource
       |> Ash.Filter.parse!(
         relationship.filter,
-        ash_query.calculations,
-        Map.update(
-          ash_query.context,
-          :parent_stack,
-          [relationship.source],
-          &[&1 | relationship.source]
-        )
+        %{},
+        context
       )
+
+    {:ok, filter} = Ash.Filter.hydrate_refs(filter, context)
 
     base_bindings = bindings || query.__ash_bindings__
 
@@ -405,16 +411,24 @@ defmodule AshSqlite.Join do
 
   def get_binding(_, _, _, _), do: nil
 
-  defp add_distinct(relationship, _join_type, joined_query) do
-    if !joined_query.__ash_bindings__.in_group? &&
-         (relationship.cardinality == :many || Map.get(relationship, :from_many?)) &&
-         !joined_query.distinct do
-      from(row in joined_query,
-        distinct: ^Ash.Resource.Info.primary_key(joined_query.__ash_bindings__.resource)
-      )
-    else
-      joined_query
-    end
+  defp add_distinct(_relationship, _join_type, joined_query) do
+    # We can't do the same distincting that we do in ash_postgres
+    # This means that all filters that reference `has_many` relationships need
+    # to be rewritten to use `exists`, which will allow us to not need to do any distincting.
+    # in fact, we probably want to do that in `ash_postgres` automatically too?
+    # if !joined_query.__ash_bindings__.in_group? &&
+    #      (relationship.cardinality == :many || Map.get(relationship, :from_many?)) &&
+    #      !joined_query.distinct do
+    #   from(row in joined_query,
+    #     distinct:
+    #       ^AshSqlite.DataLayer.unwrap_one(
+    #         Ash.Resource.Info.primary_key(joined_query.__ash_bindings__.resource)
+    #       )
+    #   )
+    #   |> IO.inspect()
+    # else
+    joined_query
+    # end
   end
 
   defp join_relationship(

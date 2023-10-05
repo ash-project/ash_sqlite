@@ -76,7 +76,6 @@ defmodule AshSqlite.Test.Post do
     attribute(:status, AshSqlite.Test.Types.Status)
     attribute(:status_enum, AshSqlite.Test.Types.StatusEnum)
     attribute(:status_enum_no_cast, AshSqlite.Test.Types.StatusEnumNoCast, source: :status_enum)
-    attribute(:point, AshSqlite.Test.Point)
     attribute(:stuff, :map)
     attribute(:uniq_one, :string)
     attribute(:uniq_two, :string)
@@ -163,7 +162,7 @@ defmodule AshSqlite.Test.Post do
       AshSqlite.Test.Money,
       expr(
         fragment("""
-        '{"amount":100, "currency": "usd"}'::json
+        '{"amount":100, "currency": "usd"}'
         """)
       )
     )
@@ -174,7 +173,7 @@ defmodule AshSqlite.Test.Post do
       expr(
         # This is written in a silly way on purpose, to test a regression
         if(
-          fragment("(? <= (? - '1 month'::interval))", now(), created_at),
+          fragment("(? <= (DATE(? - '+1 month')))", now(), created_at),
           true,
           false
         )

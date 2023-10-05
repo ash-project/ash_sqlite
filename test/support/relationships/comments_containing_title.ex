@@ -23,7 +23,7 @@ defmodule AshSqlite.Test.Post.CommentsContainingTitle do
        join: dest in ^destination_query,
        as: ^as_binding,
        on: dest.post_id == as(^current_binding).id,
-       on: fragment("strpos(?, ?) > 0", dest.title, as(^current_binding).title)
+       on: fragment("instr(?, ?) > 0", dest.title, as(^current_binding).title)
      )}
   end
 
@@ -33,7 +33,7 @@ defmodule AshSqlite.Test.Post.CommentsContainingTitle do
        left_join: dest in ^destination_query,
        as: ^as_binding,
        on: dest.post_id == as(^current_binding).id,
-       on: fragment("strpos(?, ?) > 0", dest.title, as(^current_binding).title)
+       on: fragment("instr(?, ?) > 0", dest.title, as(^current_binding).title)
      )}
   end
 
@@ -42,7 +42,7 @@ defmodule AshSqlite.Test.Post.CommentsContainingTitle do
      Ecto.Query.from(_ in destination_query,
        where: parent_as(^current_binding).id == as(^as_binding).post_id,
        where:
-         fragment("strpos(?, ?) > 0", as(^as_binding).title, parent_as(^current_binding).title)
+         fragment("instr(?, ?) > 0", as(^as_binding).title, parent_as(^current_binding).title)
      )}
   end
 end

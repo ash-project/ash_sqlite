@@ -206,41 +206,22 @@ defmodule AshSqlite.Expr do
          embedded?,
          type
        ) do
-    if "citext" in AshSqlite.DataLayer.Info.repo(query.__ash_bindings__.resource).installed_extensions() do
-      do_dynamic_expr(
-        query,
-        %Fragment{
-          embedded?: pred_embedded?,
-          arguments: [
-            raw: "(strpos((",
-            expr: left,
-            raw: "::citext), (",
-            expr: right,
-            raw: ")) > 0)"
-          ]
-        },
-        bindings,
-        embedded?,
-        type
-      )
-    else
-      do_dynamic_expr(
-        query,
-        %Fragment{
-          embedded?: pred_embedded?,
-          arguments: [
-            raw: "(strpos(lower(",
-            expr: left,
-            raw: "), lower(",
-            expr: right,
-            raw: ")) > 0)"
-          ]
-        },
-        bindings,
-        embedded?,
-        type
-      )
-    end
+    do_dynamic_expr(
+      query,
+      %Fragment{
+        embedded?: pred_embedded?,
+        arguments: [
+          raw: "(instr((",
+          expr: left,
+          raw: " COLLATE NOCASE), (",
+          expr: right,
+          raw: ")) > 0)"
+        ]
+      },
+      bindings,
+      embedded?,
+      type
+    )
   end
 
   defp do_dynamic_expr(
@@ -255,7 +236,7 @@ defmodule AshSqlite.Expr do
       %Fragment{
         embedded?: pred_embedded?,
         arguments: [
-          raw: "(strpos((",
+          raw: "(instr((",
           expr: left,
           raw: "), (",
           expr: right,
@@ -1107,6 +1088,7 @@ defmodule AshSqlite.Expr do
         if is_list(other) do
           list_expr(query, other, bindings, true, type)
         else
+          IO.inspect(other, structs: false)
           raise "Unsupported expression in AshSqlite query: #{inspect(other)}"
         end
       else
@@ -1246,10 +1228,10 @@ defmodule AshSqlite.Expr do
     path_frags =
       path
       |> Enum.flat_map(fn item ->
-        [expr: item, raw: "::text,"]
+        [expr: item, raw: ","]
       end)
       |> :lists.droplast()
-      |> Enum.concat(raw: "::text)")
+      |> Enum.concat(raw: ")")
 
     expr =
       do_dynamic_expr(
@@ -1258,9 +1240,9 @@ defmodule AshSqlite.Expr do
           embedded?: pred_embedded?,
           arguments:
             [
-              raw: "jsonb_extract_path_text(",
+              raw: "jsonb_extract_path(",
               expr: left,
-              raw: "::jsonb,"
+              raw: ","
             ] ++ path_frags
         },
         bindings,
