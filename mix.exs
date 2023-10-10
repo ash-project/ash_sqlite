@@ -172,10 +172,10 @@ defmodule AshSqlite.MixProject do
   defp deps do
     [
       {:ecto_sql, "~> 3.9"},
-      {:ecto_sqlite3, path: "../ecto_sqlite3", override: true},
+      {:ecto_sqlite3, github: "elixir-sqlite/ecto_sqlite3"},
       {:ecto, "~> 3.9"},
       {:jason, "~> 1.0"},
-      {:ash, ash_version("~> 2.14 and >= 2.14.18")},
+      {:ash, ash_version("~> 2.15 and >= 2.15.12")},
       {:git_ops, "~> 2.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.22", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.14", only: [:dev, :test]},
@@ -213,7 +213,7 @@ defmodule AshSqlite.MixProject do
       docs: [
         "spark.cheat_sheets",
         "docs",
-        "ash.replace_doc_links",
+        "spark.replace_doc_links",
         "spark.cheat_sheets_in_search"
       ],
       "spark.formatter": "spark.formatter --extensions AshSqlite.DataLayer",

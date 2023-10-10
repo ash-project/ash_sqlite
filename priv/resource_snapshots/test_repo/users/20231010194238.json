@@ -6,9 +6,9 @@
       "type": "uuid",
       "source": "id",
       "references": null,
-      "primary_key?": true,
       "allow_nil?": false,
-      "generated?": false
+      "generated?": false,
+      "primary_key?": true
     },
     {
       "default": "nil",
@@ -16,9 +16,9 @@
       "type": "boolean",
       "source": "is_active",
       "references": null,
-      "primary_key?": false,
       "allow_nil?": true,
-      "generated?": false
+      "generated?": false,
+      "primary_key?": false
     },
     {
       "default": "nil",
@@ -29,34 +29,34 @@
         "name": "users_organization_id_fkey",
         "table": "orgs",
         "on_delete": null,
-        "on_update": null,
-        "destination_attribute_generated": null,
-        "destination_attribute_default": null,
         "multitenancy": {
           "global": null,
           "attribute": null,
           "strategy": null
         },
-        "destination_attribute": "id",
         "primary_key?": true,
-        "deferrable": false
+        "destination_attribute": "id",
+        "deferrable": false,
+        "on_update": null,
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null
       },
-      "primary_key?": false,
       "allow_nil?": true,
-      "generated?": false
+      "generated?": false,
+      "primary_key?": false
     }
   ],
   "table": "users",
-  "hash": "EBC30A0BFC23F11FEBED0038376C50027BEAF7FFE7B896CCFD20A09F37B39617",
+  "hash": "E049498FF6613245F13A84E56ECE76F84F45A63D2380C9B013CA9786B1AB4390",
   "repo": "Elixir.AshSqlite.TestRepo",
+  "identities": [],
   "multitenancy": {
     "global": null,
     "attribute": null,
     "strategy": null
   },
-  "custom_indexes": [],
   "base_filter": null,
-  "identities": [],
+  "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true
 }

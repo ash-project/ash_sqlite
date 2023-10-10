@@ -215,8 +215,6 @@ defmodule AshSqlite.CalculationTest do
   #       })
   #       |> Api.create!()
 
-  #     Logger.configure(level: :debug)
-
   #     assert %{
   #              full_name_with_nils: "Bill",
   #              full_name_with_nils_no_joiner: "Bill"

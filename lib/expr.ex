@@ -7,7 +7,6 @@ defmodule AshSqlite.Expr do
 
   alias Ash.Query.Function.{
     Ago,
-    Contains,
     DateAdd,
     DateTimeAdd,
     FromNow,
@@ -18,7 +17,7 @@ defmodule AshSqlite.Expr do
     Type
   }
 
-  alias AshSqlite.Functions.{Fragment, Like}
+  alias AshSqlite.Functions.{Fragment, ILike, Like}
 
   require Ecto.Query
 
@@ -61,6 +60,20 @@ defmodule AshSqlite.Expr do
     arg2 = do_dynamic_expr(query, arg2, bindings, pred_embedded? || embedded?, :string)
 
     Ecto.Query.dynamic(like(^arg1, ^arg2))
+  end
+
+  defp do_dynamic_expr(
+         query,
+         %ILike{arguments: [arg1, arg2], embedded?: pred_embedded?},
+         bindings,
+         embedded?,
+         _type
+       ) do
+    arg1 = do_dynamic_expr(query, arg1, bindings, pred_embedded? || embedded?, :ci_string)
+    arg2 = do_dynamic_expr(query, arg2, bindings, pred_embedded? || embedded?, :string)
+
+    # Not ideal, but better than not having it.
+    Ecto.Query.dynamic(like(fragment("LOWER(?)", ^arg1), fragment("LOWER(?)", ^arg2)))
   end
 
   defp do_dynamic_expr(
@@ -178,55 +191,58 @@ defmodule AshSqlite.Expr do
     do_get_path(query, get_path, bindings, embedded?, type)
   end
 
-  defp do_dynamic_expr(
-         query,
-         %Contains{arguments: [left, %Ash.CiString{} = right], embedded?: pred_embedded?},
-         bindings,
-         embedded?,
-         type
-       ) do
-    do_dynamic_expr(
-      query,
-      %Fragment{
-        embedded?: pred_embedded?,
-        arguments: [
-          raw: "(instr((",
-          expr: left,
-          raw: " COLLATE NOCASE), (",
-          expr: right,
-          raw: ")) > 0)"
-        ]
-      },
-      bindings,
-      embedded?,
-      type
-    )
-  end
+  # Can't support contains without also supporting case insensitive
+  # strings
 
-  defp do_dynamic_expr(
-         query,
-         %Contains{arguments: [left, right], embedded?: pred_embedded?},
-         bindings,
-         embedded?,
-         type
-       ) do
-    do_dynamic_expr(
-      query,
-      %Fragment{
-        embedded?: pred_embedded?,
-        arguments: [
-          raw: "(instr((",
-          expr: left,
-          raw: "), (",
-          expr: right,
-          raw: ")) > 0)"
-        ]
-      },
-      bindings,
-      embedded?,
-      type
-    )
-  end
+  # defp do_dynamic_expr(
+  #        query,
+  #        %Contains{arguments: [left, %Ash.CiString{} = right], embedded?: pred_embedded?},
+  #        bindings,
+  #        embedded?,
+  #        type
+  #      ) do
+  #   do_dynamic_expr(
+  #     query,
+  #     %Fragment{
+  #       embedded?: pred_embedded?,
+  #       arguments: [
+  #         raw: "(instr((",
+  #         expr: left,
+  #         raw: " COLLATE NOCASE), (",
+  #         expr: right,
+  #         raw: ")) > 0)"
+  #       ]
+  #     },
+  #     bindings,
+  #     embedded?,
+  #     type
+  #   )
+  # end
+
+  # defp do_dynamic_expr(
+  #        query,
+  #        %Contains{arguments: [left, right], embedded?: pred_embedded?},
+  #        bindings,
+  #        embedded?,
+  #        type
+  #      ) do
+  #   do_dynamic_expr(
+  #     query,
+  #     %Fragment{
+  #       embedded?: pred_embedded?,
+  #       arguments: [
+  #         raw: "(instr((",
+  #         expr: left,
+  #         raw: "), (",
+  #         expr: right,
+  #         raw: ")) > 0)"
+  #       ]
+  #     },
+  #     bindings,
+  #     embedded?,
+  #     type
+  #   )
+  # end
 
   defp do_dynamic_expr(
          query,
@@ -295,7 +311,8 @@ defmodule AshSqlite.Expr do
   # Wow, even this doesn't work, because of course it doesn't.
   # Doing string joining properly requires a recursive "if not empty" check
   # that honestly I don't have the energy to do right now.
-  # There are commented out tests for this in the calculation tests, make sure those pass, whoever feels like fixing this.
+  # There are commented out tests for this in the calculation tests, make sure those pass,
+  # whoever feels like fixing this.
   # defp do_dynamic_expr(
   #        _query,
   #        %StringJoin{arguments: [values | _], embedded?: _pred_embedded?} = string_join,
@@ -304,7 +321,8 @@ defmodule AshSqlite.Expr do
   #        _type
   #      )
   #      when not is_list(values) do
-  #   raise "SQLite can only join literal lists, not dynamic values. i.e `string_join([foo, bar])`, but not `string_join(something)`. Got #{inspect(string_join)}"
+  #   raise "SQLite can only join literal lists, not dynamic values. i.e `string_join([foo, bar])`,
+  #    but not `string_join(something)`. Got #{inspect(string_join)}"
   # end
 
   # defp do_dynamic_expr(
@@ -514,7 +532,7 @@ defmodule AshSqlite.Expr do
       if left_type && operator in @cast_operands_for do
         left_expr = do_dynamic_expr(query, left, bindings, pred_embedded? || embedded?)
 
-        Ecto.Query.dynamic(type(^left_expr, ^left_type))
+        type_expr(left_expr, left_type)
       else
         do_dynamic_expr(query, left, bindings, pred_embedded? || embedded?, left_type)
       end
@@ -522,7 +540,7 @@ defmodule AshSqlite.Expr do
     right_expr =
       if right_type && operator in @cast_operands_for do
         right_expr = do_dynamic_expr(query, right, bindings, pred_embedded? || embedded?)
-        Ecto.Query.dynamic(type(^right_expr, ^right_type))
+        type_expr(right_expr, right_type)
       else
         do_dynamic_expr(query, right, bindings, pred_embedded? || embedded?, right_type)
       end
@@ -663,7 +681,7 @@ defmodule AshSqlite.Expr do
            attribute: %Ash.Query.Calculation{} = calculation,
            relationship_path: [],
            resource: resource
-         } = type_expr,
+         },
          bindings,
          embedded?,
          _type
@@ -675,8 +693,6 @@ defmodule AshSqlite.Expr do
         calculation.type,
         Map.get(calculation, :constraints, [])
       )
-
-    validate_type!(query, type, type_expr)
 
     case Ash.Filter.hydrate_refs(
            calculation.module.expression(calculation.opts, calculation.context),
@@ -733,6 +749,14 @@ defmodule AshSqlite.Expr do
         end
       end)
 
+    if is_nil(binding_to_replace) do
+      raise """
+      Error building calculation reference: #{inspect(relationship_path)} is not available in bindings.
+
+      In reference: #{ref}
+      """
+    end
+
     temp_bindings =
       bindings.bindings
       |> Map.delete(0)
@@ -743,8 +767,6 @@ defmodule AshSqlite.Expr do
         calculation.type,
         Map.get(calculation, :constraints, [])
       )
-
-    validate_type!(query, type, ref)
 
     case Ash.Filter.hydrate_refs(
            calculation.module.expression(calculation.opts, calculation.context),
@@ -764,11 +786,7 @@ defmodule AshSqlite.Expr do
             type
           )
 
-        if type do
-          Ecto.Query.dynamic(type(^expr, ^type))
-        else
-          expr
-        end
+        type_expr(expr, type)
 
       _ ->
         raise "Failed to hydrate references in #{inspect(calculation.module.expression(calculation.opts, calculation.context))}"
@@ -786,11 +804,9 @@ defmodule AshSqlite.Expr do
     arg1 = maybe_uuid_to_binary(arg2, arg1, arg1)
     type = AshSqlite.Types.parameterized_type(arg2, constraints)
 
-    if type do
-      Ecto.Query.dynamic(type(^do_dynamic_expr(query, arg1, bindings, embedded?, type), ^type))
-    else
-      do_dynamic_expr(query, arg1, bindings, embedded?, type)
-    end
+    query
+    |> do_dynamic_expr(arg1, bindings, embedded?, type)
+    |> type_expr(type)
   end
 
   defp do_dynamic_expr(
@@ -1040,13 +1056,14 @@ defmodule AshSqlite.Expr do
         end
 
       type ->
-        validate_type!(query, type, ref)
+        dynamic =
+          if query.__ash_bindings__[:parent?] do
+            Ecto.Query.dynamic(field(parent_as(^ref_binding), ^name))
+          else
+            Ecto.Query.dynamic(field(as(^ref_binding), ^name))
+          end
 
-        if query.__ash_bindings__[:parent?] do
-          Ecto.Query.dynamic(type(field(parent_as(^ref_binding), ^name), ^type))
-        else
-          Ecto.Query.dynamic(type(field(as(^ref_binding), ^name), ^type))
-        end
+        type_expr(dynamic, type)
     end
   end
 
@@ -1100,17 +1117,28 @@ defmodule AshSqlite.Expr do
     else
       case maybe_sanitize_list(query, value, bindings, true, type) do
         ^value ->
-          if type do
-            validate_type!(query, type, value)
-
-            Ecto.Query.dynamic(type(^value, ^type))
-          else
-            value
-          end
+          type_expr(value, type)
 
         value ->
           value
       end
+    end
+  end
+
+  defp type_expr(expr, type) do
+    case type do
+      {:parameterized, inner_type, constraints} ->
+        if inner_type.type(constraints) == :ci_string do
+          Ecto.Query.dynamic(fragment("(? COLLATE NOCASE)", ^expr))
+        else
+          Ecto.Query.dynamic(type(^expr, ^type))
+        end
+
+      nil ->
+        expr
+
+      type ->
+        Ecto.Query.dynamic(type(^expr, ^type))
     end
   end
 
@@ -1173,11 +1201,6 @@ defmodule AshSqlite.Expr do
 
   defp maybe_uuid_to_binary(_type, _value, original_value), do: original_value
 
-  @doc false
-  def validate_type!(_query, _type, _context) do
-    :ok
-  end
-
   defp maybe_sanitize_list(query, value, bindings, embedded?, type) do
     if is_list(value) do
       Enum.map(value, &do_dynamic_expr(query, &1, bindings, embedded?, type))
@@ -1194,41 +1217,32 @@ defmodule AshSqlite.Expr do
 
   defp do_get_path(
          query,
-         %GetPath{arguments: [left, right], embedded?: pred_embedded?} = get_path,
+         %GetPath{arguments: [left, right], embedded?: pred_embedded?},
          bindings,
          embedded?,
          type \\ nil
        ) do
-    path = Enum.map(right, &to_string/1)
-
-    path_frags =
-      path
-      |> Enum.flat_map(fn item ->
-        [expr: item, raw: ","]
-      end)
-      |> :lists.droplast()
-      |> Enum.concat(raw: ")")
+    path = "$." <> Enum.join(right, ".")
 
     expr =
       do_dynamic_expr(
         query,
         %Fragment{
           embedded?: pred_embedded?,
-          arguments:
-            [
-              raw: "json_extract(",
-              expr: left,
-              raw: ","
-            ] ++ path_frags
+          arguments: [
+            raw: "json_extract(",
+            expr: left,
+            raw: ", ",
+            expr: path,
+            raw: ")"
+          ]
         },
         bindings,
         embedded?
       )
 
     if type do
-      validate_type!(query, type, get_path)
-
-      Ecto.Query.dynamic(type(^expr, ^type))
+      type_expr(expr, type)
     else
       expr
     end

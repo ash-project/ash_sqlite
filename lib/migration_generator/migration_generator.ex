@@ -2198,7 +2198,7 @@ defmodule AshSqlite.MigrationGenerator do
   defp migration_type({:array, type}, constraints),
     do: {:array, migration_type(type, constraints)}
 
-  defp migration_type(Ash.Type.CiString, _), do: :citext
+  defp migration_type(AshSqlite.Type.CiString, _), do: :string
   defp migration_type(Ash.Type.UUID, _), do: :uuid
   defp migration_type(Ash.Type.Integer, _), do: :bigint
 

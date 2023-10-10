@@ -133,7 +133,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert file_contents =~ ~S[add :title, :text]
 
       # the migration unwraps newtypes
-      assert file_contents =~ ~S[add :email, :citext]
+      assert file_contents =~ ~S[add :email, :text]
 
       # the migration adds custom attributes
       assert file_contents =~ ~S[add :second_title, :varchar, size: 16]

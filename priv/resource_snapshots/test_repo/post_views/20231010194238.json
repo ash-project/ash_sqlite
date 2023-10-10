@@ -6,9 +6,9 @@
       "type": "utc_datetime_usec",
       "source": "time",
       "references": null,
-      "primary_key?": false,
       "allow_nil?": false,
-      "generated?": false
+      "generated?": false,
+      "primary_key?": false
     },
     {
       "default": "nil",
@@ -16,9 +16,9 @@
       "type": "text",
       "source": "browser",
       "references": null,
-      "primary_key?": false,
       "allow_nil?": true,
-      "generated?": false
+      "generated?": false,
+      "primary_key?": false
     },
     {
       "default": "nil",
@@ -26,22 +26,22 @@
       "type": "uuid",
       "source": "post_id",
       "references": null,
-      "primary_key?": false,
       "allow_nil?": false,
-      "generated?": false
+      "generated?": false,
+      "primary_key?": false
     }
   ],
   "table": "post_views",
-  "hash": "25FC1D03DE747F86A8894536121520D288728618469978D90571337038FF2A23",
+  "hash": "F92BCC0AC778FC683A6BC4BFA66AEC4A5FB75C53D6B3B47D0C357D6EA6E39EF6",
   "repo": "Elixir.AshSqlite.TestRepo",
+  "identities": [],
   "multitenancy": {
     "global": null,
     "attribute": null,
     "strategy": null
   },
-  "custom_indexes": [],
   "base_filter": null,
-  "identities": [],
+  "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true
 }

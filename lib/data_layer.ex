@@ -495,7 +495,8 @@ defmodule AshSqlite.DataLayer do
   def functions(_resource) do
     [
       AshSqlite.Functions.Fragment,
-      AshSqlite.Functions.Like
+      AshSqlite.Functions.Like,
+      AshSqlite.Functions.ILike
     ]
   end
 

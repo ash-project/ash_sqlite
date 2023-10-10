@@ -6,9 +6,9 @@
       "type": "bigint",
       "source": "id",
       "references": null,
-      "primary_key?": true,
       "allow_nil?": false,
-      "generated?": true
+      "generated?": true,
+      "primary_key?": true
     },
     {
       "default": "nil",
@@ -16,22 +16,22 @@
       "type": "text",
       "source": "title",
       "references": null,
-      "primary_key?": false,
       "allow_nil?": true,
-      "generated?": false
+      "generated?": false,
+      "primary_key?": false
     }
   ],
   "table": "integer_posts",
-  "hash": "A06710150BA7BDCA09FBD107B3F6B5174EA424D0317A4452BDB7BEF3DA1435F0",
+  "hash": "C2B733710FBBF80A470C0F8BB5808DC1E2F9824EF0F9A3D095C81926DD20F952",
   "repo": "Elixir.AshSqlite.TestRepo",
+  "identities": [],
   "multitenancy": {
     "global": null,
     "attribute": null,
     "strategy": null
   },
-  "custom_indexes": [],
   "base_filter": null,
-  "identities": [],
+  "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true
 }

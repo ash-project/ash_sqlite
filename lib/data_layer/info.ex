@@ -40,7 +40,6 @@ defmodule AshSqlite.DataLayer.Info do
     Extension.get_opt(resource, [:sqlite], :migration_ignore_attributes, [])
   end
 
-
   @doc "The configured custom_indexes for a resource"
   def custom_indexes(resource) do
     Extension.get_entities(resource, [:sqlite, :custom_indexes])

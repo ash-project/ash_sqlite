@@ -81,10 +81,7 @@ import Config
 
 # Configure your database
 config :helpdesk, Helpdesk.Repo,
-  username: "sqlite",
-  password: "sqlite",
-  hostname: "localhost",
-  database: "helpdesk_dev",
+  database: Path.join(__DIR__, "../path/to/your.db"),
   port: 5432,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
@@ -96,15 +93,7 @@ config :helpdesk, Helpdesk.Repo,
 import Config
 
 if config_env() == :prod do
-  database_url =
-    System.get_env("DATABASE_URL") ||
-      raise """
-      environment variable DATABASE_URL is missing.
-      For example: ecto://USER:PASS@HOST/DATABASE
-      """
-
   config :helpdesk, Helpdesk.Repo,
-    url: database_url,
     pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
 end
 ```
@@ -230,18 +219,18 @@ And now we can read that data. You should see some debug logs that show the sql 
 ```elixir
 require Ash.Query
 
-# Show the tickets where the subject contains "2"
+# Show the tickets where the subject equals "foobar"
 Helpdesk.Support.Ticket
-|> Ash.Query.filter(contains(subject, "2"))
+|> Ash.Query.filter(subject == "foobar")
 |> Helpdesk.Support.read!()
 ```
 
 ```elixir
 require Ash.Query
 
-# Show the tickets that are closed and their subject does not contain "4"
+# Show the tickets that are closed and their subject does not equal "barbaz"
 Helpdesk.Support.Ticket
-|> Ash.Query.filter(status == :closed and not(contains(subject, "4")))
+|> Ash.Query.filter(status == :closed and not(subject == "barbaz"))
 |> Helpdesk.Support.read!()
 ```
 
@@ -276,6 +265,10 @@ Helpdesk.Support.Representative
 ### Rich Configuration Options
 
 Take a look at the DSL documentation for more information on what you can configure. You can add check constraints, configure the behavior of foreign keys and more!
+
+### Deployment
+
+When deploying, you will need to ensure that the file you are using in production is persisted in some way (probably, unless you want it to disappear whenever your deployed system restarts). For example with fly.io this might mean adding a volume to your deployment.
 
 ### What next?
 

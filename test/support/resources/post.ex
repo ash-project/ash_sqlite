@@ -69,7 +69,7 @@ defmodule AshSqlite.Test.Post do
     attribute(:title, :string)
     attribute(:score, :integer)
     attribute(:public, :boolean)
-    attribute(:category, :string)
+    attribute(:category, :ci_string)
     attribute(:type, :atom, default: :sponsored, private?: true, writable?: false)
     attribute(:price, :integer)
     attribute(:decimal, :decimal, default: Decimal.new(0))

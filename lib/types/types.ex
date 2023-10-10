@@ -21,14 +21,6 @@ defmodule AshSqlite.Types do
     end
   end
 
-  def parameterized_type(Ash.Type.CiString, constraints) do
-    parameterized_type(Ash.Type.CiStringWrapper, constraints)
-  end
-
-  def parameterized_type(Ash.Type.String.EctoType, constraints) do
-    parameterized_type(Ash.Type.StringWrapper, constraints)
-  end
-
   def parameterized_type(type, _constraints) when type in [Ash.Type.Map, Ash.Type.Map.EctoType],
     do: nil
 

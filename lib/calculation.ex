@@ -8,6 +8,16 @@ defmodule AshSqlite.Calculation do
   def add_calculations(query, calculations, resource, _source_binding) do
     query = AshSqlite.DataLayer.default_bindings(query, resource)
 
+    {:ok, query} =
+      AshSqlite.Join.join_all_relationships(
+        query,
+        %Ash.Filter{
+          resource: resource,
+          expression: Enum.map(calculations, &elem(&1, 1))
+        },
+        left_only?: true
+      )
+
     query =
       if query.select do
         query

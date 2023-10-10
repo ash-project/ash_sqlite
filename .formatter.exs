@@ -1,9 +1,6 @@
 spark_locals_without_parens = [
   base_filter_sql: 1,
-  check: 1,
   code?: 1,
-  concurrently: 1,
-  create?: 1,
   deferrable: 1,
   down: 1,
   exclusion_constraint_names: 1,
@@ -32,11 +29,9 @@ spark_locals_without_parens = [
   statement: 1,
   statement: 2,
   table: 1,
-  template: 1,
   unique: 1,
   unique_index_names: 1,
   up: 1,
-  update?: 1,
   using: 1,
   where: 1
 ]

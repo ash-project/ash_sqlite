@@ -12,6 +12,25 @@ defmodule AshSqlite.Sort do
       ) do
     query = AshSqlite.DataLayer.default_bindings(query, resource)
 
+    calcs =
+      Enum.flat_map(sort, fn
+        {%Ash.Query.Calculation{} = calculation, _} ->
+          [calculation]
+
+        _ ->
+          []
+      end)
+
+    {:ok, query} =
+      AshSqlite.Join.join_all_relationships(
+        query,
+        %Ash.Filter{
+          resource: resource,
+          expression: calcs
+        },
+        left_only?: true
+      )
+
     sort
     |> sanitize_sort()
     |> Enum.reduce_while({:ok, []}, fn

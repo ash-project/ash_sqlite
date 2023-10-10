@@ -37,13 +37,12 @@ defmodule AshSqlite.TestRepo.Migrations.MigrateResources1 do
       add :uniq_two, :text
       add :uniq_one, :text
       add :stuff, :map
-      add :point, {:array, :float}
       add :status_enum, :status
       add :status, :text
       add :decimal, :decimal, default: "0"
       add :price, :bigint
       add :type, :text, default: "sponsored"
-      add :category, :text
+      add :category, :ci_string
       add :public, :boolean
       add :score, :bigint
       add :title, :text

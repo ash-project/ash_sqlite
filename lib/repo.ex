@@ -46,6 +46,7 @@ defmodule AshSqlite.Repo do
           config
           |> Keyword.put(:installed_extensions, installed_extensions())
           |> Keyword.put(:migrations_path, migrations_path())
+          |> Keyword.put(:case_sensitive_like, :on)
 
         {:ok, new_config}
       end

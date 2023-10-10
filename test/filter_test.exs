@@ -336,13 +336,6 @@ defmodule AshSqlite.FilterTest do
                |> Api.read!()
     end
 
-    test "works using an expression" do
-      assert [%{bio: %{title: "Highlander"}}] =
-               Author
-               |> Ash.Query.filter(contains(type(bio[:bio], :string), "only one."))
-               |> Api.read!()
-    end
-
     test "calculations that use embeds can be filtered on" do
       assert [%{bio: %{title: "Dr."}}] =
                Author
@@ -385,94 +378,94 @@ defmodule AshSqlite.FilterTest do
     end
   end
 
-  describe "contains/2" do
-    test "it works when it matches" do
-      Post
-      |> Ash.Changeset.new(%{title: "match"})
-      |> Api.create!()
+  # describe "contains/2" do
+  #   test "it works when it matches" do
+  #     Post
+  #     |> Ash.Changeset.new(%{title: "match"})
+  #     |> Api.create!()
 
-      Post
-      |> Ash.Changeset.new(%{title: "bazbuz"})
-      |> Api.create!()
+  #     Post
+  #     |> Ash.Changeset.new(%{title: "bazbuz"})
+  #     |> Api.create!()
 
-      assert [%{title: "match"}] =
-               Post
-               |> Ash.Query.filter(contains(title, "atc"))
-               |> Api.read!()
-    end
+  #     assert [%{title: "match"}] =
+  #              Post
+  #              |> Ash.Query.filter(contains(title, "atc"))
+  #              |> Api.read!()
+  #   end
 
-    test "it works when a case insensitive string is provided as a value" do
-      Post
-      |> Ash.Changeset.new(%{title: "match"})
-      |> Api.create!()
+  #   test "it works when a case insensitive string is provided as a value" do
+  #     Post
+  #     |> Ash.Changeset.new(%{title: "match"})
+  #     |> Api.create!()
 
-      Post
-      |> Ash.Changeset.new(%{title: "bazbuz"})
-      |> Api.create!()
+  #     Post
+  #     |> Ash.Changeset.new(%{title: "bazbuz"})
+  #     |> Api.create!()
 
-      assert [%{title: "match"}] =
-               Post
-               |> Ash.Query.filter(contains(title, ^%Ash.CiString{string: "ATC"}))
-               |> Api.read!()
-    end
+  #     assert [%{title: "match"}] =
+  #              Post
+  #              |> Ash.Query.filter(contains(title, ^%Ash.CiString{string: "ATC"}))
+  #              |> Api.read!()
+  #   end
 
-    test "it works on a case insensitive column" do
-      Post
-      |> Ash.Changeset.new(%{category: "match"})
-      |> Api.create!()
+  #   test "it works on a case insensitive column" do
+  #     Post
+  #     |> Ash.Changeset.new(%{category: "match"})
+  #     |> Api.create!()
 
-      Post
-      |> Ash.Changeset.new(%{category: "bazbuz"})
-      |> Api.create!()
+  #     Post
+  #     |> Ash.Changeset.new(%{category: "bazbuz"})
+  #     |> Api.create!()
 
-      assert [%{category: %Ash.CiString{string: "match"}}] =
-               Post
-               |> Ash.Query.filter(contains(category, ^"ATC"))
-               |> Api.read!()
-    end
+  #     assert [%{category: %Ash.CiString{string: "match"}}] =
+  #              Post
+  #              |> Ash.Query.filter(contains(category, ^"ATC"))
+  #              |> Api.read!()
+  #   end
 
-    test "it works on a case insensitive calculation" do
-      Post
-      |> Ash.Changeset.new(%{category: "match"})
-      |> Api.create!()
+  #   test "it works on a case insensitive calculation" do
+  #     Post
+  #     |> Ash.Changeset.new(%{category: "match"})
+  #     |> Api.create!()
 
-      Post
-      |> Ash.Changeset.new(%{category: "bazbuz"})
-      |> Api.create!()
+  #     Post
+  #     |> Ash.Changeset.new(%{category: "bazbuz"})
+  #     |> Api.create!()
 
-      assert [%{category: %Ash.CiString{string: "match"}}] =
-               Post
-               |> Ash.Query.filter(contains(category_label, ^"ATC"))
-               |> Api.read!()
-    end
+  #     assert [%{category: %Ash.CiString{string: "match"}}] =
+  #              Post
+  #              |> Ash.Query.filter(contains(category_label, ^"ATC"))
+  #              |> Api.read!()
+  #   end
 
-    test "it works on related values" do
-      post =
-        Post
-        |> Ash.Changeset.new(%{title: "match"})
-        |> Api.create!()
+  #   test "it works on related values" do
+  #     post =
+  #       Post
+  #       |> Ash.Changeset.new(%{title: "match"})
+  #       |> Api.create!()
 
-      Comment
-      |> Ash.Changeset.new(%{title: "abba"})
-      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+  #     Comment
+  #     |> Ash.Changeset.new(%{title: "abba"})
+  #     |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+  #     |> Api.create!()
 
-      post2 =
-        Post
-        |> Ash.Changeset.new(%{title: "no_match"})
-        |> Api.create!()
+  #     post2 =
+  #       Post
+  #       |> Ash.Changeset.new(%{title: "no_match"})
+  #       |> Api.create!()
 
-      Comment
-      |> Ash.Changeset.new(%{title: "acca"})
-      |> Ash.Changeset.manage_relationship(:post, post2, type: :append_and_remove)
-      |> Api.create!()
+  #     Comment
+  #     |> Ash.Changeset.new(%{title: "acca"})
+  #     |> Ash.Changeset.manage_relationship(:post, post2, type: :append_and_remove)
+  #     |> Api.create!()
 
-      assert [%{title: "match"}] =
-               Post
-               |> Ash.Query.filter(contains(comments.title, ^"bb"))
-               |> Api.read!()
-    end
-  end
+  #     assert [%{title: "match"}] =
+  #              Post
+  #              |> Ash.Query.filter(contains(comments.title, ^"bb"))
+  #              |> Api.read!()
+  #   end
+  # end
 
   describe "exists/2" do
     test "it works with single relationships" do
@@ -687,6 +680,28 @@ defmodule AshSqlite.FilterTest do
         |> Api.read!()
 
       assert [] = results
+    end
+  end
+
+  describe "ilike" do
+    test "ilike builds and matches" do
+      Post
+      |> Ash.Changeset.new(%{title: "MaTcH"})
+      |> Api.create!()
+
+      results =
+        Post
+        |> Ash.Query.filter(ilike(title, "%aTc%"))
+        |> Api.read!()
+
+      assert [%Post{title: "MaTcH"}] = results
+
+      results =
+        Post
+        |> Ash.Query.filter(ilike(title, "%atc%"))
+        |> Api.read!()
+
+      assert [%Post{title: "MaTcH"}] = results
     end
   end
 
