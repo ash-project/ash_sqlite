@@ -332,6 +332,7 @@ defmodule AshSqlite.DataLayer do
   def can?(_, :transact), do: false
   def can?(_, :composite_primary_key), do: true
   def can?(_, {:atomic, :update}), do: true
+  def can?(_, {:atomic, :upsert}), do: true
   def can?(_, :upsert), do: true
   def can?(_, :changeset_filter), do: true
 
@@ -507,7 +508,7 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def bulk_create(resource, stream, options) do
-    opts = repo_opts(nil, resource)
+    opts = repo_opts(nil, options[:tenant], resource)
 
     opts =
       if options.return_records? do
@@ -516,10 +517,44 @@ defmodule AshSqlite.DataLayer do
         opts
       end
 
+    changesets = Enum.to_list(stream)
+
     opts =
       if options[:upsert?] do
+        # Ash groups changesets by atomics before dispatching them to the data layer
+        # this means that all changesets have the same atomics
+        %{atomics: atomics, filters: filters} = Enum.at(changesets, 0)
+
+        query = from(row in resource, as: ^0)
+
+        query =
+          query
+          |> default_bindings(resource)
+
+        upsert_set =
+          upsert_set(resource, changesets, options)
+
+        on_conflict =
+          case query_with_atomics(
+                 resource,
+                 query,
+                 filters,
+                 atomics,
+                 %{},
+                 upsert_set
+               ) do
+            :empty ->
+              :nothing
+
+            {:ok, query} ->
+              query
+
+            {:error, error} ->
+              raise Ash.Error.to_ash_error(error)
+          end
+
         opts
-        |> Keyword.put(:on_conflict, {:replace, options[:upsert_fields] || []})
+        |> Keyword.put(:on_conflict, on_conflict)
         |> Keyword.put(
           :conflict_target,
           conflict_target(
@@ -530,8 +565,6 @@ defmodule AshSqlite.DataLayer do
       else
         opts
       end
-
-    changesets = Enum.to_list(stream)
 
     ecto_changesets = Enum.map(changesets, & &1.attributes)
 
@@ -576,6 +609,55 @@ defmodule AshSqlite.DataLayer do
       )
   end
 
+  defp upsert_set(resource, changesets, options) do
+    attributes_changing_anywhere =
+      changesets |> Enum.flat_map(&Map.keys(&1.attributes)) |> Enum.uniq()
+
+    update_defaults = update_defaults(resource)
+    # We can't reference EXCLUDED if at least one of the changesets in the stream is not
+    # changing the value (and we wouldn't want to even if we could as it would be unnecessary)
+
+    upsert_fields =
+      (options[:upsert_fields] || []) |> Enum.filter(&(&1 in attributes_changing_anywhere))
+
+    fields_to_upsert =
+      (upsert_fields ++ Keyword.keys(update_defaults)) --
+        Keyword.keys(Enum.at(changesets, 0).atomics)
+
+    Enum.map(fields_to_upsert, fn upsert_field ->
+      # for safety, we check once more at the end that all values in
+      # upsert_fields are names of attributes. This is because
+      # below we use `literal/1` to bring them into the query
+      if is_nil(resource.__schema__(:type, upsert_field)) do
+        raise "Only attribute names can be used in upsert_fields"
+      end
+
+      case Keyword.fetch(update_defaults, upsert_field) do
+        {:ok, default} ->
+          if upsert_field in upsert_fields do
+            {upsert_field,
+             Ecto.Query.dynamic(
+               [],
+               fragment(
+                 "COALESCE(EXCLUDED.?, ?)",
+                 literal(^to_string(upsert_field)),
+                 ^default
+               )
+             )}
+          else
+            {upsert_field, default}
+          end
+
+        :error ->
+          {upsert_field,
+           Ecto.Query.dynamic(
+             [],
+             fragment("EXCLUDED.?", literal(^to_string(upsert_field)))
+           )}
+      end
+    end)
+  end
+
   @impl true
   def create(resource, changeset) do
     changeset = %{
@@ -590,6 +672,7 @@ defmodule AshSqlite.DataLayer do
 
     case bulk_create(resource, [changeset], %{
            single?: true,
+           tenant: changeset.tenant,
            return_records?: true
          }) do
       {:ok, [result]} ->
@@ -748,7 +831,7 @@ defmodule AshSqlite.DataLayer do
   end
 
   defp handle_raised_error(error, stacktrace, _ecto_changeset, _resource) do
-    {:error, Ash.Error.to_ash_error(error, stacktrace)}
+    reraise Ash.Error.to_error_class(error, stacktrace), stacktrace
   end
 
   defp find_constraint_message(resource, names) do
@@ -1005,26 +1088,20 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def upsert(resource, changeset, keys \\ nil) do
-    keys = keys || Ash.Resource.Info.primary_key(resource)
+    keys = keys || Ash.Resource.Info.primary_key(keys)
 
     explicitly_changing_attributes =
-      Enum.map(
-        Map.keys(changeset.attributes) -- Map.get(changeset, :defaults, []) -- keys,
-        fn key ->
-          {key, Ash.Changeset.get_attribute(changeset, key)}
-        end
-      )
+      Map.keys(changeset.attributes) -- Map.get(changeset, :defaults, []) -- keys
 
-    on_conflict =
-      changeset
-      |> update_defaults()
-      |> Keyword.merge(explicitly_changing_attributes)
+    upsert_fields =
+      changeset.context[:private][:upsert_fields] || explicitly_changing_attributes
 
     case bulk_create(resource, [changeset], %{
            single?: true,
            upsert?: true,
+           tenant: changeset.tenant,
            upsert_keys: keys,
-           upsert_fields: Keyword.keys(on_conflict),
+           upsert_fields: upsert_fields,
            return_records?: true
          }) do
       {:ok, [result]} ->
@@ -1054,9 +1131,9 @@ defmodule AshSqlite.DataLayer do
     end
   end
 
-  defp update_defaults(changeset) do
+  defp update_defaults(resource) do
     attributes =
-      changeset.resource
+      resource
       |> Ash.Resource.Info.attributes()
       |> Enum.reject(&is_nil(&1.update_default))
 
@@ -1130,45 +1207,105 @@ defmodule AshSqlite.DataLayer do
         |> default_bindings(resource, changeset.context)
         |> Ecto.Query.select(^select)
 
-      query =
-        Enum.reduce(ecto_changeset.filters, query, fn {key, value}, query ->
-          from(row in query,
-            where: field(row, ^key) == ^value
-          )
-        end)
+      case query_with_atomics(
+             resource,
+             query,
+             ecto_changeset.filters,
+             changeset.atomics,
+             ecto_changeset.changes,
+             []
+           ) do
+        :empty ->
+          {:ok, changeset.data}
 
-      atomics_result =
-        Enum.reduce_while(changeset.atomics, {:ok, query, []}, fn {field, expr},
-                                                                  {:ok, query, set} ->
-          with {:ok, query} <-
-                 AshSqlite.Join.join_all_relationships(
-                   query,
-                   %Ash.Filter{
-                     resource: resource,
-                     expression: expr
-                   },
-                   left_only?: true
-                 ),
-               dynamic <-
-                 AshSqlite.Expr.dynamic_expr(query, expr, query.__ash_bindings__) do
-            {:cont, {:ok, query, Keyword.put(set, field, dynamic)}}
-          else
-            other ->
-              {:halt, other}
+        {:ok, query} ->
+          repo_opts = repo_opts(changeset.timeout, changeset.tenant, changeset.resource)
+
+          repo_opts =
+            Keyword.put(repo_opts, :returning, Keyword.keys(changeset.atomics))
+
+          result =
+            dynamic_repo(resource, changeset).update_all(
+              query,
+              [],
+              repo_opts
+            )
+
+          case result do
+            {0, []} ->
+              {:error,
+               Ash.Error.Changes.StaleRecord.exception(
+                 resource: resource,
+                 filters: ecto_changeset.filters
+               )}
+
+            {1, [result]} ->
+              record =
+                changeset.data
+                |> Map.merge(changeset.attributes)
+                |> Map.merge(Map.take(result, Keyword.keys(changeset.atomics)))
+
+              {:ok, record}
           end
-        end)
 
-      case atomics_result do
-        {:ok, query, dynamics} ->
-          {params, set, count} =
-            ecto_changeset.changes
-            |> Map.to_list()
-            |> Enum.reduce({[], [], 0}, fn {key, value}, {params, set, count} ->
-              {[{value, {0, key}} | params], [{key, {:^, [], [count]}} | set], count + 1}
-            end)
+        {:error, error} ->
+          {:error, error}
+      end
+    rescue
+      e ->
+        handle_raised_error(e, __STACKTRACE__, ecto_changeset, resource)
+    end
+  end
 
-          {params, set, _} =
-            Enum.reduce(dynamics, {params, set, count}, fn {key, value}, {params, set, count} ->
+  defp query_with_atomics(
+         resource,
+         query,
+         filters,
+         atomics,
+         updating_one_changes,
+         existing_set
+       ) do
+    query =
+      Enum.reduce(filters, query, fn {key, value}, query ->
+        from(row in query,
+          where: field(row, ^key) == ^value
+        )
+      end)
+
+    atomics_result =
+      Enum.reduce_while(atomics, {:ok, query, []}, fn {field, expr}, {:ok, query, set} ->
+        with {:ok, query} <-
+               AshSqlite.Join.join_all_relationships(
+                 query,
+                 %Ash.Filter{
+                   resource: resource,
+                   expression: expr
+                 },
+                 left_only?: true
+               ),
+             dynamic <-
+               AshSqlite.Expr.dynamic_expr(query, expr, query.__ash_bindings__) do
+          {:cont, {:ok, query, Keyword.put(set, field, dynamic)}}
+        else
+          other ->
+            {:halt, other}
+        end
+      end)
+
+    case atomics_result do
+      {:ok, query, dynamics} ->
+        {params, set, count} =
+          updating_one_changes
+          |> Map.to_list()
+          |> Enum.reduce({[], [], 0}, fn {key, value}, {params, set, count} ->
+            {[{value, {0, key}} | params], [{key, {:^, [], [count]}} | set], count + 1}
+          end)
+
+        {params, set, _} =
+          Enum.reduce(
+            dynamics ++ existing_set,
+            {params, set, count},
+            fn {key, value}, {params, set, count} ->
               case AshSqlite.Expr.dynamic_expr(query, value, query.__ash_bindings__) do
                 %Ecto.Query.DynamicExpr{} = dynamic ->
                   result =
@@ -1191,59 +1328,27 @@ defmodule AshSqlite.DataLayer do
                 other ->
                   {[{other, {0, key}} | params], [{key, {:^, [], [count]}} | set], count + 1}
               end
-            end)
+            end
+          )
 
-          case set do
-            [] ->
-              {:ok, changeset.data}
+        case set do
+          [] ->
+            :empty
 
-            set ->
-              query =
-                Map.put(query, :updates, [
-                  %Ecto.Query.QueryExpr{
-                    # why do I have to reverse the `set`???
-                    # it breaks if I don't
-                    expr: [set: Enum.reverse(set)],
-                    params: Enum.reverse(params)
-                  }
-                ])
+          set ->
+            {:ok,
+             Map.put(query, :updates, [
+               %Ecto.Query.QueryExpr{
+                 # why do I have to reverse the `set`???
+                 # it breaks if I don't
+                 expr: [set: Enum.reverse(set)],
+                 params: Enum.reverse(params)
+               }
+             ])}
+        end
 
-              repo_opts = repo_opts(changeset.timeout, changeset.resource)
-
-              repo_opts =
-                Keyword.put(repo_opts, :returning, Keyword.keys(changeset.atomics))
-
-              result =
-                dynamic_repo(resource, changeset).update_all(
-                  query,
-                  [],
-                  repo_opts
-                )
-
-              case result do
-                {0, []} ->
-                  {:error,
-                   Ash.Error.Changes.StaleRecord.exception(
-                     resource: resource,
-                     filters: ecto_changeset.filters
-                   )}
-
-                {1, [result]} ->
-                  record =
-                    changeset.data
-                    |> Map.merge(changeset.attributes)
-                    |> Map.merge(Map.take(result, Keyword.keys(changeset.atomics)))
-
-                  {:ok, record}
-              end
-          end
-
-        {:error, error} ->
-          {:error, error}
-      end
-    rescue
-      e ->
-        handle_raised_error(e, __STACKTRACE__, ecto_changeset, resource)
+      {:error, error} ->
+        {:error, error}
     end
   end
 

@@ -4,6 +4,22 @@ defmodule AshSqlite.AtomicsTest do
 
   import Ash.Expr
 
+  test "atomics work on upserts" do
+    id = Ash.UUID.generate()
+
+    Post
+    |> Ash.Changeset.for_create(:create, %{id: id, title: "foo", price: 1}, upsert?: true)
+    |> Ash.Changeset.atomic_update(:price, expr(price + 1))
+    |> Api.create!()
+
+    Post
+    |> Ash.Changeset.for_create(:create, %{id: id, title: "foo", price: 1}, upsert?: true)
+    |> Ash.Changeset.atomic_update(:price, expr(price + 1))
+    |> Api.create!()
+
+    assert [%{price: 2}] = Post |> Api.read!()
+  end
+
   test "a basic atomic works" do
     post =
       Post
