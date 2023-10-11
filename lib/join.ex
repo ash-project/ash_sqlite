@@ -471,12 +471,7 @@ defmodule AshSqlite.Join do
 
     query = AshSqlite.DataLayer.add_binding(query, binding_data)
 
-    use_root_query_bindings? = true
-
-    root_bindings =
-      if use_root_query_bindings? do
-        query.__ash_bindings__
-      end
+    root_bindings = query.__ash_bindings__
 
     case maybe_get_resource_query(
            relationship.destination,
@@ -561,12 +556,7 @@ defmodule AshSqlite.Join do
       })
       |> AshSqlite.DataLayer.add_binding(binding_data)
 
-    use_root_query_bindings? = true
-
-    root_bindings =
-      if use_root_query_bindings? do
-        query.__ash_bindings__
-      end
+    root_bindings = query.__ash_bindings__
 
     with {:ok, relationship_through} <-
            maybe_get_resource_query(
@@ -661,12 +651,7 @@ defmodule AshSqlite.Join do
 
     query = AshSqlite.DataLayer.add_binding(query, binding_data)
 
-    use_root_query_bindings? = true
-
-    root_bindings =
-      if use_root_query_bindings? do
-        query.__ash_bindings__
-      end
+    root_bindings = query.__ash_bindings__
 
     case maybe_get_resource_query(
            relationship.destination,

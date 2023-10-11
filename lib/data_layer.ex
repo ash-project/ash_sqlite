@@ -508,94 +508,113 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def bulk_create(resource, stream, options) do
-    opts = repo_opts(nil, options[:tenant], resource)
+    # Cell-wise default values are not supported on INSERT statements by SQLite
+    # This requires that we group changesets by what attributes are changing
+    # And *omit* any defaults instead of using something like `(1, 2, DEFAULT)`
+    # like we could with postgres
+    stream
+    |> Enum.group_by(&Map.keys(&1.attributes))
+    |> Enum.reduce_while({:ok, []}, fn {_, changesets}, {:ok, acc} ->
+      opts = repo_opts(nil, options[:tenant], resource)
 
-    opts =
-      if options.return_records? do
-        Keyword.put(opts, :returning, true)
-      else
-        opts
-      end
-
-    changesets = Enum.to_list(stream)
-
-    opts =
-      if options[:upsert?] do
-        # Ash groups changesets by atomics before dispatching them to the data layer
-        # this means that all changesets have the same atomics
-        %{atomics: atomics, filters: filters} = Enum.at(changesets, 0)
-
-        query = from(row in resource, as: ^0)
-
-        query =
-          query
-          |> default_bindings(resource)
-
-        upsert_set =
-          upsert_set(resource, changesets, options)
-
-        on_conflict =
-          case query_with_atomics(
-                 resource,
-                 query,
-                 filters,
-                 atomics,
-                 %{},
-                 upsert_set
-               ) do
-            :empty ->
-              :nothing
-
-            {:ok, query} ->
-              query
-
-            {:error, error} ->
-              raise Ash.Error.to_ash_error(error)
-          end
-
-        opts
-        |> Keyword.put(:on_conflict, on_conflict)
-        |> Keyword.put(
-          :conflict_target,
-          conflict_target(
-            resource,
-            options[:upsert_keys] || Ash.Resource.Info.primary_key(resource)
-          )
-        )
-      else
-        opts
-      end
-
-    ecto_changesets = Enum.map(changesets, & &1.attributes)
-
-    source =
-      if table = Enum.at(changesets, 0).context[:data_layer][:table] do
-        {table, resource}
-      else
-        resource
-      end
-
-    repo = dynamic_repo(resource, Enum.at(changesets, 0))
-
-    source
-    |> repo.insert_all(ecto_changesets, opts)
-    |> case do
-      {_, nil} ->
-        :ok
-
-      {_, results} ->
-        if options[:single?] do
-          {:ok, results}
+      opts =
+        if options.return_records? do
+          Keyword.put(opts, :returning, true)
         else
-          {:ok,
-           Stream.zip_with(results, changesets, fn result, changeset ->
-             Ash.Resource.put_metadata(
-               result,
-               :bulk_create_index,
-               changeset.context.bulk_create.index
-             )
-           end)}
+          opts
         end
+
+      opts =
+        if options[:upsert?] do
+          # Ash groups changesets by atomics before dispatching them to the data layer
+          # this means that all changesets have the same atomics
+          %{atomics: atomics, filters: filters} = Enum.at(changesets, 0)
+
+          query = from(row in resource, as: ^0)
+
+          query =
+            query
+            |> default_bindings(resource)
+
+          upsert_set =
+            upsert_set(resource, changesets, options)
+
+          on_conflict =
+            case query_with_atomics(
+                   resource,
+                   query,
+                   filters,
+                   atomics,
+                   %{},
+                   upsert_set
+                 ) do
+              :empty ->
+                :nothing
+
+              {:ok, query} ->
+                query
+
+              {:error, error} ->
+                raise Ash.Error.to_ash_error(error)
+            end
+
+          opts
+          |> Keyword.put(:on_conflict, on_conflict)
+          |> Keyword.put(
+            :conflict_target,
+            conflict_target(
+              resource,
+              options[:upsert_keys] || Ash.Resource.Info.primary_key(resource)
+            )
+          )
+        else
+          opts
+        end
+
+      ecto_changesets = changesets |> Enum.map(& &1.attributes)
+
+      source =
+        if table = Enum.at(changesets, 0).context[:data_layer][:table] do
+          {table, resource}
+        else
+          resource
+        end
+
+      repo = dynamic_repo(resource, Enum.at(changesets, 0))
+
+      source
+      |> repo.insert_all(ecto_changesets, opts)
+      |> case do
+        {_, nil} ->
+          {:cont, {:ok, acc}}
+
+        {_, results} ->
+          if options[:single?] do
+            {:cont, {:ok, acc ++ results}}
+          else
+            {:cont,
+             {:ok,
+              acc ++
+                Enum.zip_with(results, changesets, fn result, changeset ->
+                  Ash.Resource.put_metadata(
+                    result,
+                    :bulk_create_index,
+                    changeset.context.bulk_create.index
+                  )
+                end)}}
+          end
+      end
+    end)
+    |> case do
+      {:ok, records} ->
+        if options[:return_records?] do
+          {:ok, records}
+        else
+          :ok
+        end
+
+      {:error, error} ->
+        {:error, error}
     end
   rescue
     e ->
@@ -796,8 +815,8 @@ defmodule AshSqlite.DataLayer do
          %Exqlite.Error{
            message: "UNIQUE constraint failed: " <> fields
          },
-         stacktrace,
-         context,
+         _stacktrace,
+         _context,
          resource
        ) do
     names =
@@ -816,22 +835,18 @@ defmodule AshSqlite.DataLayer do
 
     message = find_constraint_message(resource, names)
 
-    names
-    |> Enum.map(fn name ->
-      Ash.Error.Changes.InvalidAttribute.exception(
-        field: name,
-        message: message
-      )
-    end)
-    |> handle_raised_error(
-      stacktrace,
-      context,
-      resource
-    )
+    {:error,
+     names
+     |> Enum.map(fn name ->
+       Ash.Error.Changes.InvalidAttribute.exception(
+         field: name,
+         message: message
+       )
+     end)}
   end
 
   defp handle_raised_error(error, stacktrace, _ecto_changeset, _resource) do
-    reraise Ash.Error.to_error_class(error, stacktrace), stacktrace
+    {:error, Ash.Error.to_ash_error(error, stacktrace)}
   end
 
   defp find_constraint_message(resource, names) do
@@ -1390,19 +1405,14 @@ defmodule AshSqlite.DataLayer do
      )}
   end
 
-  defp apply_sort(query, sort, resource, directly? \\ false)
-
-  defp apply_sort(query, sort, _resource, _) when sort in [nil, []] do
+  defp apply_sort(query, sort, _resource) when sort in [nil, []] do
     {:ok, query |> set_sort_applied()}
   end
 
-  defp apply_sort(query, sort, resource, directly?) do
+  defp apply_sort(query, sort, resource) do
     query
-    |> AshSqlite.Sort.sort(sort, resource, [], 0, directly?)
+    |> AshSqlite.Sort.sort(sort, resource, [], 0)
     |> case do
-      {:ok, sort} when directly? ->
-        {:ok, query |> Ecto.Query.order_by(^sort) |> set_sort_applied()}
-
       {:ok, query} ->
         {:ok, query |> set_sort_applied()}
 
