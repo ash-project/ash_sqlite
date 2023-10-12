@@ -109,11 +109,7 @@ import Config
 # to provide built-in test partitioning in CI environment.
 # Run `mix help test` for more information.
 config :helpdesk, Helpdesk.Repo,
-  username: "sqlite",
-  password: "sqlite",
-  hostname: "localhost",
-  database: "helpdesk_test#{System.get_env("MIX_TEST_PARTITION")}",
-  pool: Ecto.Adapters.SQL.Sandbox,
+  database: Path.join(__DIR__, "../path/to/your#{System.get_env("MIX_TEST_PARTITION")}.db"),
   pool_size: 10
 ```
 
