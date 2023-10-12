@@ -156,9 +156,6 @@ defmodule AshSqlite.MixProject do
         Types: [
           AshSqlite.Type
         ],
-        "Sqlite Migrations": [
-          SqliteMigrationDefault
-        ],
         Expressions: [
           AshSqlite.Functions.Fragment,
           AshSqlite.Functions.Like

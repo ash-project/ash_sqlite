@@ -690,68 +690,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
       end)
     end
 
-    test "when default value is specified that implements SqliteMigrationDefault" do
-      defposts do
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:start_date, :date, default: ~D[2022-04-19])
-          attribute(:start_time, :time, default: ~T[08:30:45])
-          attribute(:timestamp, :utc_datetime, default: ~U[2022-02-02 08:30:30Z])
-          attribute(:timestamp_naive, :naive_datetime, default: ~N[2022-02-02 08:30:30])
-          attribute(:number, :integer, default: 5)
-          attribute(:fraction, :float, default: 0.25)
-          attribute(:decimal, :decimal, default: Decimal.new("123.4567890987654321987"))
-          attribute(:name, :string, default: "Fred")
-          attribute(:tag, :atom, default: :value)
-          attribute(:enabled, :boolean, default: false)
-        end
-      end
-
-      defapi([Post])
-
-      AshSqlite.MigrationGenerator.generate(Api,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
-        quiet: true,
-        format: false
-      )
-
-      assert [file1] = Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
-
-      file = File.read!(file1)
-
-      assert file =~
-               ~S[add :start_date, :date, default: fragment("'2022-04-19'")]
-
-      assert file =~
-               ~S[add :start_time, :time, default: fragment("'08:30:45'")]
-
-      assert file =~
-               ~S[add :timestamp, :utc_datetime, default: fragment("'2022-02-02 08:30:30Z'")]
-
-      assert file =~
-               ~S[add :timestamp_naive, :naive_datetime, default: fragment("'2022-02-02 08:30:30'")]
-
-      assert file =~
-               ~S[add :number, :bigint, default: 5]
-
-      assert file =~
-               ~S[add :fraction, :float, default: 0.25]
-
-      assert file =~
-               ~S[add :decimal, :decimal, default: "123.4567890987654321987"]
-
-      assert file =~
-               ~S[add :name, :text, default: "Fred"]
-
-      assert file =~
-               ~S[add :tag, :text, default: "value"]
-
-      assert file =~
-               ~S[add :enabled, :boolean, default: false]
-    end
-
-    test "when default value is specified that does not implement SqliteMigrationDefault" do
+    test "when default value is specified that has no impl" do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -770,8 +709,6 @@ defmodule AshSqlite.MigrationGeneratorTest do
             format: false
           )
         end)
-
-      assert log =~ "`{\"xyz\"}`"
 
       assert [file1] = Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
 
