@@ -5,12 +5,18 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
-## [v0.1.0](https://github.com/ash-project/ash_sqlite/compare/v0.1.0...v0.1.0) (2023-10-10)
+## [v0.1.0](https://github.com/ash-project/ash_sqlite/compare/v0.1.0...v0.1.0) (2023-10-12)
 
 
 
+
+### Bug Fixes:
+
+* various fixes around bulk inserts/upserts
 
 ### Improvements:
+
+* support atomic upserts
 
 * draw the rest of the owl
 
