@@ -172,7 +172,7 @@ defmodule AshSqlite.MixProject do
   defp deps do
     [
       {:ecto_sql, "~> 3.9"},
-      {:ecto_sqlite3, github: "elixir-sqlite/ecto_sqlite3"},
+      {:ecto_sqlite3, "~> 0.12.0"},
       {:ecto, "~> 3.9"},
       {:jason, "~> 1.0"},
       {:ash, ash_version("~> 2.15 and >= 2.15.12")},

@@ -5,9 +5,9 @@
 [![Coverage Status](https://coveralls.io/repos/github/ash-project/ash_sqlite/badge.svg?branch=main)](https://coveralls.io/github/ash-project/ash_sqlite?branch=main)
 [![Hex version badge](https://img.shields.io/hexpm/v/ash_sqlite.svg)](https://hex.pm/packages/ash_sqlite)
 
-## Notice: UNSTABLE
+## Notice: Beta
 
-This is a brand new data layer that was copied/extracted from `ash_postgres`. More than half of the tests are failing. We don't yet know which parts do/don't work.
+This is a newly released library. You can expect some hiccups here and there. Please report any issues you find!
 
 ## DSL
 
