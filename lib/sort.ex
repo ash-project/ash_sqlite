@@ -7,7 +7,8 @@ defmodule AshSqlite.Sort do
         sort,
         resource,
         relationship_path \\ [],
-        binding \\ 0
+        binding \\ 0,
+        return_order_by? \\ false
       ) do
     query = AshSqlite.DataLayer.default_bindings(query, resource)
 
@@ -45,6 +46,7 @@ defmodule AshSqlite.Sort do
         |> calc.module.expression(calc.context)
         |> Ash.Filter.hydrate_refs(%{
           resource: resource,
+          aggregates: query.__ash_bindings__.aggregate_defs,
           calculations: %{},
           public?: false
         })
@@ -68,22 +70,30 @@ defmodule AshSqlite.Sort do
     end)
     |> case do
       {:ok, []} ->
-        {:ok, query}
+        if return_order_by? do
+          {:ok, order_to_fragments([])}
+        else
+          {:ok, query}
+        end
 
       {:ok, sort_exprs} ->
-        new_query = Ecto.Query.order_by(query, ^sort_exprs)
+        if return_order_by? do
+          {:ok, order_to_fragments(sort_exprs)}
+        else
+          new_query = Ecto.Query.order_by(query, ^sort_exprs)
 
-        sort_expr = List.last(new_query.order_bys)
+          sort_expr = List.last(new_query.order_bys)
 
-        new_query =
-          new_query
-          |> Map.update!(:windows, fn windows ->
-            order_by_expr = %{sort_expr | expr: [order_by: sort_expr.expr]}
-            Keyword.put(windows, :order, order_by_expr)
-          end)
-          |> Map.update!(:__ash_bindings__, &Map.put(&1, :__order__?, true))
+          new_query =
+            new_query
+            |> Map.update!(:windows, fn windows ->
+              order_by_expr = %{sort_expr | expr: [order_by: sort_expr.expr]}
+              Keyword.put(windows, :order, order_by_expr)
+            end)
+            |> Map.update!(:__ash_bindings__, &Map.put(&1, :__order__?, true))
 
-        {:ok, new_query}
+          {:ok, new_query}
+        end
 
       {:error, error} ->
         {:error, error}
@@ -119,7 +129,7 @@ defmodule AshSqlite.Sort do
     end
   end
 
-  def order_to_sqlite_order(dir) do
+  def order_to_postgres_order(dir) do
     case dir do
       :asc -> nil
       :asc_nils_last -> " ASC NULLS LAST"

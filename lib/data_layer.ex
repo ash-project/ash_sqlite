@@ -322,7 +322,7 @@ defmodule AshSqlite.DataLayer do
     Mix.Task.run("ash_sqlite.drop", args)
   end
 
-  import Ecto.Query, only: [from: 2]
+  import Ecto.Query, only: [from: 2, subquery: 1]
 
   @impl true
   def can?(_, :async_engine), do: false
@@ -382,7 +382,7 @@ defmodule AshSqlite.DataLayer do
   def can?(_, :timeout), do: true
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
-  def can?(_, {:query_aggregate, :count}), do: false
+  def can?(_, {:query_aggregate, _}), do: true
   def can?(_, :sort), do: true
   def can?(_, :distinct_sort), do: false
   def can?(_, :distinct), do: false
@@ -428,6 +428,79 @@ defmodule AshSqlite.DataLayer do
 
   def offset(query, offset, _resource) do
     {:ok, from(row in query, offset: ^offset)}
+  end
+
+  @impl true
+  def run_aggregate_query(query, aggregates, resource) do
+    {exists, aggregates} = Enum.split_with(aggregates, &(&1.kind == :exists))
+    query = default_bindings(query, resource)
+
+    query =
+      if query.distinct || query.limit do
+        query =
+          query
+          |> Ecto.Query.exclude(:select)
+          |> Ecto.Query.exclude(:order_by)
+          |> Map.put(:windows, [])
+
+        from(row in subquery(query), as: ^0, select: %{})
+      else
+        query
+        |> Ecto.Query.exclude(:select)
+        |> Ecto.Query.exclude(:order_by)
+        |> Map.put(:windows, [])
+        |> Ecto.Query.select(%{})
+      end
+
+    query_before_select = query
+
+    query =
+      Enum.reduce(
+        aggregates,
+        query,
+        fn agg, query ->
+          AshSqlite.Aggregate.add_subquery_aggregate_select(
+            query,
+            agg.relationship_path |> Enum.drop(1),
+            agg,
+            resource,
+            true
+          )
+        end
+      )
+
+    result =
+      case aggregates do
+        [] ->
+          %{}
+
+        _ ->
+          dynamic_repo(resource, query).one(query, repo_opts(nil, nil, resource))
+      end
+
+    {:ok, add_exists_aggs(result, resource, query_before_select, exists)}
+  end
+
+  defp add_exists_aggs(result, resource, query, exists) do
+    repo = dynamic_repo(resource, query)
+    repo_opts = repo_opts(nil, nil, resource)
+
+    Enum.reduce(exists, result, fn agg, result ->
+      {:ok, filtered} =
+        case agg do
+          %{query: %{filter: filter}} when not is_nil(filter) ->
+            filter(query, filter, resource)
+
+          _ ->
+            {:ok, query}
+        end
+
+      Map.put(
+        result || %{},
+        agg.name,
+        repo.exists?(filtered, repo_opts)
+      )
+    end)
   end
 
   @impl true
