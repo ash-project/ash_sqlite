@@ -18,7 +18,7 @@ See the DSL documentation in `AshSqlite.DataLayer` for DSL documentation
 Add `ash_qlite` to your `mix.exs` file.
 
 ```elixir
-{:ash_sqlite, "~> 0.1.0"}
+{:ash_sqlite, "~> 0.1.1"}
 ```
 
 To use this data layer, you need to chage your Ecto Repo's from `use Ecto.Repo`, to `use Sqlite.Repo`. because AshSqlite adds functionality to Ecto Repos.
