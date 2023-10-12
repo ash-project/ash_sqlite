@@ -690,7 +690,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
       end)
     end
 
-    test "when default value is specified that implements EctoMigrationDefault" do
+    test "when default value is specified that implements SqliteMigrationDefault" do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -751,7 +751,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
                ~S[add :enabled, :boolean, default: false]
     end
 
-    test "when default value is specified that does not implement EctoMigrationDefault" do
+    test "when default value is specified that does not implement SqliteMigrationDefault" do
       defposts do
         attributes do
           uuid_primary_key(:id)

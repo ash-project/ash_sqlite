@@ -2301,7 +2301,7 @@ defmodule AshSqlite.MigrationGenerator do
             default
 
           :error ->
-            EctoMigrationDefault.to_default(value)
+            SqliteMigrationDefault.to_default(value)
         end
 
       default ->

@@ -157,7 +157,7 @@ defmodule AshSqlite.MixProject do
           AshSqlite.Type
         ],
         "Sqlite Migrations": [
-          EctoMigrationDefault
+          SqliteMigrationDefault
         ],
         Expressions: [
           AshSqlite.Functions.Fragment,

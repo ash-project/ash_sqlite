@@ -1,4 +1,4 @@
-defprotocol EctoMigrationDefault do
+defprotocol SqliteMigrationDefault do
   @moduledoc """
   Allows configuring how values are translated to default values in migrations.
 
@@ -9,7 +9,7 @@ defprotocol EctoMigrationDefault do
   def to_default(value)
 end
 
-defimpl EctoMigrationDefault, for: Any do
+defimpl SqliteMigrationDefault, for: Any do
   require Logger
 
   def to_default(value) do
@@ -22,7 +22,7 @@ defimpl EctoMigrationDefault, for: Any do
     The default value in the migration will be set to `nil` and you can edit
     your migration accordingly.
 
-    To prevent this warning, implement the `EctoMigrationDefault` protocol
+    To prevent this warning, implement the `SqliteMigrationDefault` protocol
     for the appropriate Elixir type in your Ash project, or configure its
     default value in `migration_defaults` in the sqlite section. Use `\\\"nil\\\"`
     for no default.
@@ -32,55 +32,55 @@ defimpl EctoMigrationDefault, for: Any do
   end
 end
 
-defimpl EctoMigrationDefault, for: Integer do
+defimpl SqliteMigrationDefault, for: Integer do
   def to_default(value) do
     to_string(value)
   end
 end
 
-defimpl EctoMigrationDefault, for: Float do
+defimpl SqliteMigrationDefault, for: Float do
   def to_default(value) do
     to_string(value)
   end
 end
 
-defimpl EctoMigrationDefault, for: Decimal do
+defimpl SqliteMigrationDefault, for: Decimal do
   def to_default(value) do
     ~s["#{value}"]
   end
 end
 
-defimpl EctoMigrationDefault, for: BitString do
+defimpl SqliteMigrationDefault, for: BitString do
   def to_default(value) do
     inspect(value)
   end
 end
 
-defimpl EctoMigrationDefault, for: DateTime do
+defimpl SqliteMigrationDefault, for: DateTime do
   def to_default(value) do
     ~s[fragment("'#{to_string(value)}'")]
   end
 end
 
-defimpl EctoMigrationDefault, for: NaiveDateTime do
+defimpl SqliteMigrationDefault, for: NaiveDateTime do
   def to_default(value) do
     ~s[fragment("'#{to_string(value)}'")]
   end
 end
 
-defimpl EctoMigrationDefault, for: Date do
+defimpl SqliteMigrationDefault, for: Date do
   def to_default(value) do
     ~s[fragment("'#{to_string(value)}'")]
   end
 end
 
-defimpl EctoMigrationDefault, for: Time do
+defimpl SqliteMigrationDefault, for: Time do
   def to_default(value) do
     ~s[fragment("'#{to_string(value)}'")]
   end
 end
 
-defimpl EctoMigrationDefault, for: Atom do
+defimpl SqliteMigrationDefault, for: Atom do
   def to_default(value) when value in [nil, true, false], do: inspect(value)
 
   def to_default(value) do
