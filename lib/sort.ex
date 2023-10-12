@@ -46,8 +46,6 @@ defmodule AshSqlite.Sort do
         |> calc.module.expression(calc.context)
         |> Ash.Filter.hydrate_refs(%{
           resource: resource,
-          aggregates: query.__ash_bindings__.aggregate_defs,
-          calculations: %{},
           public?: false
         })
         |> Ash.Filter.move_to_relationship_path(relationship_path)
