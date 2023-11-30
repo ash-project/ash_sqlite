@@ -44,7 +44,7 @@ defmodule AshSqlite.MixProject do
   if Mix.env() == :test do
     def application() do
       [
-        applications: [:ecto, :ecto_sql, :ecto_sqlite3, :jason, :ash],
+        extra_applications: [:ecto, :ecto_sql, :ecto_sqlite3, :jason, :ash],
         mod: {AshSqlite.TestApp, []}
       ]
     end
