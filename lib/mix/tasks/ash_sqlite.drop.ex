@@ -51,6 +51,8 @@ defmodule Mix.Tasks.AshSqlite.Drop do
 
     rest_opts = AshSqlite.MixHelpers.delete_arg(args, "--apis")
 
+    Mix.Task.reenable("ecto.drop")
+
     Mix.Task.run("ecto.drop", repo_args ++ rest_opts)
   end
 end

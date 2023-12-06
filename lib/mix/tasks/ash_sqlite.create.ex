@@ -43,6 +43,8 @@ defmodule Mix.Tasks.AshSqlite.Create do
 
     rest_opts = AshSqlite.MixHelpers.delete_arg(args, "--apis")
 
+    Mix.Task.reenable("ecto.create")
+
     Mix.Task.run("ecto.create", repo_args ++ rest_opts)
   end
 end
