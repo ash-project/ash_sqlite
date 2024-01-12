@@ -2198,24 +2198,18 @@ defmodule AshSqlite.MigrationGenerator do
   defp migration_type({:array, type}, constraints),
     do: {:array, migration_type(type, constraints)}
 
-  defp migration_type(AshSqlite.Type.CiString, _), do: :string
+  defp migration_type(Ash.Type.CiString, _), do: :citext
   defp migration_type(Ash.Type.UUID, _), do: :uuid
   defp migration_type(Ash.Type.Integer, _), do: :bigint
 
   defp migration_type(other, constraints) do
     type = Ash.Type.get_type(other)
 
-    if Ash.Type.NewType.new_type?(type) do
-      migration_type(
-        Ash.Type.NewType.subtype_of(type),
-        Ash.Type.NewType.constraints(type, constraints)
-      )
-    else
-      migration_type_from_storage_type(Ash.Type.storage_type(other, constraints))
-    end
+    migration_type_from_storage_type(Ash.Type.storage_type(type, constraints))
   end
 
   defp migration_type_from_storage_type(:string), do: :text
+  defp migration_type_from_storage_type(:ci_string), do: :citext
   defp migration_type_from_storage_type(storage_type), do: storage_type
 
   defp foreign_key?(relationship) do
@@ -2294,7 +2288,7 @@ defmodule AshSqlite.MigrationGenerator do
     do: configured_default(resource, name) || "%{}"
 
   defp default(%{name: name, default: value, type: type} = attr, resource, _) do
-    case configured_default(resource, name) do
+    case configured_default(resource, name) |> IO.inspect() do
       nil ->
         case migration_default(type, Map.get(attr, :constraints, []), value) do
           {:ok, default} ->
