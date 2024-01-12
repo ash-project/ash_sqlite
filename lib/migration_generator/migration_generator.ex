@@ -2288,7 +2288,7 @@ defmodule AshSqlite.MigrationGenerator do
     do: configured_default(resource, name) || "%{}"
 
   defp default(%{name: name, default: value, type: type} = attr, resource, _) do
-    case configured_default(resource, name) |> IO.inspect() do
+    case configured_default(resource, name) do
       nil ->
         case migration_default(type, Map.get(attr, :constraints, []), value) do
           {:ok, default} ->
