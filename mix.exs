@@ -190,7 +190,7 @@ defmodule AshSqlite.MixProject do
         default_version
 
       "local" ->
-        [path: "../ash"]
+        [path: "../ash", override: true]
 
       "main" ->
         [git: "https://github.com/ash-project/ash.git"]
