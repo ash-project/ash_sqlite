@@ -15,8 +15,8 @@ if Mix.env() == :dev do
 end
 
 if Mix.env() == :test do
-  config :ash, :validate_api_resource_inclusion?, false
-  config :ash, :validate_api_config_inclusion?, false
+  config :ash, :validate_domain_resource_inclusion?, false
+  config :ash, :validate_domain_config_inclusion?, false
 
   config :ash_sqlite, AshSqlite.TestRepo,
     database: Path.join(__DIR__, "../test/test.db"),
@@ -27,8 +27,8 @@ if Mix.env() == :test do
 
   config :ash_sqlite,
     ecto_repos: [AshSqlite.TestRepo],
-    ash_apis: [
-      AshSqlite.Test.Api
+    ash_domains: [
+      AshSqlite.Test.Domain
     ]
 
   config :logger, level: :warning

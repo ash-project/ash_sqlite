@@ -1,13 +1,13 @@
 defmodule AshSqlite.EnumTest do
   @moduledoc false
   use AshSqlite.RepoCase, async: false
-  alias AshSqlite.Test.{Api, Post}
+  alias AshSqlite.Test.Post
 
   require Ash.Query
 
   test "valid values are properly inserted" do
     Post
-    |> Ash.Changeset.new(%{title: "title", status: :open})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "title", status: :open})
+    |> Ash.create!()
   end
 end

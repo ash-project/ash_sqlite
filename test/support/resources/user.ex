@@ -1,14 +1,15 @@
 defmodule AshSqlite.Test.User do
   @moduledoc false
-  use Ash.Resource, data_layer: AshSqlite.DataLayer
+  use Ash.Resource, domain: AshSqlite.Test.Domain, data_layer: AshSqlite.DataLayer
 
   actions do
+    default_accept(:*)
     defaults([:create, :read, :update, :destroy])
   end
 
   attributes do
     uuid_primary_key(:id)
-    attribute(:is_active, :boolean)
+    attribute(:is_active, :boolean, public?: true)
   end
 
   sqlite do
@@ -17,7 +18,7 @@ defmodule AshSqlite.Test.User do
   end
 
   relationships do
-    belongs_to(:organization, AshSqlite.Test.Organization)
-    has_many(:accounts, AshSqlite.Test.Account)
+    belongs_to(:organization, AshSqlite.Test.Organization, public?: true)
+    has_many(:accounts, AshSqlite.Test.Account, public?: true)
   end
 end

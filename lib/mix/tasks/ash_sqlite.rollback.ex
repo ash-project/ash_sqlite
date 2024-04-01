@@ -4,7 +4,7 @@ defmodule Mix.Tasks.AshSqlite.Rollback do
   import AshSqlite.MixHelpers,
     only: [migrations_path: 2]
 
-  @shortdoc "Rolls back the repository migrations for all repositories in the provided (or configured) apis"
+  @shortdoc "Rolls back the repository migrations for all repositories in the provided (or configured) domains"
 
   @moduledoc """
   Reverts applied migrations in the given repository.
@@ -16,7 +16,7 @@ defmodule Mix.Tasks.AshSqlite.Rollback do
   specific number of times, use `--step n`. To undo all applied
   migrations, provide `--all`.
 
-  This is only really useful if your api or apis only use a single repo.
+  This is only really useful if your domain or domains only use a single repo.
   If you have multiple repos and you want to run a single migration and/or
   migrate/roll them back to different points, you will need to use the
   ecto specific task, `mix ecto.migrate` and provide your repo name.
@@ -30,7 +30,7 @@ defmodule Mix.Tasks.AshSqlite.Rollback do
       mix ash_sqlite.rollback --to 20080906120000
 
   ## Command line options
-    * `--apis` - the apis who's repos should be rolledback
+    * `--domains` - the domains who's repos should be rolledback
     * `--all` - revert all applied migrations
     * `--step` / `-n` - revert n number of applied migrations
     * `--to` / `-v` - revert all migrations down to and including version
@@ -64,7 +64,7 @@ defmodule Mix.Tasks.AshSqlite.Rollback do
 
     rest_opts =
       args
-      |> AshSqlite.MixHelpers.delete_arg("--apis")
+      |> AshSqlite.MixHelpers.delete_arg("--domains")
       |> AshSqlite.MixHelpers.delete_arg("--migrations-path")
 
     Mix.Task.reenable("ecto.rollback")

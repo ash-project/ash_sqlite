@@ -1,6 +1,7 @@
 defmodule AshSqlite.Test.Post do
   @moduledoc false
   use Ash.Resource,
+    domain: AshSqlite.Test.Domain,
     data_layer: AshSqlite.DataLayer,
     authorizers: [
       Ash.Policy.Authorizer
@@ -31,6 +32,7 @@ defmodule AshSqlite.Test.Post do
   end
 
   actions do
+    default_accept(:*)
     defaults([:update, :destroy])
 
     read :read do
@@ -66,71 +68,82 @@ defmodule AshSqlite.Test.Post do
 
   attributes do
     uuid_primary_key(:id, writable?: true)
-    attribute(:title, :string)
-    attribute(:score, :integer)
-    attribute(:public, :boolean)
-    attribute(:category, :ci_string)
-    attribute(:type, :atom, default: :sponsored, private?: true, writable?: false)
-    attribute(:price, :integer)
-    attribute(:decimal, :decimal, default: Decimal.new(0))
-    attribute(:status, AshSqlite.Test.Types.Status)
-    attribute(:status_enum, AshSqlite.Test.Types.StatusEnum)
-    attribute(:status_enum_no_cast, AshSqlite.Test.Types.StatusEnumNoCast, source: :status_enum)
-    attribute(:stuff, :map)
-    attribute(:uniq_one, :string)
-    attribute(:uniq_two, :string)
-    attribute(:uniq_custom_one, :string)
-    attribute(:uniq_custom_two, :string)
+    attribute(:title, :string, public?: true)
+    attribute(:score, :integer, public?: true)
+    attribute(:public, :boolean, public?: true)
+    attribute(:category, :ci_string, public?: true)
+    attribute(:type, :atom, default: :sponsored, writable?: false)
+    attribute(:price, :integer, public?: true)
+    attribute(:decimal, :decimal, default: Decimal.new(0), public?: true)
+    attribute(:status, AshSqlite.Test.Types.Status, public?: true)
+    attribute(:status_enum, AshSqlite.Test.Types.StatusEnum, public?: true)
+
+    attribute(:status_enum_no_cast, AshSqlite.Test.Types.StatusEnumNoCast,
+      source: :status_enum,
+      public?: true
+    )
+
+    attribute(:stuff, :map, public?: true)
+    attribute(:uniq_one, :string, public?: true)
+    attribute(:uniq_two, :string, public?: true)
+    attribute(:uniq_custom_one, :string, public?: true)
+    attribute(:uniq_custom_two, :string, public?: true)
     create_timestamp(:created_at)
     update_timestamp(:updated_at)
   end
 
   code_interface do
-    define_for(AshSqlite.Test.Api)
     define(:get_by_id, action: :read, get_by: [:id])
     define(:increment_score, args: [{:optional, :amount}])
   end
 
   relationships do
     belongs_to :organization, AshSqlite.Test.Organization do
+      public?(true)
       attribute_writable?(true)
     end
 
-    belongs_to(:author, AshSqlite.Test.Author)
+    belongs_to(:author, AshSqlite.Test.Author, public?: true)
 
-    has_many(:comments, AshSqlite.Test.Comment, destination_attribute: :post_id)
+    has_many(:comments, AshSqlite.Test.Comment, destination_attribute: :post_id, public?: true)
 
     has_many :comments_matching_post_title, AshSqlite.Test.Comment do
+      public?(true)
       filter(expr(title == parent_expr(title)))
     end
 
     has_many :popular_comments, AshSqlite.Test.Comment do
+      public?(true)
       destination_attribute(:post_id)
       filter(expr(likes > 10))
     end
 
     has_many :comments_containing_title, AshSqlite.Test.Comment do
+      public?(true)
       manual(AshSqlite.Test.Post.CommentsContainingTitle)
     end
 
     has_many(:ratings, AshSqlite.Test.Rating,
+      public?: true,
       destination_attribute: :resource_id,
       relationship_context: %{data_layer: %{table: "post_ratings"}}
     )
 
     has_many(:post_links, AshSqlite.Test.PostLink,
+      public?: true,
       destination_attribute: :source_post_id,
       filter: [state: :active]
     )
 
     many_to_many(:linked_posts, __MODULE__,
+      public?: true,
       through: AshSqlite.Test.PostLink,
       join_relationship: :post_links,
       source_attribute_on_join_resource: :source_post_id,
       destination_attribute_on_join_resource: :destination_post_id
     )
 
-    has_many(:views, AshSqlite.Test.PostView)
+    has_many(:views, AshSqlite.Test.PostView, public?: true)
   end
 
   validations do
@@ -191,10 +204,10 @@ end
 
 defmodule CalculatePostPriceString do
   @moduledoc false
-  use Ash.Calculation
+  use Ash.Resource.Calculation
 
   @impl true
-  def select(_, _, _), do: [:price]
+  def load(_, _, _), do: [:price]
 
   @impl true
   def calculate(records, _, _) do
@@ -208,7 +221,7 @@ end
 
 defmodule CalculatePostPriceStringWithSymbol do
   @moduledoc false
-  use Ash.Calculation
+  use Ash.Resource.Calculation
 
   @impl true
   def load(_, _, _), do: [:price_string]

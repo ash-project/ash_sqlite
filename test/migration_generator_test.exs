@@ -10,6 +10,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defmodule unquote(mod) do
         use Ash.Resource,
+          domain: nil,
           data_layer: AshSqlite.DataLayer
 
         sqlite do
@@ -34,25 +35,17 @@ defmodule AshSqlite.MigrationGeneratorTest do
     end
   end
 
-  defmacrop defapi(resources) do
+  defmacrop defdomain(resources) do
     quote do
       Code.compiler_options(ignore_module_conflict: true)
 
-      defmodule Registry do
-        use Ash.Registry
-
-        entries do
-          for resource <- unquote(resources) do
-            entry(resource)
-          end
-        end
-      end
-
-      defmodule Api do
-        use Ash.Api
+      defmodule Domain do
+        use Ash.Domain
 
         resources do
-          registry(Registry)
+          for resource <- unquote(resources) do
+            resource(resource)
+          end
         end
       end
 
@@ -89,11 +82,11 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post])
+      defdomain([Post])
 
       Mix.shell(Mix.Shell.Process)
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -169,11 +162,11 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post])
+      defdomain([Post])
 
       Mix.shell(Mix.Shell.Process)
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -199,9 +192,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post])
+      defdomain([Post])
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -228,9 +221,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post])
+      defdomain([Post])
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -252,11 +245,11 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post])
+      defdomain([Post])
 
       send(self(), {:mix_shell_input, :yes?, true})
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -277,11 +270,11 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post])
+      defdomain([Post])
 
       send(self(), {:mix_shell_input, :yes?, false})
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -304,12 +297,12 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post])
+      defdomain([Post])
 
       send(self(), {:mix_shell_input, :yes?, true})
       send(self(), {:mix_shell_input, :prompt, "subject"})
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -335,11 +328,11 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post])
+      defdomain([Post])
 
       send(self(), {:mix_shell_input, :yes?, false})
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -368,9 +361,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post, Post2])
+      defdomain([Post, Post2])
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -401,11 +394,11 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post])
+      defdomain([Post])
 
       Mix.shell(Mix.Shell.Process)
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -435,14 +428,14 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post])
+      defdomain([Post])
 
-      [api: Api]
+      [domain: Domain]
     end
 
-    test "returns code(1) if snapshots and resources don't fit", %{api: api} do
+    test "returns code(1) if snapshots and resources don't fit", %{domain: domain} do
       assert catch_exit(
-               AshSqlite.MigrationGenerator.generate(api,
+               AshSqlite.MigrationGenerator.generate(domain,
                  snapshot_path: "test_snapshot_path",
                  migration_path: "test_migration_path",
                  check: true
@@ -482,9 +475,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post, Post2])
+      defdomain([Post, Post2])
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -517,9 +510,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post, Post2])
+      defdomain([Post, Post2])
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -552,9 +545,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post, Post2])
+      defdomain([Post, Post2])
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -578,7 +571,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -615,6 +608,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defmodule Comment do
         use Ash.Resource,
+          domain: nil,
           data_layer: AshSqlite.DataLayer
 
         sqlite do
@@ -634,6 +628,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defmodule Post do
         use Ash.Resource,
+          domain: nil,
           data_layer: AshSqlite.DataLayer
 
         sqlite do
@@ -662,16 +657,16 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post, Comment])
+      defdomain([Post, Comment])
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
         format: false
       )
 
-      [api: Api]
+      [domain: Domain]
     end
 
     test "it uses the relationship's table context if it is set" do
@@ -698,17 +693,16 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post])
+      defdomain([Post])
 
-      log =
-        capture_log(fn ->
-          AshSqlite.MigrationGenerator.generate(Api,
-            snapshot_path: "test_snapshots_path",
-            migration_path: "test_migration_path",
-            quiet: true,
-            format: false
-          )
-        end)
+      capture_log(fn ->
+        AshSqlite.MigrationGenerator.generate(Domain,
+          snapshot_path: "test_snapshots_path",
+          migration_path: "test_migration_path",
+          quiet: true,
+          format: false
+        )
+      end)
 
       assert [file1] = Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
 
@@ -735,6 +729,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defmodule Comment do
         use Ash.Resource,
+          domain: nil,
           data_layer: AshSqlite.DataLayer
 
         sqlite do
@@ -751,11 +746,11 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post, Comment])
+      defdomain([Post, Comment])
 
       Mix.shell(Mix.Shell.Process)
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
@@ -776,6 +771,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defmodule Comment do
         use Ash.Resource,
+          domain: nil,
           data_layer: AshSqlite.DataLayer
 
         sqlite do
@@ -792,9 +788,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
         end
       end
 
-      defapi([Post, Comment])
+      defdomain([Post, Comment])
 
-      AshSqlite.MigrationGenerator.generate(Api,
+      AshSqlite.MigrationGenerator.generate(Domain,
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,

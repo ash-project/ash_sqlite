@@ -282,9 +282,6 @@ defmodule AshSqlite.DataLayer do
     ]
   }
 
-  alias Ash.Filter
-  alias Ash.Query.{BooleanExpression, Not}
-
   @behaviour Ash.DataLayer
 
   @sections [@sqlite]
@@ -380,6 +377,8 @@ defmodule AshSqlite.DataLayer do
   def can?(_, {:aggregate_relationship, _}), do: false
 
   def can?(_, :timeout), do: true
+  def can?(_, {:filter_expr, %Ash.Query.Function.StringJoin{}}), do: false
+  def can?(_, {:filter_expr, %Ash.Query.Function.Contains{}}), do: false
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
   def can?(_, {:query_aggregate, _}), do: true
@@ -416,7 +415,13 @@ defmodule AshSqlite.DataLayer do
         data_layer_query
       end
 
-    {:ok, default_bindings(data_layer_query, resource, context)}
+    {:ok,
+     AshSql.Bindings.default_bindings(
+       data_layer_query,
+       resource,
+       AshSqlite.SqlImplementation,
+       context
+     )}
   end
 
   @impl true
@@ -433,10 +438,10 @@ defmodule AshSqlite.DataLayer do
   @impl true
   def run_aggregate_query(query, aggregates, resource) do
     {exists, aggregates} = Enum.split_with(aggregates, &(&1.kind == :exists))
-    query = default_bindings(query, resource)
+    query = AshSql.Bindings.default_bindings(query, resource, AshSqlite.SqlImplementation)
 
     query =
-      if query.distinct || query.limit do
+      if query.limit do
         query =
           query
           |> Ecto.Query.exclude(:select)
@@ -459,12 +464,13 @@ defmodule AshSqlite.DataLayer do
         aggregates,
         query,
         fn agg, query ->
-          AshSqlite.Aggregate.add_subquery_aggregate_select(
+          AshSql.Aggregate.add_subquery_aggregate_select(
             query,
             agg.relationship_path |> Enum.drop(1),
             agg,
             resource,
-            true
+            true,
+            Ash.Resource.Info.relationship(resource, agg.relationship_path |> Enum.at(1))
           )
         end
       )
@@ -505,13 +511,11 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def run_query(query, resource) do
-    query = default_bindings(query, resource)
-
     with_sort_applied =
       if query.__ash_bindings__[:sort_applied?] do
         {:ok, query}
       else
-        apply_sort(query, query.__ash_bindings__[:sort], resource)
+        AshSql.Sort.apply_sort(query, query.__ash_bindings__[:sort], resource)
       end
 
     case with_sort_applied do
@@ -568,7 +572,6 @@ defmodule AshSqlite.DataLayer do
   @impl true
   def functions(_resource) do
     [
-      AshSqlite.Functions.Fragment,
       AshSqlite.Functions.Like,
       AshSqlite.Functions.ILike
     ]
@@ -601,22 +604,22 @@ defmodule AshSqlite.DataLayer do
         if options[:upsert?] do
           # Ash groups changesets by atomics before dispatching them to the data layer
           # this means that all changesets have the same atomics
-          %{atomics: atomics, filters: filters} = Enum.at(changesets, 0)
+          %{atomics: atomics, filter: filter} = Enum.at(changesets, 0)
 
           query = from(row in resource, as: ^0)
 
           query =
             query
-            |> default_bindings(resource)
+            |> AshSql.Bindings.default_bindings(resource, AshSqlite.SqlImplementation)
 
           upsert_set =
             upsert_set(resource, changesets, options)
 
           on_conflict =
-            case query_with_atomics(
+            case AshSql.Atomics.query_with_atomics(
                    resource,
                    query,
-                   filters,
+                   filter,
                    atomics,
                    %{},
                    upsert_set
@@ -1292,13 +1295,17 @@ defmodule AshSqlite.DataLayer do
 
       query =
         query
-        |> default_bindings(resource, changeset.context)
+        |> AshSql.Bindings.default_bindings(
+          resource,
+          AshSqlite.SqlImplementation,
+          changeset.context
+        )
         |> Ecto.Query.select(^select)
 
-      case query_with_atomics(
+      case AshSql.Atomics.query_with_atomics(
              resource,
              query,
-             ecto_changeset.filters,
+             changeset.filter,
              changeset.atomics,
              ecto_changeset.changes,
              []
@@ -1324,7 +1331,7 @@ defmodule AshSqlite.DataLayer do
               {:error,
                Ash.Error.Changes.StaleRecord.exception(
                  resource: resource,
-                 filters: ecto_changeset.filters
+                 filters: changeset.filter
                )}
 
             {1, [result]} ->
@@ -1342,101 +1349,6 @@ defmodule AshSqlite.DataLayer do
     rescue
       e ->
         handle_raised_error(e, __STACKTRACE__, ecto_changeset, resource)
-    end
-  end
-
-  defp query_with_atomics(
-         resource,
-         query,
-         filters,
-         atomics,
-         updating_one_changes,
-         existing_set
-       ) do
-    query =
-      Enum.reduce(filters, query, fn {key, value}, query ->
-        from(row in query,
-          where: field(row, ^key) == ^value
-        )
-      end)
-
-    atomics_result =
-      Enum.reduce_while(atomics, {:ok, query, []}, fn {field, expr}, {:ok, query, set} ->
-        with {:ok, query} <-
-               AshSqlite.Join.join_all_relationships(
-                 query,
-                 %Ash.Filter{
-                   resource: resource,
-                   expression: expr
-                 },
-                 left_only?: true
-               ),
-             dynamic <-
-               AshSqlite.Expr.dynamic_expr(query, expr, query.__ash_bindings__) do
-          {:cont, {:ok, query, Keyword.put(set, field, dynamic)}}
-        else
-          other ->
-            {:halt, other}
-        end
-      end)
-
-    case atomics_result do
-      {:ok, query, dynamics} ->
-        {params, set, count} =
-          updating_one_changes
-          |> Map.to_list()
-          |> Enum.reduce({[], [], 0}, fn {key, value}, {params, set, count} ->
-            {[{value, {0, key}} | params], [{key, {:^, [], [count]}} | set], count + 1}
-          end)
-
-        {params, set, _} =
-          Enum.reduce(
-            dynamics ++ existing_set,
-            {params, set, count},
-            fn {key, value}, {params, set, count} ->
-              case AshSqlite.Expr.dynamic_expr(query, value, query.__ash_bindings__) do
-                %Ecto.Query.DynamicExpr{} = dynamic ->
-                  result =
-                    Ecto.Query.Builder.Dynamic.partially_expand(
-                      :select,
-                      query,
-                      dynamic,
-                      params,
-                      count
-                    )
-
-                  expr = elem(result, 0)
-                  new_params = elem(result, 1)
-
-                  new_count =
-                    result |> Tuple.to_list() |> List.last()
-
-                  {new_params, [{key, expr} | set], new_count}
-
-                other ->
-                  {[{other, {0, key}} | params], [{key, {:^, [], [count]}} | set], count + 1}
-              end
-            end
-          )
-
-        case set do
-          [] ->
-            :empty
-
-          set ->
-            {:ok,
-             Map.put(query, :updates, [
-               %Ecto.Query.QueryExpr{
-                 # why do I have to reverse the `set`???
-                 # it breaks if I don't
-                 expr: [set: Enum.reverse(set)],
-                 params: Enum.reverse(params)
-               }
-             ])}
-        end
-
-      {:error, error} ->
-        {:error, error}
     end
   end
 
@@ -1470,7 +1382,7 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def select(query, select, resource) do
-    query = default_bindings(query, resource)
+    query = AshSql.Bindings.default_bindings(query, resource, AshSqlite.SqlImplementation)
 
     {:ok,
      from(row in query,
@@ -1478,64 +1390,27 @@ defmodule AshSqlite.DataLayer do
      )}
   end
 
-  defp apply_sort(query, sort, _resource) when sort in [nil, []] do
-    {:ok, query |> set_sort_applied()}
-  end
-
-  defp apply_sort(query, sort, resource) do
-    query
-    |> AshSqlite.Sort.sort(sort, resource, [], 0)
-    |> case do
-      {:ok, query} ->
-        {:ok, query |> set_sort_applied()}
-
-      {:error, error} ->
-        {:error, error}
-    end
-  end
-
   @doc false
   def unwrap_one([thing]), do: thing
   def unwrap_one([]), do: nil
   def unwrap_one(other), do: other
 
-  defp set_sort_applied(query) do
-    Map.update!(query, :__ash_bindings__, &Map.put(&1, :sort_applied?, true))
-  end
-
   @impl true
-  def filter(query, filter, resource, opts \\ []) do
-    query = default_bindings(query, resource)
-
+  def filter(query, filter, _resource, opts \\ []) do
     query
-    |> AshSqlite.Join.join_all_relationships(filter, opts)
+    |> AshSql.Join.join_all_relationships(filter, opts)
     |> case do
       {:ok, query} ->
-        {:ok, add_filter_expression(query, filter)}
+        {:ok, AshSql.Filter.add_filter_expression(query, filter)}
 
       {:error, error} ->
         {:error, error}
     end
   end
 
-  @doc false
-  def default_bindings(query, resource, context \\ %{}) do
-    start_bindings = context[:data_layer][:start_bindings_at] || 0
-
-    Map.put_new(query, :__ash_bindings__, %{
-      resource: resource,
-      current: Enum.count(query.joins) + 1 + start_bindings,
-      in_group?: false,
-      calculations: %{},
-      parent_resources: [],
-      context: context,
-      bindings: %{start_bindings => %{path: [], type: :root, source: resource}}
-    })
-  end
-
   @impl true
   def add_calculations(query, calculations, resource) do
-    AshSqlite.Calculation.add_calculations(query, calculations, resource, 0)
+    AshSql.Calculation.add_calculations(query, calculations, resource, 0, true)
   end
 
   @doc false
@@ -1568,40 +1443,6 @@ defmodule AshSqlite.DataLayer do
   end
 
   def get_binding(_, _, _, _, _), do: nil
-
-  defp add_filter_expression(query, filter) do
-    filter
-    |> split_and_statements()
-    |> Enum.reduce(query, fn filter, query ->
-      dynamic = AshSqlite.Expr.dynamic_expr(query, filter, query.__ash_bindings__)
-
-      Ecto.Query.where(query, ^dynamic)
-    end)
-  end
-
-  defp split_and_statements(%Filter{expression: expression}) do
-    split_and_statements(expression)
-  end
-
-  defp split_and_statements(%BooleanExpression{op: :and, left: left, right: right}) do
-    split_and_statements(left) ++ split_and_statements(right)
-  end
-
-  defp split_and_statements(%Not{expression: %Not{expression: expression}}) do
-    split_and_statements(expression)
-  end
-
-  defp split_and_statements(%Not{
-         expression: %BooleanExpression{op: :or, left: left, right: right}
-       }) do
-    split_and_statements(%BooleanExpression{
-      op: :and,
-      left: %Not{expression: left},
-      right: %Not{expression: right}
-    })
-  end
-
-  defp split_and_statements(other), do: [other]
 
   @doc false
   def add_binding(query, data, additional_bindings \\ 0) do

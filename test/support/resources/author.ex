@@ -1,6 +1,7 @@
 defmodule AshSqlite.Test.Author do
   @moduledoc false
   use Ash.Resource,
+    domain: AshSqlite.Test.Domain,
     data_layer: AshSqlite.DataLayer
 
   sqlite do
@@ -10,19 +11,20 @@ defmodule AshSqlite.Test.Author do
 
   attributes do
     uuid_primary_key(:id, writable?: true)
-    attribute(:first_name, :string)
-    attribute(:last_name, :string)
-    attribute(:bio, AshSqlite.Test.Bio)
-    attribute(:badges, {:array, :atom})
+    attribute(:first_name, :string, public?: true)
+    attribute(:last_name, :string, public?: true)
+    attribute(:bio, AshSqlite.Test.Bio, public?: true)
+    attribute(:badges, {:array, :atom}, public?: true)
   end
 
   actions do
+    default_accept(:*)
     defaults([:create, :read, :update, :destroy])
   end
 
   relationships do
-    has_one(:profile, AshSqlite.Test.Profile)
-    has_many(:posts, AshSqlite.Test.Post)
+    has_one(:profile, AshSqlite.Test.Profile, public?: true)
+    has_many(:posts, AshSqlite.Test.Post, public?: true)
   end
 
   calculations do

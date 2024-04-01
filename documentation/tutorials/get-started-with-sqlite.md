@@ -136,6 +136,7 @@ Now we can add the data layer to our resources. The basic configuration for a re
 # in lib/helpdesk/support/resources/ticket.ex
 
   use Ash.Resource,
+    domain: MyApp.Domain,
     data_layer: AshSqlite.DataLayer
 
   sqlite do
@@ -148,6 +149,7 @@ Now we can add the data layer to our resources. The basic configuration for a re
 # in lib/helpdesk/support/resources/representative.ex
 
   use Ash.Resource,
+    domain: MyApp.Domain,
     data_layer: AshSqlite.DataLayer
 
   sqlite do

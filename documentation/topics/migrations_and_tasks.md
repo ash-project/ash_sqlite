@@ -86,17 +86,17 @@ defmodule MyApp.Release do
   end
 
   defp repos do
-    apis()
-    |> Enum.flat_map(fn api ->
-      api
-      |> Ash.Api.Info.resources()
+    domains()
+    |> Enum.flat_map(fn domain ->
+      domain
+      |> Ash.Domain.Info.resources()
       |> Enum.map(&AshSqlite.repo/1)
     end)
     |> Enum.uniq()
   end
 
-  defp apis do
-    Application.fetch_env!(:my_app, :ash_apis)
+  defp domains do
+    Application.fetch_env!(:my_app, :ash_domains)
   end
 
   defp load_app do

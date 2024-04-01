@@ -5,6 +5,7 @@ To support leveraging the same resource backed by multiple tables (useful for th
 ```elixir
 defmodule MyApp.Reaction do
   use Ash.Resource,
+    domain: MyApp.Domain,
     data_layer: AshSqlite.DataLayer
 
    sqlite do
@@ -24,6 +25,7 @@ Then, in your related resources, you set the table context like so:
 ```elixir
 defmodule MyApp.Post do
   use Ash.Resource,
+    domain: MyApp.Domain,
     data_layer: AshSqlite.DataLayer
 
   ...
@@ -37,6 +39,7 @@ end
 
 defmodule MyApp.Comment do
   use Ash.Resource,
+    domain: MyApp.Domain,
     data_layer: AshSqlite.DataLayer
 
   ...

@@ -4,7 +4,7 @@ defmodule Mix.Tasks.AshSqlite.Migrate do
   import AshSqlite.MixHelpers,
     only: [migrations_path: 2]
 
-  @shortdoc "Runs the repository migrations for all repositories in the provided (or congigured) apis"
+  @shortdoc "Runs the repository migrations for all repositories in the provided (or congigured) domains"
 
   @aliases [
     n: :step
@@ -18,7 +18,7 @@ defmodule Mix.Tasks.AshSqlite.Migrate do
     pool_size: :integer,
     log_sql: :boolean,
     strict_version_order: :boolean,
-    apis: :string,
+    domains: :string,
     no_compile: :boolean,
     no_deps_check: :boolean,
     migrations_path: :keep
@@ -37,7 +37,7 @@ defmodule Mix.Tasks.AshSqlite.Migrate do
   specific version number, supply `--to version_number`. To migrate a
   specific number of times, use `--step n`.
 
-  This is only really useful if your api or apis only use a single repo.
+  This is only really useful if your domain or domains only use a single repo.
   If you have multiple repos and you want to run a single migration and/or
   migrate/roll them back to different points, you will need to use the
   ecto specific task, `mix ecto.migrate` and provide your repo name.
@@ -48,7 +48,7 @@ defmodule Mix.Tasks.AshSqlite.Migrate do
   ## Examples
 
       mix ash_sqlite.migrate
-      mix ash_sqlite.migrate --apis MyApp.Api1,MyApp.Api2
+      mix ash_sqlite.migrate --domains MyApp.Domain1,MyApp.Domain2
 
       mix ash_sqlite.migrate -n 3
       mix ash_sqlite.migrate --step 3
@@ -57,7 +57,7 @@ defmodule Mix.Tasks.AshSqlite.Migrate do
 
   ## Command line options
 
-    * `--apis` - the apis who's repos should be migrated
+    * `--domains` - the domains who's repos should be migrated
 
     * `--all` - run all pending migrations
 
@@ -99,7 +99,7 @@ defmodule Mix.Tasks.AshSqlite.Migrate do
 
     rest_opts =
       args
-      |> AshSqlite.MixHelpers.delete_arg("--apis")
+      |> AshSqlite.MixHelpers.delete_arg("--domains")
       |> AshSqlite.MixHelpers.delete_arg("--migrations-path")
 
     Mix.Task.reenable("ecto.migrate")

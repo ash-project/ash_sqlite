@@ -27,7 +27,7 @@ Then, configure each of your `Ash.Resource` resources by adding `use Ash.Resourc
 
 ```elixir
 defmodule MyApp.SomeResource do
-  use Ash.Resource, data_layer: AshSqlite.DataLayer
+  use Ash.Resource, domain: MyDomain, data_layer: AshSqlite.DataLayer
 
   sqlite do
     repo MyApp.Repo

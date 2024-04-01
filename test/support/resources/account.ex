@@ -1,21 +1,23 @@
 defmodule AshSqlite.Test.Account do
   @moduledoc false
-  use Ash.Resource, data_layer: AshSqlite.DataLayer
+  use Ash.Resource, domain: AshSqlite.Test.Domain, data_layer: AshSqlite.DataLayer
 
   actions do
+    default_accept(:*)
     defaults([:create, :read, :update, :destroy])
   end
 
   attributes do
     uuid_primary_key(:id)
-    attribute(:is_active, :boolean)
+    attribute(:is_active, :boolean, public?: true)
   end
 
   calculations do
     calculate(
       :active,
       :boolean,
-      expr(is_active)
+      expr(is_active),
+      public?: true
     )
   end
 
@@ -25,6 +27,6 @@ defmodule AshSqlite.Test.Account do
   end
 
   relationships do
-    belongs_to(:user, AshSqlite.Test.User)
+    belongs_to(:user, AshSqlite.Test.User, public?: true)
   end
 end

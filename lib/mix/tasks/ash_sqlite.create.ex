@@ -5,7 +5,7 @@ defmodule Mix.Tasks.AshSqlite.Create do
 
   @switches [
     quiet: :boolean,
-    apis: :string,
+    domains: :string,
     no_compile: :boolean,
     no_deps_check: :boolean
   ]
@@ -15,16 +15,16 @@ defmodule Mix.Tasks.AshSqlite.Create do
   ]
 
   @moduledoc """
-  Create the storage for repos in all resources for the given (or configured) apis.
+  Create the storage for repos in all resources for the given (or configured) domains.
 
   ## Examples
 
       mix ash_sqlite.create
-      mix ash_sqlite.create --apis MyApp.Api1,MyApp.Api2
+      mix ash_sqlite.create --domains MyApp.Domain1,MyApp.Domain2
 
   ## Command line options
 
-    * `--apis` - the apis who's repos you want to migrate.
+    * `--domains` - the domains who's repos you want to migrate.
     * `--quiet` - do not log output
     * `--no-compile` - do not compile before creating
     * `--no-deps-check` - do not compile before creating
@@ -41,7 +41,7 @@ defmodule Mix.Tasks.AshSqlite.Create do
         ["-r", to_string(repo)]
       end)
 
-    rest_opts = AshSqlite.MixHelpers.delete_arg(args, "--apis")
+    rest_opts = AshSqlite.MixHelpers.delete_arg(args, "--domains")
 
     Mix.Task.reenable("ecto.create")
 

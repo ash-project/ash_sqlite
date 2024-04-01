@@ -19,11 +19,11 @@ defmodule AshSqlite.MigrationGenerator do
             check: false,
             drop_columns: false
 
-  def generate(apis, opts \\ []) do
-    apis = List.wrap(apis)
+  def generate(domains, opts \\ []) do
+    domains = List.wrap(domains)
     opts = opts(opts)
 
-    all_resources = Enum.uniq(Enum.flat_map(apis, &Ash.Api.Info.resources/1))
+    all_resources = Enum.uniq(Enum.flat_map(domains, &Ash.Domain.Info.resources/1))
 
     snapshots =
       all_resources
@@ -49,8 +49,8 @@ defmodule AshSqlite.MigrationGenerator do
 
   Does not support everything supported by the migration generator.
   """
-  def take_snapshots(api, repo, only_resources \\ nil) do
-    all_resources = api |> Ash.Api.Info.resources() |> Enum.uniq()
+  def take_snapshots(domain, repo, only_resources \\ nil) do
+    all_resources = domain |> Ash.Domain.Info.resources() |> Enum.uniq()
 
     all_resources
     |> Enum.filter(fn resource ->
@@ -408,10 +408,7 @@ defmodule AshSqlite.MigrationGenerator do
 
       attributes = Enum.flat_map(snapshots, & &1.attributes)
 
-      count_with_create =
-        snapshots
-        |> Enum.filter(& &1.has_create_action)
-        |> Enum.count()
+      count_with_create = Enum.count(snapshots, & &1.has_create_action)
 
       new_snapshot = %{
         snapshot
@@ -2035,7 +2032,7 @@ defmodule AshSqlite.MigrationGenerator do
   defp has_create_action?(resource) do
     resource
     |> Ash.Resource.Info.actions()
-    |> Enum.any?(&(&1.type == :create))
+    |> Enum.any?(&(&1.type == :create && !&1.manual))
   end
 
   defp custom_indexes(resource) do

@@ -1,6 +1,6 @@
 defmodule AshSqlite.AtomicsTest do
   use AshSqlite.RepoCase, async: false
-  alias AshSqlite.Test.{Api, Post}
+  alias AshSqlite.Test.Post
 
   import Ash.Expr
 
@@ -10,40 +10,40 @@ defmodule AshSqlite.AtomicsTest do
     Post
     |> Ash.Changeset.for_create(:create, %{id: id, title: "foo", price: 1}, upsert?: true)
     |> Ash.Changeset.atomic_update(:price, expr(price + 1))
-    |> Api.create!()
+    |> Ash.create!()
 
     Post
     |> Ash.Changeset.for_create(:create, %{id: id, title: "foo", price: 1}, upsert?: true)
     |> Ash.Changeset.atomic_update(:price, expr(price + 1))
-    |> Api.create!()
+    |> Ash.create!()
 
-    assert [%{price: 2}] = Post |> Api.read!()
+    assert [%{price: 2}] = Post |> Ash.read!()
   end
 
   test "a basic atomic works" do
     post =
       Post
       |> Ash.Changeset.for_create(:create, %{title: "foo", price: 1})
-      |> Api.create!()
+      |> Ash.create!()
 
     assert %{price: 2} =
              post
              |> Ash.Changeset.for_update(:update, %{})
              |> Ash.Changeset.atomic_update(:price, expr(price + 1))
-             |> Api.update!()
+             |> Ash.update!()
   end
 
   test "an atomic that violates a constraint will return the proper error" do
     post =
       Post
       |> Ash.Changeset.for_create(:create, %{title: "foo", price: 1})
-      |> Api.create!()
+      |> Ash.create!()
 
     assert_raise Ash.Error.Invalid, ~r/does not exist/, fn ->
       post
       |> Ash.Changeset.for_update(:update, %{})
       |> Ash.Changeset.atomic_update(:organization_id, Ash.UUID.generate())
-      |> Api.update!()
+      |> Ash.update!()
     end
   end
 
@@ -51,13 +51,13 @@ defmodule AshSqlite.AtomicsTest do
     post =
       Post
       |> Ash.Changeset.for_create(:create, %{title: "foo", price: 1})
-      |> Api.create!()
+      |> Ash.create!()
 
     post =
       post
       |> Ash.Changeset.for_update(:update, %{})
       |> Ash.Changeset.atomic_update(:score, expr(score_after_winning))
-      |> Api.update!()
+      |> Ash.update!()
 
     assert post.score == 1
   end
@@ -66,7 +66,7 @@ defmodule AshSqlite.AtomicsTest do
     post =
       Post
       |> Ash.Changeset.for_create(:create, %{title: "foo", price: 1})
-      |> Api.create!()
+      |> Ash.create!()
 
     assert Post.increment_score!(post, 2).score == 2
 

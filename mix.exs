@@ -169,10 +169,11 @@ defmodule AshSqlite.MixProject do
   defp deps do
     [
       {:ecto_sql, "~> 3.9"},
-      {:ecto_sqlite3, "~> 0.12.0"},
+      {:ecto_sqlite3, "~> 0.12"},
+      {:ash_sql, "~> 0.1.0-rc.2"},
       {:ecto, "~> 3.9"},
       {:jason, "~> 1.0"},
-      {:ash, ash_version("~> 2.15 and >= 2.15.12")},
+      {:ash, ash_version("~> 3.0.0-rc.0")},
       {:git_ops, "~> 2.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.22", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.14", only: [:dev, :test]},

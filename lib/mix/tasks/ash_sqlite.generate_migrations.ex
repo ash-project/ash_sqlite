@@ -4,7 +4,7 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
 
   Options:
 
-  * `apis` - a comma separated list of API modules, for which migrations will be generated
+  * `domains` - a comma separated list of domain modules, for which migrations will be generated
   * `snapshot-path` - a custom path to store the snapshots, defaults to "priv/resource_snapshots"
   * `migration-path` - a custom path to store the migrations, defaults to "priv".
     Migrations are stored in a folder for each repo, so `priv/repo_name/migrations`
@@ -71,7 +71,7 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
     {opts, _} =
       OptionParser.parse!(args,
         strict: [
-          apis: :string,
+          domains: :string,
           snapshot_path: :string,
           migration_path: :string,
           quiet: :boolean,
@@ -83,13 +83,13 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
         ]
       )
 
-    apis = AshSqlite.MixHelpers.apis!(opts, args)
+    domains = AshSqlite.MixHelpers.domains!(opts, args)
 
     opts =
       opts
       |> Keyword.put(:format, !opts[:no_format])
       |> Keyword.delete(:no_format)
 
-    AshSqlite.MigrationGenerator.generate(apis, opts)
+    AshSqlite.MigrationGenerator.generate(domains, opts)
   end
 end

@@ -1,43 +1,43 @@
 defmodule AshSqlite.Test.ManualRelationshipsTest do
   use AshSqlite.RepoCase, async: false
-  alias AshSqlite.Test.{Api, Comment, Post}
+  alias AshSqlite.Test.{Comment, Post}
 
   require Ash.Query
 
   describe "manual first" do
     test "relationships can be filtered on with no data" do
       Post
-      |> Ash.Changeset.new(%{title: "title"})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "title"})
+      |> Ash.create!()
 
       assert [] =
-               Post |> Ash.Query.filter(comments_containing_title.title == "title") |> Api.read!()
+               Post |> Ash.Query.filter(comments_containing_title.title == "title") |> Ash.read!()
     end
 
     test "relationships can be filtered on with data" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "title2"})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "title2"})
+      |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "title2"})
+      |> Ash.Changeset.for_create(:create, %{title: "title2"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "no match"})
+      |> Ash.Changeset.for_create(:create, %{title: "no match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert [_] =
                Post
                |> Ash.Query.filter(comments_containing_title.title == "title2")
-               |> Api.read!()
+               |> Ash.read!()
     end
   end
 
@@ -45,44 +45,44 @@ defmodule AshSqlite.Test.ManualRelationshipsTest do
     test "relationships can be filtered on with no data" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "no match"})
+      |> Ash.Changeset.for_create(:create, %{title: "no match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert [] =
                Comment
                |> Ash.Query.filter(post.comments_containing_title.title == "title2")
-               |> Api.read!()
+               |> Ash.read!()
     end
 
     test "relationships can be filtered on with data" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "title2"})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "title2"})
+      |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "title2"})
+      |> Ash.Changeset.for_create(:create, %{title: "title2"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "no match"})
+      |> Ash.Changeset.for_create(:create, %{title: "no match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert [_, _] =
                Comment
                |> Ash.Query.filter(post.comments_containing_title.title == "title2")
-               |> Api.read!()
+               |> Ash.read!()
     end
   end
 
@@ -90,27 +90,27 @@ defmodule AshSqlite.Test.ManualRelationshipsTest do
     test "relationships can be filtered on with data" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "title2"})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "title2"})
+      |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "title2"})
+      |> Ash.Changeset.for_create(:create, %{title: "title2"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "no match"})
+      |> Ash.Changeset.for_create(:create, %{title: "no match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert [_, _] =
                Comment
                |> Ash.Query.filter(post.comments_containing_title.post.title == "title")
-               |> Api.read!()
+               |> Ash.read!()
     end
   end
 end

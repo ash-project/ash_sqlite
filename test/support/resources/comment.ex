@@ -1,6 +1,7 @@
 defmodule AshSqlite.Test.Comment do
   @moduledoc false
   use Ash.Resource,
+    domain: AshSqlite.Test.Domain,
     data_layer: AshSqlite.DataLayer,
     authorizers: [
       Ash.Policy.Authorizer
@@ -23,6 +24,7 @@ defmodule AshSqlite.Test.Comment do
   end
 
   actions do
+    default_accept(:*)
     defaults([:read, :update, :destroy])
 
     create :create do
@@ -35,22 +37,24 @@ defmodule AshSqlite.Test.Comment do
 
   attributes do
     uuid_primary_key(:id)
-    attribute(:title, :string)
-    attribute(:likes, :integer)
-    attribute(:arbitrary_timestamp, :utc_datetime_usec)
-    create_timestamp(:created_at, writable?: true)
+    attribute(:title, :string, public?: true)
+    attribute(:likes, :integer, public?: true)
+    attribute(:arbitrary_timestamp, :utc_datetime_usec, public?: true)
+    create_timestamp(:created_at, writable?: true, public?: true)
   end
 
   relationships do
-    belongs_to(:post, AshSqlite.Test.Post)
-    belongs_to(:author, AshSqlite.Test.Author)
+    belongs_to(:post, AshSqlite.Test.Post, public?: true)
+    belongs_to(:author, AshSqlite.Test.Author, public?: true)
 
     has_many(:ratings, AshSqlite.Test.Rating,
+      public?: true,
       destination_attribute: :resource_id,
       relationship_context: %{data_layer: %{table: "comment_ratings"}}
     )
 
     has_many(:popular_ratings, AshSqlite.Test.Rating,
+      public?: true,
       destination_attribute: :resource_id,
       relationship_context: %{data_layer: %{table: "comment_ratings"}},
       filter: expr(score > 5)

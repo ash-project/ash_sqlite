@@ -1,6 +1,6 @@
 defmodule AshSqlite.Test.TypeTest do
   use AshSqlite.RepoCase, async: false
-  alias AshSqlite.Test.{Api, Post}
+  alias AshSqlite.Test.Post
 
   require Ash.Query
 
@@ -9,6 +9,6 @@ defmodule AshSqlite.Test.TypeTest do
 
     Post
     |> Ash.Query.filter(fragment("? = ?", id, type(^uuid, :uuid)))
-    |> Api.read!()
+    |> Ash.read!()
   end
 end
