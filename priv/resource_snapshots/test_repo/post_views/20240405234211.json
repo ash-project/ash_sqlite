@@ -3,34 +3,44 @@
     {
       "default": "nil",
       "size": null,
-      "type": "uuid",
-      "source": "id",
+      "type": "utc_datetime_usec",
+      "source": "time",
       "references": null,
       "allow_nil?": false,
       "generated?": false,
-      "primary_key?": true
+      "primary_key?": false
     },
     {
       "default": "nil",
       "size": null,
       "type": "text",
-      "source": "name",
+      "source": "browser",
       "references": null,
       "allow_nil?": true,
       "generated?": false,
       "primary_key?": false
+    },
+    {
+      "default": "nil",
+      "size": null,
+      "type": "uuid",
+      "source": "post_id",
+      "references": null,
+      "allow_nil?": false,
+      "generated?": false,
+      "primary_key?": false
     }
   ],
-  "table": "orgs",
-  "hash": "0B3135AADE218FAF66F0D5B4DCDD4F2C0CE299F6FCD4CE02C14003459C793873",
+  "table": "post_views",
+  "hash": "D0749D9F514E36781D95F2967C97860C58C6DEAE95543DFAAB0E9C09A1480E93",
   "repo": "Elixir.AshSqlite.TestRepo",
   "identities": [],
+  "base_filter": null,
   "multitenancy": {
     "global": null,
-    "attribute": null,
-    "strategy": null
+    "strategy": null,
+    "attribute": null
   },
-  "base_filter": null,
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true

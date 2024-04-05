@@ -1,7 +1,7 @@
 {
   "attributes": [
     {
-      "default": "\"active\"",
+      "default": "nil",
       "size": null,
       "type": "text",
       "source": "state",
@@ -21,13 +21,13 @@
         "on_delete": null,
         "multitenancy": {
           "global": null,
-          "attribute": null,
-          "strategy": null
+          "strategy": null,
+          "attribute": null
         },
         "primary_key?": true,
         "destination_attribute": "id",
-        "deferrable": false,
         "on_update": null,
+        "deferrable": false,
         "destination_attribute_default": null,
         "destination_attribute_generated": null
       },
@@ -46,13 +46,13 @@
         "on_delete": null,
         "multitenancy": {
           "global": null,
-          "attribute": null,
-          "strategy": null
+          "strategy": null,
+          "attribute": null
         },
         "primary_key?": true,
         "destination_attribute": "id",
-        "deferrable": false,
         "on_update": null,
+        "deferrable": false,
         "destination_attribute_default": null,
         "destination_attribute_generated": null
       },
@@ -62,7 +62,7 @@
     }
   ],
   "table": "post_links",
-  "hash": "160D65E5F78855E4B9DE8907FD2B26299E7DCABCF667DAD9898309BA8AAA2B74",
+  "hash": "6ADC017A784C2619574DE223A15A29ECAF6D67C0543DF67A8E4E215E8F8ED300",
   "repo": "Elixir.AshSqlite.TestRepo",
   "identities": [
     {
@@ -75,12 +75,12 @@
       "index_name": "post_links_unique_link_index"
     }
   ],
+  "base_filter": null,
   "multitenancy": {
     "global": null,
-    "attribute": null,
-    "strategy": null
+    "strategy": null,
+    "attribute": null
   },
-  "base_filter": null,
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true

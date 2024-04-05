@@ -14,7 +14,7 @@
       "default": "nil",
       "size": null,
       "type": "text",
-      "source": "first_name",
+      "source": "description",
       "references": null,
       "allow_nil?": true,
       "generated?": false,
@@ -23,47 +23,39 @@
     {
       "default": "nil",
       "size": null,
-      "type": "text",
-      "source": "last_name",
-      "references": null,
-      "allow_nil?": true,
-      "generated?": false,
-      "primary_key?": false
-    },
-    {
-      "default": "nil",
-      "size": null,
-      "type": "map",
-      "source": "bio",
-      "references": null,
-      "allow_nil?": true,
-      "generated?": false,
-      "primary_key?": false
-    },
-    {
-      "default": "nil",
-      "size": null,
-      "type": [
-        "array",
-        "text"
-      ],
-      "source": "badges",
-      "references": null,
+      "type": "uuid",
+      "source": "author_id",
+      "references": {
+        "name": "profile_author_id_fkey",
+        "table": "authors",
+        "on_delete": null,
+        "multitenancy": {
+          "global": null,
+          "strategy": null,
+          "attribute": null
+        },
+        "primary_key?": true,
+        "destination_attribute": "id",
+        "on_update": null,
+        "deferrable": false,
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null
+      },
       "allow_nil?": true,
       "generated?": false,
       "primary_key?": false
     }
   ],
-  "table": "authors",
-  "hash": "96AF8AF31D328221EB7A373A0EAC3177FA34FA4873C75AACA42937FB72E776BD",
+  "table": "profile",
+  "hash": "710F812AC63D2051F6AB22912CE5304088AF1D8F03C2BAFDC07EB24FA62136C2",
   "repo": "Elixir.AshSqlite.TestRepo",
   "identities": [],
+  "base_filter": null,
   "multitenancy": {
     "global": null,
-    "attribute": null,
-    "strategy": null
+    "strategy": null,
+    "attribute": null
   },
-  "base_filter": null,
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true

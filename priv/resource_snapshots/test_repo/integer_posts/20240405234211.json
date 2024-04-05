@@ -22,15 +22,15 @@
     }
   ],
   "table": "integer_posts",
-  "hash": "C2B733710FBBF80A470C0F8BB5808DC1E2F9824EF0F9A3D095C81926DD20F952",
+  "hash": "A3F61182D99B092A9D17E34B645823D8B0561B467B0195EFE0DA42947153D7E0",
   "repo": "Elixir.AshSqlite.TestRepo",
   "identities": [],
+  "base_filter": null,
   "multitenancy": {
     "global": null,
-    "attribute": null,
-    "strategy": null
+    "strategy": null,
+    "attribute": null
   },
-  "base_filter": null,
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true

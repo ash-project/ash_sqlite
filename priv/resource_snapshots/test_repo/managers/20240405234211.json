@@ -61,13 +61,13 @@
         "on_delete": null,
         "multitenancy": {
           "global": null,
-          "attribute": null,
-          "strategy": null
+          "strategy": null,
+          "attribute": null
         },
         "primary_key?": true,
         "destination_attribute": "id",
-        "deferrable": false,
         "on_update": null,
+        "deferrable": false,
         "destination_attribute_default": null,
         "destination_attribute_generated": null
       },
@@ -77,7 +77,7 @@
     }
   ],
   "table": "managers",
-  "hash": "3E9372C380E45A8F2A76D19CB6214F6A5CE76F2628CA36A176FB78A05C574A37",
+  "hash": "1A4EFC8497F6A73543858892D6324407A7060AC2585EDCA9A759D1E8AF509DEF",
   "repo": "Elixir.AshSqlite.TestRepo",
   "identities": [
     {
@@ -89,12 +89,12 @@
       "index_name": "managers_uniq_code_index"
     }
   ],
+  "base_filter": null,
   "multitenancy": {
     "global": null,
-    "attribute": null,
-    "strategy": null
+    "strategy": null,
+    "attribute": null
   },
-  "base_filter": null,
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true

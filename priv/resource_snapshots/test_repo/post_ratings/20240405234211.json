@@ -13,8 +13,8 @@
     {
       "default": "nil",
       "size": null,
-      "type": "text",
-      "source": "description",
+      "type": "bigint",
+      "source": "score",
       "references": null,
       "allow_nil?": true,
       "generated?": false,
@@ -24,38 +24,38 @@
       "default": "nil",
       "size": null,
       "type": "uuid",
-      "source": "author_id",
+      "source": "resource_id",
       "references": {
-        "name": "profile_author_id_fkey",
-        "table": "authors",
+        "name": "post_ratings_resource_id_fkey",
+        "table": "posts",
         "on_delete": null,
         "multitenancy": {
           "global": null,
-          "attribute": null,
-          "strategy": null
+          "strategy": null,
+          "attribute": null
         },
         "primary_key?": true,
         "destination_attribute": "id",
-        "deferrable": false,
         "on_update": null,
-        "destination_attribute_default": null,
-        "destination_attribute_generated": null
+        "deferrable": false,
+        "destination_attribute_default": "nil",
+        "destination_attribute_generated": false
       },
       "allow_nil?": true,
       "generated?": false,
       "primary_key?": false
     }
   ],
-  "table": "profile",
-  "hash": "D9928A2A80E4F97C60A49663F5FEF1AED527281B757568127DFB293A1C8079C0",
+  "table": "post_ratings",
+  "hash": "73A4E0A79F5A6449FFE48E2469FDC275723EF207780DA9027F3BBE3119DC0FFA",
   "repo": "Elixir.AshSqlite.TestRepo",
   "identities": [],
+  "base_filter": null,
   "multitenancy": {
     "global": null,
-    "attribute": null,
-    "strategy": null
+    "strategy": null,
+    "attribute": null
   },
-  "base_filter": null,
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true

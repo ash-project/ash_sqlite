@@ -39,10 +39,10 @@ defmodule AshSqlite.TestRepo.Migrations.MigrateResources1 do
       add :stuff, :map
       add :status_enum, :status
       add :status, :text
-      add :decimal, :decimal, default: "0"
+      add :decimal, :decimal
       add :price, :bigint
-      add :type, :text, default: "sponsored"
-      add :category, :ci_string
+      add :type, :text
+      add :category, :citext
       add :public, :boolean
       add :score, :bigint
       add :title, :text
@@ -78,7 +78,7 @@ defmodule AshSqlite.TestRepo.Migrations.MigrateResources1 do
           primary_key: true,
           null: false
 
-      add :state, :text, default: "active"
+      add :state, :text
     end
 
     create unique_index(:post_links, [:source_post_id, :destination_post_id],

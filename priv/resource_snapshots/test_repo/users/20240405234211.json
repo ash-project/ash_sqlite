@@ -13,8 +13,8 @@
     {
       "default": "nil",
       "size": null,
-      "type": "bigint",
-      "source": "score",
+      "type": "boolean",
+      "source": "is_active",
       "references": null,
       "allow_nil?": true,
       "generated?": false,
@@ -24,38 +24,38 @@
       "default": "nil",
       "size": null,
       "type": "uuid",
-      "source": "resource_id",
+      "source": "organization_id",
       "references": {
-        "name": "post_ratings_resource_id_fkey",
-        "table": "posts",
+        "name": "users_organization_id_fkey",
+        "table": "orgs",
         "on_delete": null,
         "multitenancy": {
           "global": null,
-          "attribute": null,
-          "strategy": null
+          "strategy": null,
+          "attribute": null
         },
         "primary_key?": true,
         "destination_attribute": "id",
-        "deferrable": false,
         "on_update": null,
-        "destination_attribute_default": "nil",
-        "destination_attribute_generated": false
+        "deferrable": false,
+        "destination_attribute_default": null,
+        "destination_attribute_generated": null
       },
       "allow_nil?": true,
       "generated?": false,
       "primary_key?": false
     }
   ],
-  "table": "post_ratings",
-  "hash": "42FE177E401874AB5A6E63A08D8A08143DB0FB1BBAE39DACEB3FBF88FD15E76F",
+  "table": "users",
+  "hash": "F1D2233C0B448A17B31E8971DEF529020894252BBF5BAFD58D7280FA36249071",
   "repo": "Elixir.AshSqlite.TestRepo",
   "identities": [],
+  "base_filter": null,
   "multitenancy": {
     "global": null,
-    "attribute": null,
-    "strategy": null
+    "strategy": null,
+    "attribute": null
   },
-  "base_filter": null,
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true

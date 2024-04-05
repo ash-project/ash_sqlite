@@ -31,13 +31,13 @@
         "on_delete": null,
         "multitenancy": {
           "global": null,
-          "attribute": null,
-          "strategy": null
+          "strategy": null,
+          "attribute": null
         },
         "primary_key?": true,
         "destination_attribute": "id",
-        "deferrable": false,
         "on_update": null,
+        "deferrable": false,
         "destination_attribute_default": "nil",
         "destination_attribute_generated": false
       },
@@ -47,15 +47,15 @@
     }
   ],
   "table": "comment_ratings",
-  "hash": "D6741B2EC934CC837AAA6E450D8E0AB5FEB2712EE921794670BFD2BE77905666",
+  "hash": "88FFC6DC62CEA37397A9C16C51E43F6FF6EED6C34E4C529FFB4D20EF1BCFF98F",
   "repo": "Elixir.AshSqlite.TestRepo",
   "identities": [],
+  "base_filter": null,
   "multitenancy": {
     "global": null,
-    "attribute": null,
-    "strategy": null
+    "strategy": null,
+    "attribute": null
   },
-  "base_filter": null,
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true

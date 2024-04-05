@@ -24,20 +24,20 @@
       "default": "nil",
       "size": null,
       "type": "uuid",
-      "source": "organization_id",
+      "source": "user_id",
       "references": {
-        "name": "users_organization_id_fkey",
-        "table": "orgs",
+        "name": "accounts_user_id_fkey",
+        "table": "users",
         "on_delete": null,
         "multitenancy": {
           "global": null,
-          "attribute": null,
-          "strategy": null
+          "strategy": null,
+          "attribute": null
         },
         "primary_key?": true,
         "destination_attribute": "id",
-        "deferrable": false,
         "on_update": null,
+        "deferrable": false,
         "destination_attribute_default": null,
         "destination_attribute_generated": null
       },
@@ -46,16 +46,16 @@
       "primary_key?": false
     }
   ],
-  "table": "users",
-  "hash": "E049498FF6613245F13A84E56ECE76F84F45A63D2380C9B013CA9786B1AB4390",
+  "table": "accounts",
+  "hash": "2320B8B55C597C2F07DED9B7BF714832FE22B0AA5E05959A4EA0553669BC368D",
   "repo": "Elixir.AshSqlite.TestRepo",
   "identities": [],
+  "base_filter": null,
   "multitenancy": {
     "global": null,
-    "attribute": null,
-    "strategy": null
+    "strategy": null,
+    "attribute": null
   },
-  "base_filter": null,
   "custom_indexes": [],
   "custom_statements": [],
   "has_create_action": true
