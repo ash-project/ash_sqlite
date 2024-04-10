@@ -83,7 +83,7 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
         ]
       )
 
-    domains = AshSqlite.MixHelpers.domains!(opts, args)
+    domains = AshSqlite.Mix.Helpers.domains!(opts, args)
 
     opts =
       opts

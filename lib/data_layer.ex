@@ -303,6 +303,61 @@ defmodule AshSqlite.DataLayer do
     Mix.Task.run("ash_sqlite.migrate", args)
   end
 
+  def rollback(args) do
+    repos = AshSqlite.Mix.Helpers.repos!([], args)
+
+    show_for_repo? = Enum.count_until(repos, 2) == 2
+
+    for repo <- repos do
+      for_repo =
+        if show_for_repo? do
+          " for repo #{inspect(repo)}"
+        else
+          ""
+        end
+
+      migrations_path = AshSqlite.Mix.Helpers.migrations_path([], repo)
+
+      files =
+        migrations_path
+        |> Path.join("**/*.exs")
+        |> Path.wildcard()
+        |> Enum.sort()
+        |> Enum.reverse()
+        |> Enum.take(20)
+        |> Enum.map(&String.trim_leading(&1, migrations_path))
+        |> Enum.with_index()
+        |> Enum.map(fn {file, index} -> "#{index + 1}: #{file}" end)
+
+      n =
+        Mix.shell().prompt("""
+        How many migrations should be rolled back#{for_repo}? (default: 0)
+
+        Last 20 migration names, with the input you must provide to
+        rollback up to *and including* that migration:
+
+        #{Enum.join(files, "\n")}
+        Rollback to:
+        """ |> String.trim_trailing())
+        |> String.trim()
+        |> case do
+          "" ->
+            0
+
+          n ->
+            try do
+              String.to_integer(n)
+            rescue
+              _ ->
+                raise "Required an integer value, got: #{n}"
+            end
+        end
+
+      Mix.Task.run("ash_postgres.rollback", args ++ ["-r", inspect(repo), "-n", to_string(n)])
+      Mix.Task.reenable("ash_postgres.rollback")
+    end
+  end
+
   def codegen(args) do
     # TODO: take args that we care about
     Mix.Task.run("ash_sqlite.generate_migrations", args)

@@ -1,7 +1,7 @@
 defmodule Mix.Tasks.AshSqlite.Migrate do
   use Mix.Task
 
-  import AshSqlite.MixHelpers,
+  import AshSqlite.Mix.Helpers,
     only: [migrations_path: 2]
 
   @shortdoc "Runs the repository migrations for all repositories in the provided (or congigured) domains"
@@ -90,7 +90,7 @@ defmodule Mix.Tasks.AshSqlite.Migrate do
   def run(args) do
     {opts, _} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
 
-    repos = AshSqlite.MixHelpers.repos!(opts, args)
+    repos = AshSqlite.Mix.Helpers.repos!(opts, args)
 
     repo_args =
       Enum.flat_map(repos, fn repo ->
@@ -99,8 +99,8 @@ defmodule Mix.Tasks.AshSqlite.Migrate do
 
     rest_opts =
       args
-      |> AshSqlite.MixHelpers.delete_arg("--domains")
-      |> AshSqlite.MixHelpers.delete_arg("--migrations-path")
+      |> AshSqlite.Mix.Helpers.delete_arg("--domains")
+      |> AshSqlite.Mix.Helpers.delete_arg("--migrations-path")
 
     Mix.Task.reenable("ecto.migrate")
 

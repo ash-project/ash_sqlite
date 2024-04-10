@@ -1,4 +1,4 @@
-defmodule AshSqlite.MixHelpers do
+defmodule AshSqlite.Mix.Helpers do
   @moduledoc false
   def domains!(opts, args) do
     apps =

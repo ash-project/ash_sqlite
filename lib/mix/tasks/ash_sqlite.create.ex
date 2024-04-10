@@ -34,14 +34,14 @@ defmodule Mix.Tasks.AshSqlite.Create do
   def run(args) do
     {opts, _} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
 
-    repos = AshSqlite.MixHelpers.repos!(opts, args)
+    repos = AshSqlite.Mix.Helpers.repos!(opts, args)
 
     repo_args =
       Enum.flat_map(repos, fn repo ->
         ["-r", to_string(repo)]
       end)
 
-    rest_opts = AshSqlite.MixHelpers.delete_arg(args, "--domains")
+    rest_opts = AshSqlite.Mix.Helpers.delete_arg(args, "--domains")
 
     Mix.Task.reenable("ecto.create")
 
