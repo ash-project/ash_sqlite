@@ -1,34 +1,18 @@
 # Migrations
 
-## Migration Generator Primer
-
-<iframe width="560" height="315" src="https://www.youtube.com/embed/GtsL_lIis4Q?si=5G6-5ckzBEzL4zko" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-
 ## Tasks
 
-The available tasks are:
+Ash comes with its own tasks, and AshSqlite exposes lower level tasks that you can use if necessary. This guide shows the process using `ash.*` tasks, and the `ash_sqlite.*` tasks are illustrated at the bottom.
 
-- `mix ash_sqlite.generate_migrations`
-- `mix ash_sqlite.create`
-- `mix ash_sqlite.drop`
-
-AshSqlite is built on top of ecto, so much of its behavior is pass-through/orchestration of that tooling.
-
-## Basic Workflow
+## Basic W## Basic Workflow
 
 - Make resource changes
-- Run `mix ash_sqlite.generate_migrations` to generate migrations and resource snapshots
-- Run `mix ash_sqlite.migrate` to run those migrations
+- Run `mix ash.codegen --name add_a_combobulator` to generate migrations and resource snapshots
+- Run `mix ash.migrate` to run those migrations
 
-For more information on generating migrations, see the module documentation here:
-`Mix.Tasks.AshSqlite.GenerateMigrations`, or run `mix help ash_sqlite.generate_migrations`
+For more information on generating migrations, run `mix help ash_sqlite.generate_migrations` (the underlying task that is called by `mix ash.migrate`)
 
-For running your migrations, there is a mix task that will find all of the repos configured in your apis and run their
-migrations. It is a thin wrapper around `mix ecto.migrate`. Ours is called `mix ash_sqlite.migrate`
-
-If you want to run or rollback individual migrations, use the corresponding
-
-### Regenerating Migrations
+### Regenerating Migratio### Regenerating Migrations
 
 Often, you will run into a situation where you want to make a slight change to a resource after you've already generated and run migrations. If you are using git and would like to undo those changes, then regenerate the migrations, this script may prove useful:
 
@@ -39,23 +23,23 @@ Often, you will run into a situation where you want to make a slight change to a
 N_MIGRATIONS=$(git ls-files --others priv/repo/migrations | wc -l)
 
 # Rollback untracked migrations
-mix ecto.rollback -n $N_MIGRATIONS
+mix ash_sqlite.rollback -n $N_MIGRATIONS
 
 # Delete untracked migrations and snapshots
 git ls-files --others priv/repo/migrations | xargs rm
 git ls-files --others priv/resource_snapshots | xargs rm
 
 # Regenerate migrations
-mix ash_sqlite.generate_migrations
+mix ash.codegen --name $1
 
 # Run migrations if flag
 if echo $* | grep -e "-m" -q
 then
-  mix ecto.migrate
+  mix ash.migrate
 fi
 ```
 
-After saving this file to something like `regen.sh`, make it executable with `chmod +x regen.sh`. Now you can run it with `./regen.sh`. If you would like the migrations to automatically run after regeneration, add the `-m` flag: `./regen.sh -m`.
+After saving this file to something like `regen.sh`, make it executable with `chmod +x regen.sh`. Now you can run it with `./regen.sh name_of_operation`. If you would like the migrations to automatically run after regeneration, add the `-m` flag: `./regen.sh name_of_operation -m`.
 
 ## Multiple Repos
 
@@ -104,3 +88,11 @@ defmodule MyApp.Release do
   end
 end
 ```
+
+# AshSqlite-specific tasks
+
+- `mix ash_sqlite.generate_migrations`
+- `mix ash_sqlite.create`
+- `mix ash_sqlite.migrate`
+- `mix ash_sqlite.rollback`
+- `mix ash_sqlite.drop`
