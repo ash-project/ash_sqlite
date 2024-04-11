@@ -352,6 +352,7 @@ defmodule AshSqlite.DataLayer do
               String.to_integer(n)
             rescue
               _ ->
+                # credo:disable-for-next-line
                 raise "Required an integer value, got: #{n}"
             end
         end
