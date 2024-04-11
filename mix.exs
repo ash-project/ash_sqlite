@@ -16,7 +16,6 @@ defmodule AshSqlite.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: @description,
-      test_coverage: [tool: ExCoveralls],
       elixirc_paths: elixirc_paths(Mix.env()),
       preferred_cli_env: [
         coveralls: :test,
@@ -44,7 +43,6 @@ defmodule AshSqlite.MixProject do
   if Mix.env() == :test do
     def application() do
       [
-        extra_applications: [:ecto, :ecto_sql, :ecto_sqlite3, :jason, :ash, :castore],
         mod: {AshSqlite.TestApp, []}
       ]
     end
