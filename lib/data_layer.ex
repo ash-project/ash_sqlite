@@ -330,15 +330,18 @@ defmodule AshSqlite.DataLayer do
         |> Enum.map(fn {file, index} -> "#{index + 1}: #{file}" end)
 
       n =
-        Mix.shell().prompt("""
-        How many migrations should be rolled back#{for_repo}? (default: 0)
+        Mix.shell().prompt(
+          """
+          How many migrations should be rolled back#{for_repo}? (default: 0)
 
-        Last 20 migration names, with the input you must provide to
-        rollback up to *and including* that migration:
+          Last 20 migration names, with the input you must provide to
+          rollback up to *and including* that migration:
 
-        #{Enum.join(files, "\n")}
-        Rollback to:
-        """ |> String.trim_trailing())
+          #{Enum.join(files, "\n")}
+          Rollback to:
+          """
+          |> String.trim_trailing()
+        )
         |> String.trim()
         |> case do
           "" ->
