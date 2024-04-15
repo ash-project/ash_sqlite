@@ -6,7 +6,7 @@ defmodule AshSqlite.MixProject do
   support, and delegates to a configured repo.
   """
 
-  @version "0.1.1"
+  @version "0.1.2-rc.0"
 
   def project do
     [
