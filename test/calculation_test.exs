@@ -236,12 +236,11 @@ defmodule AshSqlite.CalculationTest do
   end
 
   test "contains uses instr" do
-    post =
-      Post
-      |> Ash.Changeset.for_create(:create, %{
-        title: "foo-dude-bar"
-      })
-      |> Ash.create!()
+    Post
+    |> Ash.Changeset.for_create(:create, %{
+      title: "foo-dude-bar"
+    })
+    |> Ash.create!()
 
     assert Post
            |> Ash.Query.filter(contains(title, "-dude-"))
