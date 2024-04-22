@@ -11,6 +11,9 @@ defmodule AshSqlite.SqlImplementation do
   def manual_relationship_subquery_function, do: :ash_sqlite_subquery
 
   @impl true
+  def strpos_function, do: "instr"
+
+  @impl true
   def expr(
         query,
         %like{arguments: [arg1, arg2], embedded?: pred_embedded?},

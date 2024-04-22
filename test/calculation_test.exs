@@ -235,6 +235,19 @@ defmodule AshSqlite.CalculationTest do
              |> Map.get(:foo_bar_from_stuff)
   end
 
+  test "contains uses instr" do
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{
+        title: "foo-dude-bar"
+      })
+      |> Ash.create!()
+
+    assert Post
+           |> Ash.Query.filter(contains(title, "-dude-"))
+           |> Ash.read_one!()
+  end
+
   test "runtime expression calcs" do
     author =
       Author

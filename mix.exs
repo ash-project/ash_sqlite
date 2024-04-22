@@ -168,10 +168,10 @@ defmodule AshSqlite.MixProject do
     [
       {:ecto_sql, "~> 3.9"},
       {:ecto_sqlite3, "~> 0.12"},
-      {:ash_sql, "~> 0.1.0-rc.2"},
       {:ecto, "~> 3.9"},
       {:jason, "~> 1.0"},
       {:ash, ash_version("~> 3.0.0-rc.0")},
+      {:ash_sql, ash_sql_version("~> 0.1.1-rc and >= 0.1.1-rc.9")},
       {:git_ops, "~> 2.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.22", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.14", only: [:dev, :test]},
@@ -192,6 +192,25 @@ defmodule AshSqlite.MixProject do
 
       "main" ->
         [git: "https://github.com/ash-project/ash.git"]
+
+      version when is_binary(version) ->
+        "~> #{version}"
+
+      version ->
+        version
+    end
+  end
+
+  defp ash_sql_version(default_version) do
+    case System.get_env("ASH_SQL_VERSION") do
+      nil ->
+        default_version
+
+      "local" ->
+        [path: "../ash_sql", override: true]
+
+      "main" ->
+        [git: "https://github.com/ash-project/ash_sql.git"]
 
       version when is_binary(version) ->
         "~> #{version}"

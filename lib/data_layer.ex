@@ -437,7 +437,6 @@ defmodule AshSqlite.DataLayer do
 
   def can?(_, :timeout), do: true
   def can?(_, {:filter_expr, %Ash.Query.Function.StringJoin{}}), do: false
-  def can?(_, {:filter_expr, %Ash.Query.Function.Contains{}}), do: false
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
   def can?(_, {:query_aggregate, _}), do: true
