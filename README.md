@@ -15,7 +15,7 @@ See the DSL documentation in `AshSqlite.DataLayer` for DSL documentation
 
 ## Usage
 
-Add `ash_qlite` to your `mix.exs` file.
+Add `ash_sqlite` to your `mix.exs` file.
 
 ```elixir
 {:ash_sqlite, "~> 0.1.2-rc.0"}
