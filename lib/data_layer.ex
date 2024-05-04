@@ -276,7 +276,7 @@ defmodule AshSqlite.DataLayer do
         type: :boolean,
         default: false,
         doc: """
-        Declares this resource as polymorphic. See the [polymorphic resources guide](/documentation/topics/polymorphic_resources.md) for more.
+        Declares this resource as polymorphic. See the [polymorphic resources guide](/documentation/topics/resources/polymorphic-resources.md) for more.
         """
       ]
     ]

@@ -1,55 +1,38 @@
+![Logo](https://github.com/ash-project/ash/blob/main/logos/cropped-for-header-black-text.png?raw=true#gh-light-mode-only)
+![Logo](https://github.com/ash-project/ash/blob/main/logos/cropped-for-header-white-text.png?raw=true#gh-dark-mojde-only)
+
+[![CI](https://github.com/ash-project/ash_sqlite/actions/workflows/elixir.yml/badge.svg)](https://github.com/ash-project/ash_sqlite/actions/workflows/elixir.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Hex version badge](https://img.shields.io/hexpm/v/ash_sqlite.svg)](https://hex.pm/packages/ash_sqlite)
+[![Hexdocs badge](https://img.shields.io/badge/docs-hexdocs-purple)](https://hexdocs.pm/ash_sqlite)
+
 # AshSqlite
 
-![Elixir CI](https://github.com/ash-project/ash_sqlite/workflows/Elixir%20CI/badge.svg)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Coverage Status](https://coveralls.io/repos/github/ash-project/ash_sqlite/badge.svg?branch=main)](https://coveralls.io/github/ash-project/ash_sqlite?branch=main)
-[![Hex version badge](https://img.shields.io/hexpm/v/ash_sqlite.svg)](https://hex.pm/packages/ash_sqlite)
+Welcome! `AshSqlite` is the SQLite data layer for [Ash Framework](https://hexdocs.pm/ash).
 
-## Notice: Beta
+## Tutorials
 
-This is a newly released library. You can expect some hiccups here and there. Please report any issues you find!
+- [Get Started](documentation/tutorials/getting-started-with-ash-sqlite.md)
 
-## DSL
+## Topics
 
-See the DSL documentation in `AshSqlite.DataLayer` for DSL documentation
+- [What is AshSqlite?](documentation/topics/about-ash-sqlite/what-is-ash-sqlite.md)
 
-## Usage
+### Resources
 
-Add `ash_sqlite` to your `mix.exs` file.
+- [References](documentation/topics/resources/references.md)
+- [Polymorphic Resources](documentation/topics/resources/polymorphic-resources.md)
 
-```elixir
-{:ash_sqlite, "~> 0.1.2-rc.0"}
-```
+### Development
 
-To use this data layer, you need to chage your Ecto Repo's from `use Ecto.Repo`, to `use Sqlite.Repo`. because AshSqlite adds functionality to Ecto Repos.
+- [Migrations and tasks](documentation/topics/development/migrations-and-tasks.md)
+- [Testing](documentation/topics/development/testing.md)
 
-Then, configure each of your `Ash.Resource` resources by adding `use Ash.Resource, data_layer: AshSqlite.DataLayer` like so:
+### Advanced
 
-```elixir
-defmodule MyApp.SomeResource do
-  use Ash.Resource, domain: MyDomain, data_layer: AshSqlite.DataLayer
+- [Expressions](documentation/topics/advanced/expressions.md)
+- [Manual Relationships](documentation/topics/advanced/manual-relationships.md)
 
-  sqlite do
-    repo MyApp.Repo
-    table "table_name"
-  end
+## Reference
 
-  attributes do
-    # ... Attribute definitions
-  end
-end
-```
-
-## Generating Migrations
-
-See the documentation for `Mix.Tasks.AshSqlite.GenerateMigrations` for how to generate migrations from your resources
-
-# Contributors
-
-Ash is made possible by its excellent community!
-
-<a href="https://github.com/ash-project/ash_sqlite/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=ash-project/ash_sqlite" />
-</a>
-
-[Become a contributor](https://ash-hq.org/docs/guides/ash/latest/how_to/contribute.md)
+- [AshSqlite.DataLayer DSL](documentation/dsls/DSL:-AshSqlite.DataLayer.md)

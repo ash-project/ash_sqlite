@@ -1,4 +1,4 @@
-# Get Started With Sqlite
+# Getting Started With AshSqlite
 
 ## Goals
 

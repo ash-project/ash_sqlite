@@ -47,7 +47,7 @@ end
 | [`foreign_key_names`](#sqlite-foreign_key_names){: #sqlite-foreign_key_names } | `list({atom, String.t} \| {String.t, String.t})` | `[]` | A list of foreign keys that could raise errors, or an mfa to a function that takes a changeset and returns a list. In the format: `{:key, "name_of_constraint"}` or `{:key, "name_of_constraint", "custom error message"}` |
 | [`migration_ignore_attributes`](#sqlite-migration_ignore_attributes){: #sqlite-migration_ignore_attributes } | `list(atom)` | `[]` | A list of attributes that will be ignored when generating migrations. |
 | [`table`](#sqlite-table){: #sqlite-table } | `String.t` |  | The table to store and read the resource from. If this is changed, the migration generator will not remove the old table. |
-| [`polymorphic?`](#sqlite-polymorphic?){: #sqlite-polymorphic? } | `boolean` | `false` | Declares this resource as polymorphic. See the [polymorphic resources guide](/documentation/topics/polymorphic_resources.md) for more. |
+| [`polymorphic?`](#sqlite-polymorphic?){: #sqlite-polymorphic? } | `boolean` | `false` | Declares this resource as polymorphic. See the [polymorphic resources guide](/documentation/topics/resources/polymorphic-resources.md) for more. |
 
 
 ## sqlite.custom_indexes
