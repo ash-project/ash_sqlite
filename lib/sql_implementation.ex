@@ -14,6 +14,9 @@ defmodule AshSqlite.SqlImplementation do
   def strpos_function, do: "instr"
 
   @impl true
+  def ilike?, do: false
+
+  @impl true
   def expr(
         query,
         %like{arguments: [arg1, arg2], embedded?: pred_embedded?},
