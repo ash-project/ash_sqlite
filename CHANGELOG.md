@@ -5,6 +5,21 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.1.2-rc.1](https://github.com/ash-project/ash_sqlite/compare/v0.1.2-rc.0...v0.1.2-rc.1) (2024-05-06)
+
+
+
+
+### Bug Fixes:
+
+* properly scope deletes to the records in question
+
+* update ash_sqlite to get `ilike` behavior fix
+
+### Improvements:
+
+* support `contains` function
+
 ## [v0.1.2-rc.0](https://github.com/ash-project/ash_sqlite/compare/v0.1.1...v0.1.2-rc.0) (2024-04-15)
 
 
