@@ -1359,6 +1359,7 @@ defmodule AshSqlite.DataLayer do
           changeset.context
         )
         |> Ecto.Query.select(^select)
+        |> pkey_filter(changeset.data)
 
       case AshSql.Atomics.query_with_atomics(
              resource,
@@ -1408,6 +1409,15 @@ defmodule AshSqlite.DataLayer do
       e ->
         handle_raised_error(e, __STACKTRACE__, ecto_changeset, resource)
     end
+  end
+
+  defp pkey_filter(query, %resource{} = record) do
+    pkey =
+      record
+      |> Map.take(Ash.Resource.Info.primary_key(resource))
+      |> Map.to_list()
+
+    Ecto.Query.where(query, ^pkey)
   end
 
   @impl true
