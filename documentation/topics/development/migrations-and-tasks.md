@@ -4,7 +4,7 @@
 
 Ash comes with its own tasks, and AshSqlite exposes lower level tasks that you can use if necessary. This guide shows the process using `ash.*` tasks, and the `ash_sqlite.*` tasks are illustrated at the bottom.
 
-## Basic W## Basic Workflow
+## Basic Workflow
 
 - Make resource changes
 - Run `mix ash.codegen --name add_a_combobulator` to generate migrations and resource snapshots
@@ -12,7 +12,7 @@ Ash comes with its own tasks, and AshSqlite exposes lower level tasks that you c
 
 For more information on generating migrations, run `mix help ash_sqlite.generate_migrations` (the underlying task that is called by `mix ash.migrate`)
 
-### Regenerating Migratio### Regenerating Migrations
+### Regenerating Migrations
 
 Often, you will run into a situation where you want to make a slight change to a resource after you've already generated and run migrations. If you are using git and would like to undo those changes, then regenerate the migrations, this script may prove useful:
 
