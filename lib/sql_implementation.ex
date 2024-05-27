@@ -168,6 +168,10 @@ defmodule AshSqlite.SqlImplementation do
     type
   end
 
+  def parameterized_type({:parameterized, _} = type, _, _) do
+    type
+  end
+
   def parameterized_type({:in, type}, constraints, no_maps?) do
     parameterized_type({:array, type}, constraints, no_maps?)
   end
@@ -202,7 +206,7 @@ defmodule AshSqlite.SqlImplementation do
       end
     else
       if is_atom(type) && :erlang.function_exported(type, :type, 1) do
-        {:parameterized, type, constraints || []}
+        Ecto.ParameterizedType.init(type, constraints)
       else
         type
       end
@@ -314,7 +318,7 @@ defmodule AshSqlite.SqlImplementation do
     else
       type =
         if is_atom(type) && :erlang.function_exported(type, :type, 1) do
-          {:parameterized, type, []} |> array_to_in()
+          parameterized_type(type, constraints, true) |> array_to_in()
         else
           type |> array_to_in()
         end
@@ -332,9 +336,6 @@ defmodule AshSqlite.SqlImplementation do
   defp fill_in_known_type({type, value}), do: {array_to_in(type), value}
 
   defp array_to_in({:array, v}), do: {:in, array_to_in(v)}
-
-  defp array_to_in({:parameterized, type, constraints}),
-    do: {:parameterized, array_to_in(type), constraints}
 
   defp array_to_in(v), do: v
 
