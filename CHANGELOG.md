@@ -5,6 +5,17 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.1.3](https://github.com/ash-project/ash_sqlite/compare/v0.1.2...v0.1.3) (2024-05-31)
+
+
+
+
+### Bug Fixes:
+
+* use `Ecto.ParameterizedType.init/2`
+
+* handle new/old ecto parameterized type format
+
 ## [v0.1.2](https://github.com/ash-project/ash_sqlite/compare/v0.1.2-rc.1...v0.1.2) (2024-05-11)
 
 
