@@ -44,7 +44,7 @@ defmodule AshSqlite.Types do
       end
     else
       if is_atom(type) && :erlang.function_exported(type, :type, 1) do
-        parameterized_type(type, constraints || [])
+        Ecto.ParameterizedType.init(type, constraints || [])
       else
         type
       end
