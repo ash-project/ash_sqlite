@@ -61,8 +61,10 @@ Place the following contents in those files, ensuring that the credentials match
 # in config/config.exs
 import Config
 
-# This should already have been added in the first
-# getting started guide
+# This should already have been added from the getting started guide
+config :helpdesk,
+  ash_domains: [Helpdesk.Support]
+
 config :helpdesk,
   ash_apis: [Helpdesk.Support]
 
@@ -136,7 +138,7 @@ Now we can add the data layer to our resources. The basic configuration for a re
 # in lib/helpdesk/support/resources/ticket.ex
 
   use Ash.Resource,
-    domain: MyApp.Domain,
+    domain: Helpdesk.Support,
     data_layer: AshSqlite.DataLayer
 
   sqlite do
@@ -149,7 +151,7 @@ Now we can add the data layer to our resources. The basic configuration for a re
 # in lib/helpdesk/support/resources/representative.ex
 
   use Ash.Resource,
-    domain: MyApp.Domain,
+    domain: Helpdesk.Support,
     data_layer: AshSqlite.DataLayer
 
   sqlite do
@@ -236,29 +238,33 @@ And, naturally, now that we are storing this in sqlite, this database is persist
 
 ### Calculations
 
-Calculations can be pushed down into SQL using expressions.
+Simple calculation for Ticket which adds a concatenation of state and subject:
 
-For example, we can determine the percentage of tickets that are open:
-
-```elixir
-# in lib/helpdesk/support/resources/representative.ex
-
-  calculations do
-    calculate :percent_open, :float, expr(open_tickets / total_tickets )
-  end
+```
+calculations do
+  calculate :status_subject, :string,
+  expr("#{status}: #{subject}")
+end
 ```
 
-Calculations can be loaded.
+Testing of this feature can be done via iex:
 
-```elixir
-require Ash.Query
-
-Helpdesk.Support.Representative
-|> Ash.Query.filter(percent_open > 0.25)
-|> Ash.Query.sort(:percent_open)
-|> Ash.Query.load(:percent_open)
-|> Helpdesk.Support.read!()
 ```
+Ash.Query
+Helpdesk.Support.Ticket
+  |> Ash.Query.filter(status == :open)
+  |> Ash.Query.load(:status_subject)
+  |> Ash.read!()
+```
+
+### Aggregates
+
+As stated in [what-is-ash-sqlite](https://hexdocs.pm/ash_sqlite/getting-started-with-ash-sqlite.html#steps), 
+**The main feature missing is Aggregate support.**.
+
+In order to use these consider using [ash_postgres](https://github.com/ash-project/ash_postgres) or
+provide a patch.
+
 
 ### Rich Configuration Options
 
