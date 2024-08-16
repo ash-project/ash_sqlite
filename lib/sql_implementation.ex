@@ -128,7 +128,7 @@ defmodule AshSqlite.SqlImplementation do
 
   def type_expr(expr, type) do
     case type do
-      {:parameterized, inner_type, constraints} ->
+      {:parameterized, {inner_type, constraints}} ->
         if inner_type.type(constraints) == :ci_string do
           Ecto.Query.dynamic(fragment("(? COLLATE NOCASE)", ^expr))
         else

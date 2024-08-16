@@ -1363,7 +1363,12 @@ defmodule AshSqlite.DataLayer do
 
       case AshSql.Atomics.query_with_atomics(
              resource,
-             query,
+             AshSql.Bindings.default_bindings(
+               query,
+               resource,
+               AshSqlite.SqlImplementation,
+               changeset.context
+             ),
              changeset.filter,
              changeset.atomics,
              ecto_changeset.changes,

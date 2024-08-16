@@ -371,6 +371,8 @@ defmodule AshSqlite.FilterTest do
       |> Ash.Changeset.for_create(:create, %{category: "bazbuz"})
       |> Ash.create!()
 
+      Logger.configure(level: :debug)
+
       assert [%{title: "match"}] =
                Post
                |> Ash.Query.filter(category == "fOoBaR")
