@@ -84,7 +84,6 @@ import Config
 # Configure your database
 config :helpdesk, Helpdesk.Repo,
   database: Path.join(__DIR__, "../path/to/your.db"),
-  port: 5432,
   show_sensitive_data_on_connection_error: true,
   pool_size: 10
 ```
