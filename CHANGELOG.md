@@ -5,6 +5,19 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.0](https://github.com/ash-project/ash_sqlite/compare/v0.1.3...v0.2.0) (2024-09-10)
+
+
+
+
+### Features:
+
+* add igniter-based AshSqlite.Install mix task (#66)
+
+### Improvements:
+
+* fix warnings from latest igniter updates
+
 ## [v0.1.3](https://github.com/ash-project/ash_sqlite/compare/v0.1.2...v0.1.3) (2024-05-31)
 
 
