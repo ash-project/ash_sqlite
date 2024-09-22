@@ -70,5 +70,7 @@ defmodule AshSqlite.Test.Author do
               {AshSqlite.Test.Concat, keys: [:first_name, :last_name]} do
       argument(:separator, :string, default: " ", constraints: [allow_empty?: true, trim?: false])
     end
+
+    calculate(:post_titles, {:array, :string}, expr(list(posts, field: :title)))
   end
 end
