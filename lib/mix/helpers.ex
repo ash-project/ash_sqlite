@@ -30,7 +30,7 @@ defmodule AshSqlite.Mix.Helpers do
     |> Enum.map(&ensure_compiled(&1, args))
     |> case do
       [] ->
-        raise "must supply the --domains argument, or set `config :my_app, ash_domains: [...]` in config"
+        []
 
       domains ->
         domains
@@ -38,41 +38,56 @@ defmodule AshSqlite.Mix.Helpers do
   end
 
   def repos!(opts, args) do
-    domains = domains!(opts, args)
+    if opts[:domains] && opts[:domains] != "" do
+      domains = domains!(opts, args)
 
-    resources =
-      domains
-      |> Enum.flat_map(&Ash.Domain.Info.resources/1)
-      |> Enum.filter(&(Ash.DataLayer.data_layer(&1) == AshSqlite.DataLayer))
+      resources =
+        domains
+        |> Enum.flat_map(&Ash.Domain.Info.resources/1)
+        |> Enum.filter(&(Ash.DataLayer.data_layer(&1) == AshSqlite.DataLayer))
+        |> case do
+          [] ->
+            raise """
+            No resources with `data_layer: AshSqlite.DataLayer` found in the domains #{Enum.map_join(domains, ",", &inspect/1)}.
+
+            Must be able to find at least one resource with `data_layer: AshSqlite.DataLayer`.
+            """
+
+          resources ->
+            resources
+        end
+
+      resources
+      |> Enum.map(&AshSqlite.DataLayer.Info.repo/1)
+      |> Enum.uniq()
       |> case do
         [] ->
           raise """
-          No resources with `data_layer: AshSqlite.DataLayer` found in the domains #{Enum.map_join(domains, ",", &inspect/1)}.
+          No repos could be found configured on the resources in the domains: #{Enum.map_join(domains, ",", &inspect/1)}
 
-          Must be able to find at least one resource with `data_layer: AshSqlite.DataLayer`.
+          At least one resource must have a repo configured.
+
+          The following resources were found with `data_layer: AshSqlite.DataLayer`:
+
+          #{Enum.map_join(resources, "\n", &"* #{inspect(&1)}")}
           """
 
-        resources ->
-          resources
+        repos ->
+          repos
+      end
+    else
+      if Code.ensure_loaded?(Mix.Tasks.App.Config) do
+        Mix.Task.run("app.config", args)
+      else
+        Mix.Task.run("loadpaths", args)
+        "--no-compile" not in args && Mix.Task.run("compile", args)
       end
 
-    resources
-    |> Enum.map(&AshSqlite.DataLayer.Info.repo(&1))
-    |> Enum.uniq()
-    |> case do
-      [] ->
-        raise """
-        No repos could be found configured on the resources in the domains: #{Enum.map_join(domains, ",", &inspect/1)}
-
-        At least one resource must have a repo configured.
-
-        The following resources were found with `data_layer: AshSqlite.DataLayer`:
-
-        #{Enum.map_join(resources, "\n", &"* #{inspect(&1)}")}
-        """
-
-      repos ->
-        repos
+      Mix.Project.config()[:app]
+      |> Application.get_env(:ecto_repos, [])
+      |> Enum.filter(fn repo ->
+        Spark.implements_behaviour?(repo, AshSqlite.Repo)
+      end)
     end
   end
 
