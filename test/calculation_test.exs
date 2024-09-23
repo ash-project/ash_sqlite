@@ -271,4 +271,30 @@ defmodule AshSqlite.CalculationTest do
              |> Map.get(:posts)
              |> Enum.map(&Map.get(&1, :calc_returning_json))
   end
+
+  test "calculations with inline aggregates" do
+    author =
+      Author
+      |> Ash.Changeset.for_create(:create, %{
+        first_name: "Marty",
+        last_name: "McFly"
+      })
+      |> Ash.create!()
+
+    post_titles = [
+      "Top 10 reasons to visit 1885",
+      "I went to 2015 and you won't believe what happened!"
+    ]
+
+    post_titles
+    |> Enum.map(fn title ->
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: title})
+      |> Ash.create!()
+    end)
+
+    author = Ash.load!(author, :post_titles)
+
+    assert author.post_titles == post_titles
+  end
 end
