@@ -5,12 +5,36 @@ defmodule Mix.Tasks.AshSqlite.Install do
   require Igniter.Code.Function
   use Igniter.Mix.Task
 
-  def igniter(igniter, _argv) do
-    repo = Igniter.Code.Module.module_name(igniter, "Repo")
+  @impl true
+  def info(_argv, _parent) do
+    %Igniter.Mix.Task.Info{
+      schema: [
+        repo: :string
+      ],
+      aliases: [
+        r: :repo
+      ]
+    }
+  end
+
+  @impl true
+  def igniter(igniter, argv) do
+    opts = options!(argv)
+
+    repo =
+      case opts[:repo] do
+        nil ->
+          Igniter.Code.Module.module_name(igniter, "Repo")
+
+        repo ->
+          Igniter.Code.Module.parse(repo)
+      end
+
     otp_app = Igniter.Project.Application.app_name(igniter)
 
     igniter
     |> Igniter.Project.Formatter.import_dep(:ash_sqlite)
+    |> setup_aliases()
     |> setup_repo_module(otp_app, repo)
     |> configure_config(otp_app, repo)
     |> configure_dev(otp_app, repo)
@@ -35,6 +59,47 @@ defmodule Mix.Tasks.AshSqlite.Install do
         )
       end
     )
+  end
+
+  defp setup_aliases(igniter) do
+    is_ecto_setup = &Igniter.Code.Common.nodes_equal?(&1, "ecto.setup")
+
+    is_ecto_create_or_migrate =
+      fn zipper ->
+        Igniter.Code.Common.nodes_equal?(zipper, "ecto.create --quiet") or
+          Igniter.Code.Common.nodes_equal?(zipper, "ecto.create") or
+          Igniter.Code.Common.nodes_equal?(zipper, "ecto.migrate --quiet") or
+          Igniter.Code.Common.nodes_equal?(zipper, "ecto.migrate")
+      end
+
+    igniter
+    |> Igniter.Project.TaskAliases.modify_existing_alias(
+      "test",
+      &Igniter.Code.List.remove_from_list(&1, is_ecto_create_or_migrate)
+    )
+    |> Igniter.Project.TaskAliases.modify_existing_alias(
+      "test",
+      &Igniter.Code.List.replace_in_list(
+        &1,
+        is_ecto_setup,
+        "ash.setup"
+      )
+    )
+    |> Igniter.Project.TaskAliases.add_alias("test", ["ash.setup --quiet", "test"],
+      if_exists: {:prepend, "ash.setup --quiet"}
+    )
+    |> run_seeds_on_setup()
+  end
+
+  defp run_seeds_on_setup(igniter) do
+    if Igniter.exists?(igniter, "priv/repo/seeds.exs") do
+      Igniter.Project.TaskAliases.add_alias(igniter, "ash.setup", [
+        "ash.setup",
+        "run priv/repo/seeds.exs"
+      ])
+    else
+      igniter
+    end
   end
 
   defp configure_runtime(igniter, otp_app, repo) do
@@ -259,12 +324,30 @@ defmodule Mix.Tasks.AshSqlite.Install do
       repo,
       default_repo_contents,
       fn zipper ->
-        zipper
-        |> set_otp_app(otp_app)
-        |> Sourceror.Zipper.top()
-        |> use_ash_sqlite_instead_of_ecto()
-        |> Sourceror.Zipper.top()
-        |> remove_adapter_option()
+        case Igniter.Code.Module.move_to_use(zipper, Ecto.Repo) do
+          {:ok, _} ->
+            zipper
+            |> set_otp_app(otp_app)
+            |> Sourceror.Zipper.top()
+            |> use_ash_sqlite_instead_of_ecto()
+            |> Sourceror.Zipper.top()
+            |> remove_adapter_option()
+            |> then(&{:ok, &1})
+
+          _ ->
+            case Igniter.Code.Module.move_to_use(zipper, AshSqlite.Repo) do
+              {:ok, _} ->
+                {:ok, zipper}
+
+              _ ->
+                {:error,
+                 """
+                 Repo module #{inspect(repo)} existed, but was not an `Ecto.Repo` or an `AshSqlite.Repo`.
+
+                 Please rerun the ash_sqlite installer with the `--repo` option to specify a repo.
+                 """}
+            end
+        end
       end
     )
   end
