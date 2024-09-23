@@ -293,8 +293,8 @@ defmodule AshSqlite.CalculationTest do
       |> Ash.create!()
     end)
 
-    author = Ash.load!(author, :post_titles)
-
-    assert author.post_titles == post_titles
+    assert_raise Ash.Error.Invalid, ~r/does not support using aggregates/, fn ->
+      Ash.load!(author, :post_titles)
+    end
   end
 end
