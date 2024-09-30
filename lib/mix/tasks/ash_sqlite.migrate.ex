@@ -4,7 +4,7 @@ defmodule Mix.Tasks.AshSqlite.Migrate do
   import AshSqlite.Mix.Helpers,
     only: [migrations_path: 2]
 
-  @shortdoc "Runs the repository migrations for all repositories in the provided (or congigured) domains"
+  @shortdoc "Runs the repository migrations for all repositories in the provided (or configured) domains"
 
   @aliases [
     n: :step
