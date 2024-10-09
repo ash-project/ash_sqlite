@@ -5,6 +5,23 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.1](https://github.com/ash-project/ash_sqlite/compare/v0.2.0...v0.2.1) (2024-10-09)
+
+
+
+
+### Bug Fixes:
+
+* don't raise error on codegen with no domains
+
+* installer: use correct module name in the `DataCase` moduledocs. (#82)
+
+### Improvements:
+
+* add `--repo` option to installer, warn on clashing existing repo
+
+* modify mix task aliases according to installer
+
 ## [v0.2.0](https://github.com/ash-project/ash_sqlite/compare/v0.1.3...v0.2.0) (2024-09-10)
 
 
