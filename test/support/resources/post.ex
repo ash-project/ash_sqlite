@@ -60,10 +60,6 @@ defmodule AshSqlite.Test.Post do
       argument(:amount, :integer, default: 1)
       change(atomic_update(:score, expr((score || 0) + ^arg(:amount))))
     end
-
-    create :failing_after_action do
-      change(AshSqlite.Test.FailingAfterActionChange)
-    end
   end
 
   identities do
