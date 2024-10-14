@@ -18,6 +18,7 @@ defmodule AshSqlite.Test.Manager do
       argument(:organization_id, :uuid, allow_nil?: false)
 
       change(manage_relationship(:organization_id, :organization, type: :append_and_remove))
+      transaction?(false)
     end
   end
 

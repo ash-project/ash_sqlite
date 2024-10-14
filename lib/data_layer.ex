@@ -194,7 +194,7 @@ defmodule AshSqlite.DataLayer do
     ],
     schema: [
       repo: [
-        type: :atom,
+        type: {:or, [{:behaviour, Ecto.Repo}, {:fun, 2}]},
         required: true,
         doc:
           "The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more"
@@ -278,6 +278,13 @@ defmodule AshSqlite.DataLayer do
         doc: """
         Declares this resource as polymorphic. See the [polymorphic resources guide](/documentation/topics/resources/polymorphic-resources.md) for more.
         """
+      ],
+      enable_write_transactions?: [
+        type: :boolean,
+        default: false,
+        doc: """
+        Enable write transactions for this resource. See the [SQLite transaction guide](/documentation/topics/about-as-sqlite/transactions.md) for more.
+        """
       ]
     ]
   }
@@ -296,11 +303,38 @@ defmodule AshSqlite.DataLayer do
       AshSqlite.Transformers.ValidateReferences,
       AshSqlite.Transformers.VerifyRepo,
       AshSqlite.Transformers.EnsureTableOrPolymorphic
+    ],
+    verifiers: [
+      AshSqlite.Verifiers.VerifyTransactions
     ]
 
   def migrate(args) do
     # TODO: take args that we care about
     Mix.Task.run("ash_sqlite.migrate", args)
+  end
+
+  @impl true
+  def transaction(resource, func, timeout \\ nil, reason \\ %{type: :custom, metadata: %{}}) do
+    repo =
+      case reason[:data_layer_context] do
+        %{repo: repo} when not is_nil(repo) ->
+          repo
+
+        _ ->
+          AshSqlite.DataLayer.Info.repo(resource, :read)
+      end
+
+    func = fn ->
+      repo.on_transaction_begin(reason)
+
+      func.()
+    end
+
+    if timeout do
+      repo.transaction(func, timeout: timeout)
+    else
+      repo.transaction(func)
+    end
   end
 
   def rollback(args) do
@@ -385,7 +419,10 @@ defmodule AshSqlite.DataLayer do
   def can?(_, :bulk_create), do: true
   def can?(_, {:lock, _}), do: false
 
-  def can?(_, :transact), do: false
+  def can?(resource, :transact) do
+    Spark.Dsl.Extension.get_opt(resource, [:sqlite], :enable_write_transactions?, false)
+  end
+
   def can?(_, :composite_primary_key), do: true
   def can?(_, {:atomic, :update}), do: true
   def can?(_, {:atomic, :upsert}), do: true
@@ -445,6 +482,11 @@ defmodule AshSqlite.DataLayer do
   def can?(_, :distinct), do: false
   def can?(_, {:sort, _}), do: true
   def can?(_, _), do: false
+
+  @impl true
+  def in_transaction?(resource) do
+    AshSqlite.DataLayer.Info.repo(resource, :mutate).in_transaction?()
+  end
 
   @impl true
   def limit(query, nil, _), do: {:ok, query}

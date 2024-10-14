@@ -12,12 +12,9 @@ defmodule AshSqlite.Repo do
   @doc "Use this to inform the data layer about what extensions are installed"
   @callback installed_extensions() :: [String.t()]
 
-  @doc """
-  Use this to inform the data layer about the oldest potential sqlite version it will be run on.
 
-  Must be an integer greater than or equal to 13.
-  """
-  @callback min_pg_version() :: integer()
+  @doc "Called when a transaction starts"
+  @callback on_transaction_begin(reason :: Ash.DataLayer.transaction_reason()) :: term
 
   @doc "The path where your migrations are stored"
   @callback migrations_path() :: String.t() | nil
@@ -39,7 +36,6 @@ defmodule AshSqlite.Repo do
       def installed_extensions, do: []
       def migrations_path, do: nil
       def override_migration_type(type), do: type
-      def min_pg_version, do: 10
 
       def init(_, config) do
         new_config =
@@ -50,6 +46,8 @@ defmodule AshSqlite.Repo do
 
         {:ok, new_config}
       end
+
+      def on_transaction_begin(_reason), do: :ok
 
       def insert(struct_or_changeset, opts \\ []) do
         struct_or_changeset
@@ -81,6 +79,13 @@ defmodule AshSqlite.Repo do
           )
         end)
         |> from_ecto()
+      end
+      
+      def transaction!(fun) do
+        case fun.() do
+          {:ok, value} -> value
+          {:error, error} -> raise Ash.Error.to_error_class(error)
+        end
       end
 
       def from_ecto({:ok, result}), do: {:ok, from_ecto(result)}
@@ -148,8 +153,8 @@ defmodule AshSqlite.Repo do
 
       defoverridable init: 2,
                      installed_extensions: 0,
-                     override_migration_type: 1,
-                     min_pg_version: 0
+                     on_transaction_begin: 1,
+                     override_migration_type: 1
     end
   end
 end

@@ -32,6 +32,7 @@ defmodule AshSqlite.Test.Comment do
       argument(:rating, :map)
 
       change(manage_relationship(:rating, :ratings, on_missing: :ignore, on_match: :create))
+      transaction?(false)
     end
   end
 
