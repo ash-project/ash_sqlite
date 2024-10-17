@@ -54,11 +54,14 @@ defmodule AshSqlite.Test.Post do
           on_match: :create
         )
       )
+
+      transaction?(false)
     end
 
     update :increment_score do
       argument(:amount, :integer, default: 1)
       change(atomic_update(:score, expr((score || 0) + ^arg(:amount))))
+      transaction?(false)
     end
   end
 

@@ -35,7 +35,7 @@ end
 
 | Name | Type | Default | Docs |
 |------|------|---------|------|
-| [`repo`](#sqlite-repo){: #sqlite-repo .spark-required} | `atom` |  | The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more |
+| [`repo`](#sqlite-repo){: #sqlite-repo .spark-required} | `module \| (any, any -> any)` |  | The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more |
 | [`migrate?`](#sqlite-migrate?){: #sqlite-migrate? } | `boolean` | `true` | Whether or not to include this resource in the generated migrations with `mix ash.generate_migrations` |
 | [`migration_types`](#sqlite-migration_types){: #sqlite-migration_types } | `keyword` | `[]` | A keyword list of attribute names to the ecto migration type that should be used for that attribute. Only necessary if you need to override the defaults. |
 | [`migration_defaults`](#sqlite-migration_defaults){: #sqlite-migration_defaults } | `keyword` | `[]` | A keyword list of attribute names to the ecto migration default that should be used for that attribute. The string you use will be placed verbatim in the migration. Use fragments like `fragment(\\"now()\\")`, or for `nil`, use `\\"nil\\"`. |
@@ -48,6 +48,7 @@ end
 | [`migration_ignore_attributes`](#sqlite-migration_ignore_attributes){: #sqlite-migration_ignore_attributes } | `list(atom)` | `[]` | A list of attributes that will be ignored when generating migrations. |
 | [`table`](#sqlite-table){: #sqlite-table } | `String.t` |  | The table to store and read the resource from. If this is changed, the migration generator will not remove the old table. |
 | [`polymorphic?`](#sqlite-polymorphic?){: #sqlite-polymorphic? } | `boolean` | `false` | Declares this resource as polymorphic. See the [polymorphic resources guide](/documentation/topics/resources/polymorphic-resources.md) for more. |
+| [`enable_write_transactions?`](#sqlite-enable_write_transactions?){: #sqlite-enable_write_transactions? } | `boolean` | `false` | Enable write transactions for this resource. See the [SQLite transaction guide](/documentation/topics/about-as-sqlite/transactions.md) for more. |
 
 
 ## sqlite.custom_indexes
