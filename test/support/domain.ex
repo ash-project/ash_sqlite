@@ -15,6 +15,7 @@ defmodule AshSqlite.Test.Domain do
     resource(AshSqlite.Test.Account)
     resource(AshSqlite.Test.Organization)
     resource(AshSqlite.Test.Manager)
+    allow_unregistered?(true)
   end
 
   authorization do
