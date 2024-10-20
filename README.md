@@ -35,4 +35,4 @@ Welcome! `AshSqlite` is the SQLite data layer for [Ash Framework](https://hexdoc
 
 ## Reference
 
-- [AshSqlite.DataLayer DSL](documentation/dsls/DSL:-AshSqlite.DataLayer.md)
+- [AshSqlite.DataLayer DSL](documentation/dsls/DSL-AshSqlite.DataLayer.md)
