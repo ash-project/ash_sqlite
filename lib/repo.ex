@@ -12,7 +12,6 @@ defmodule AshSqlite.Repo do
   @doc "Use this to inform the data layer about what extensions are installed"
   @callback installed_extensions() :: [String.t()]
 
-
   @doc "Called when a transaction starts"
   @callback on_transaction_begin(reason :: Ash.DataLayer.transaction_reason()) :: term
 
@@ -80,7 +79,7 @@ defmodule AshSqlite.Repo do
         end)
         |> from_ecto()
       end
-      
+
       def transaction!(fun) do
         case fun.() do
           {:ok, value} -> value

@@ -8,7 +8,7 @@ defmodule AshSqlite.DataLayer.Info do
     case Extension.get_opt(resource, [:sqlite], :repo, nil, true) do
       fun when is_function(fun, 2) ->
         fun.(resource, type)
-  
+
       repo ->
         repo
     end

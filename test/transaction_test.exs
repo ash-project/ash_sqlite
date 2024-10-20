@@ -49,15 +49,16 @@ defmodule AshSqlite.TransactionTest do
 
       actions do
         create :create do
-          accept []
+          accept([])
           primary?(true)
           transaction?(true)
-          change fn changeset, _context ->
+
+          change(fn changeset, _context ->
             transaction? = AshSqlite.TestRepo.in_transaction?() |> dbg()
-            
+
             changeset
             |> Ash.Changeset.change_attribute(:is_active, transaction?)
-          end
+          end)
         end
       end
     end
@@ -66,7 +67,7 @@ defmodule AshSqlite.TransactionTest do
       TransactionalResource
       |> Ash.Changeset.for_create(:create, %{})
       |> Ash.create!()
-      
+
     assert record.is_active
   end
 end
