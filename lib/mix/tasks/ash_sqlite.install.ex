@@ -107,15 +107,7 @@ defmodule Mix.Tasks.AshSqlite.Install do
     import Config
 
     if config_env() == :prod do
-      database_url =
-        System.get_env("DATABASE_URL") ||
-          raise \"\"\"
-          environment variable DATABASE_URL is missing.
-          For example: ecto://USER:PASS@HOST/DATABASE
-          \"\"\"
-
       config #{inspect(otp_app)}, #{inspect(repo)},
-        url: database_url,
         pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
     end
     """
@@ -142,63 +134,20 @@ defmodule Mix.Tasks.AshSqlite.Install do
         |> Igniter.Code.Common.move_to_cursor_match_in_scope(patterns)
         |> case do
           {:ok, zipper} ->
-            case Igniter.Code.Function.move_to_function_call_in_current_scope(
-                   zipper,
-                   :=,
-                   2,
-                   fn call ->
-                     Igniter.Code.Function.argument_matches_pattern?(
-                       call,
-                       0,
-                       {:database_url, _, ctx} when is_atom(ctx)
-                     )
-                   end
-                 ) do
-              {:ok, _zipper} ->
-                zipper
-                |> Igniter.Project.Config.modify_configuration_code(
-                  [repo, :url],
-                  otp_app,
-                  {:database_url, [], nil}
-                )
-                |> Igniter.Project.Config.modify_configuration_code(
-                  [repo, :pool_size],
-                  otp_app,
-                  Sourceror.parse_string!("""
-                  String.to_integer(System.get_env("POOL_SIZE") || "10")
-                  """)
-                )
-                |> then(&{:ok, &1})
+            zipper
+            |> Igniter.Project.Config.modify_configuration_code(
+              [repo, :pool_size],
+              otp_app,
+              Sourceror.parse_string!("""
+              String.to_integer(System.get_env("POOL_SIZE") || "10")
+              """)
+            )
+            |> then(&{:ok, &1})
 
-              _ ->
-                Igniter.Code.Common.add_code(zipper, """
-                  database_url =
-                    System.get_env("DATABASE_URL") ||
-                      raise \"\"\"
-                      environment variable DATABASE_URL is missing.
-                      For example: ecto://USER:PASS@HOST/DATABASE
-                      \"\"\"
-
-                  config #{inspect(otp_app)}, Helpdesk.Repo,
-                    url: database_url,
-                    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
-                """)
-            end
-
-          :error ->
+          _ ->
             Igniter.Code.Common.add_code(zipper, """
-            if config_env() == :prod do
-              database_url =
-                System.get_env("DATABASE_URL") ||
-                  raise \"\"\"
-                  environment variable DATABASE_URL is missing.
-                  For example: ecto://USER:PASS@HOST/DATABASE
-                  \"\"\"
-
               config #{inspect(otp_app)}, Helpdesk.Repo,
-                url: database_url,
                 pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
-            end
             """)
         end
       end
