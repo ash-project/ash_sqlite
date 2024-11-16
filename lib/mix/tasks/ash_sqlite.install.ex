@@ -213,7 +213,6 @@ defmodule Mix.Tasks.AshSqlite.Install do
       [repo, :database],
       "../path/to/your.db"
     )
-    |> Igniter.Project.Config.configure_new("dev.exs", otp_app, [repo, :port], 5432)
     |> Igniter.Project.Config.configure_new(
       "dev.exs",
       otp_app,
