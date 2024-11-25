@@ -7,6 +7,15 @@ defmodule AshSqlite.Repo do
   You can use `Ecto.Repo`'s `init/2` to configure your repo like normal, but
   instead of returning `{:ok, config}`, use `super(config)` to pass the
   configuration to the `AshSqlite.Repo` implementation.
+
+  ## Additional Repo Configuration
+
+  Because an `AshPostgres.Repo` is also an `Ecto.Repo`, it has all of the same callbacks.
+
+  In the `c:Ecto.Repo.init/2` callback, you can configure the following additional items:
+
+  - `:tenant_migrations_path` - The path where your tenant migrations are stored (only relevant for a multitenant implementation)
+  - `:snapshots_path` - The path where the resource snapshots for the migration generator are stored.
   """
 
   @doc "Use this to inform the data layer about what extensions are installed"

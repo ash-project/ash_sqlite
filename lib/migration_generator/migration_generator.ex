@@ -138,8 +138,15 @@ defmodule AshSqlite.MigrationGenerator do
     # Copied from ecto's mix task, thanks Ecto ❤️
     config = repo.config()
 
-    app = Keyword.fetch!(config, :otp_app)
-    Path.join([Mix.Project.deps_paths()[app] || File.cwd!(), "priv", "resource_snapshots"])
+    if snapshot_path = config[:snapshots_path] do
+      snapshot_path
+    else
+      priv =
+        config[:priv] || "priv/#{repo |> Module.split() |> List.last() |> Macro.underscore()}"
+
+      app = Keyword.fetch!(config, :otp_app)
+      Application.app_dir(app, Path.join(priv, "resource_snapshots"))
+    end
   end
 
   defp create_extension_migrations(repos, opts) do
@@ -655,18 +662,18 @@ defmodule AshSqlite.MigrationGenerator do
   end
 
   defp migration_path(opts, repo) do
-    repo_name = repo_name(repo)
     # Copied from ecto's mix task, thanks Ecto ❤️
     config = repo.config()
     app = Keyword.fetch!(config, :otp_app)
 
-    if opts.migration_path do
-      opts.migration_path
+    if path = opts.migration_path || config[:tenant_migrations_path] do
+      path
     else
-      Path.join([Mix.Project.deps_paths()[app] || File.cwd!(), "priv"])
+      priv =
+        config[:priv] || "priv/#{repo |> Module.split() |> List.last() |> Macro.underscore()}"
+
+      Application.app_dir(app, Path.join(priv, "migrations"))
     end
-    |> Path.join(repo_name)
-    |> Path.join("migrations")
   end
 
   defp repo_name(repo) do
