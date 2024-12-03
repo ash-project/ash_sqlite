@@ -357,8 +357,8 @@ defmodule AshSqlite.DataLayer do
             end
         end
 
-      Mix.Task.run("ash_postgres.rollback", args ++ ["-r", inspect(repo), "-n", to_string(n)])
-      Mix.Task.reenable("ash_postgres.rollback")
+      Mix.Task.run("ash_sqlite.rollback", args ++ ["-r", inspect(repo), "-n", to_string(n)])
+      Mix.Task.reenable("ash_sqlite.rollback")
     end
   end
 
