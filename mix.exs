@@ -128,7 +128,7 @@ defmodule AshSqlite.MixProject do
       {:jason, "~> 1.0"},
       {:ash, ash_version("~> 3.1 and >= 3.1.7")},
       {:ash_sql, ash_sql_version("~> 0.2 and >= 0.2.20")},
-      {:igniter, "~> 0.3 and >= 0.3.42"},
+      {:igniter, "~> 0.3 and >= 0.3.42", optional: true},
       {:simple_sat, ">= 0.0.0", only: [:dev, :test]},
       {:git_ops, "~> 2.5", only: [:dev, :test]},
       {:ex_doc, "~> 0.22", only: [:dev, :test], runtime: false},
