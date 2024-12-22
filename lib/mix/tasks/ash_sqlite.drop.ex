@@ -24,11 +24,11 @@ defmodule Mix.Tasks.AshSqlite.Drop do
   ## Examples
 
       mix ash_sqlite.drop
-      mix ash_sqlite.drop -r MyApp.Domain1,MyApp.Domain2
+      mix ash_sqlite.drop -d MyApp.Domain1,MyApp.Domain2
 
   ## Command line options
 
-    * `--doains` - the domains who's repos should be dropped
+    * `--domains` - the domains who's repos should be dropped
     * `-q`, `--quiet` - run the command quietly
     * `-f`, `--force` - do not ask for confirmation when dropping the database.
       Configuration is asked only when `:start_permanent` is set to true
