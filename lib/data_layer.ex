@@ -362,6 +362,34 @@ defmodule AshSqlite.DataLayer do
     end
   end
 
+  if Code.ensure_loaded?(Igniter) do
+    def install(igniter, module, Ash.Resource, _path, argv) do
+      table_name =
+        module
+        |> Module.split()
+        |> List.last()
+        |> Macro.underscore()
+        |> Inflex.pluralize()
+
+      {options, _, _} = OptionParser.parse(argv, switches: [repo: :string])
+
+      repo =
+        case options[:repo] do
+          nil ->
+            Igniter.Project.Module.module_name(igniter, "Repo")
+
+          repo ->
+            Igniter.Project.Module.parse(repo)
+        end
+
+      igniter
+      |> Spark.Igniter.set_option(module, [:sqlite, :table], table_name)
+      |> Spark.Igniter.set_option(module, [:sqlite, :repo], repo)
+    end
+
+    def install(igniter, _, _, _), do: igniter
+  end
+
   def codegen(args) do
     # TODO: take args that we care about
     Mix.Task.run("ash_sqlite.generate_migrations", args)
