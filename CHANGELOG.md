@@ -5,6 +5,25 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.2](https://github.com/ash-project/ash_sqlite/compare/v0.2.1...v0.2.2) (2025-01-22)
+
+
+
+
+### Bug Fixes:
+
+* Remove a postgresql specific configuration from `ash_sqlite.install` (#103)
+
+### Improvements:
+
+* add installer for sqlite
+
+* make igniter optional
+
+* improve dry_run logic and fix priv path setup
+
+* honor repo configs and add snapshot configs
+
 ## [v0.2.1](https://github.com/ash-project/ash_sqlite/compare/v0.2.0...v0.2.1) (2024-10-09)
 
 
