@@ -1268,7 +1268,7 @@ defmodule AshSqlite.DataLayer do
     keys = keys || Ash.Resource.Info.primary_key(keys)
 
     explicitly_changing_attributes =
-      Map.keys(changeset.attributes) -- Map.get(changeset, :defaults, []) -- keys
+      Map.keys(changeset.attributes) -- (Map.get(changeset, :defaults, []) -- keys)
 
     upsert_fields =
       changeset.context[:private][:upsert_fields] || explicitly_changing_attributes
