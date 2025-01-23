@@ -710,9 +710,6 @@ defmodule AshSqlite.DataLayer do
                    %{},
                    upsert_set
                  ) do
-              :empty ->
-                :nothing
-
               {:ok, query} ->
                 query
 
@@ -1402,9 +1399,6 @@ defmodule AshSqlite.DataLayer do
              ecto_changeset.changes,
              []
            ) do
-        :empty ->
-          {:ok, changeset.data}
-
         {:ok, query} ->
           repo_opts = repo_opts(changeset.timeout, changeset.tenant, changeset.resource)
 
