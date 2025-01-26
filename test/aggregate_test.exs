@@ -16,4 +16,15 @@ defmodule AshSqlite.AggregatesTest do
 
     assert count == 2
   end
+
+  test "pagination returns the count" do
+    Ash.Seed.seed!(%Post{title: "foo"})
+    Ash.Seed.seed!(%Post{title: "foo"})
+    Ash.Seed.seed!(%Post{title: "bar"})
+
+    Post
+    |> Ash.Query.page(offset: 1, limit: 1, count: true)
+    |> Ash.Query.for_read(:paginated)
+    |> Ash.read!()
+  end
 end
