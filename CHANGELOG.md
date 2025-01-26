@@ -5,6 +5,19 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.3](https://github.com/ash-project/ash_sqlite/compare/v0.2.2...v0.2.3) (2025-01-26)
+
+
+
+
+### Bug Fixes:
+
+* use `AshSql` for running aggregate queries
+
+### Improvements:
+
+* update ash version for better aggregate support validation
+
 ## [v0.2.2](https://github.com/ash-project/ash_sqlite/compare/v0.2.1...v0.2.2) (2025-01-22)
 
 
