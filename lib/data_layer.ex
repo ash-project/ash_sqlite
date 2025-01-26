@@ -467,7 +467,11 @@ defmodule AshSqlite.DataLayer do
   def can?(_, {:filter_expr, %Ash.Query.Function.StringJoin{}}), do: false
   def can?(_, {:filter_expr, _}), do: true
   def can?(_, :nested_expressions), do: true
-  def can?(_, {:query_aggregate, _}), do: true
+
+  def can?(_, {:query_aggregate, kind})
+      when kind in [:count, :first, :sum, :max, :min, :avg, :exists],
+      do: true
+
   def can?(_, :sort), do: true
   def can?(_, :distinct_sort), do: false
   def can?(_, :distinct), do: false
