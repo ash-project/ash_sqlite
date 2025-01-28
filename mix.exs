@@ -30,7 +30,7 @@ defmodule AshSqlite.MixProject do
       dialyzer: [
         plt_add_apps: [:ecto, :ash, :mix]
       ],
-      docs: docs(),
+      docs: &docs/0,
       aliases: aliases(),
       package: package(),
       source_url: "https://github.com/ash-project/ash_sqlite",
@@ -77,7 +77,11 @@ defmodule AshSqlite.MixProject do
         "documentation/topics/development/testing.md",
         "documentation/topics/advanced/expressions.md",
         "documentation/topics/advanced/manual-relationships.md",
-        "documentation/dsls/DSL-AshSqlite.DataLayer.md",
+        {"documentation/dsls/DSL-AshSqlite.DataLayer.md",
+         search_data: Spark.Docs.search_data_for(AshSqlite.DataLayer)},
+        "CHANGELOG.md"
+      ],
+      skip_undefined_reference_warnings_on: [
         "CHANGELOG.md"
       ],
       groups_for_extras: [
@@ -131,7 +135,7 @@ defmodule AshSqlite.MixProject do
       {:igniter, "~> 0.5 and >= 0.5.16", optional: true},
       {:simple_sat, ">= 0.0.0", only: [:dev, :test]},
       {:git_ops, "~> 2.5", only: [:dev, :test]},
-      {:ex_doc, "~> 0.22", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.37-rc", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.14", only: [:dev, :test]},
       {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:dialyxir, ">= 0.0.0", only: [:dev, :test], runtime: false},
@@ -186,13 +190,10 @@ defmodule AshSqlite.MixProject do
       docs: [
         "spark.cheat_sheets",
         "docs",
-        "spark.replace_doc_links",
-        "spark.cheat_sheets_in_search"
+        "spark.replace_doc_links"
       ],
       "spark.formatter": "spark.formatter --extensions AshSqlite.DataLayer",
       "spark.cheat_sheets": "spark.cheat_sheets --extensions AshSqlite.DataLayer",
-      "spark.cheat_sheets_in_search":
-        "spark.cheat_sheets_in_search --extensions AshSqlite.DataLayer",
       "test.generate_migrations": "ash_sqlite.generate_migrations",
       "test.check_migrations": "ash_sqlite.generate_migrations --check",
       "test.migrate": "ash_sqlite.migrate",
