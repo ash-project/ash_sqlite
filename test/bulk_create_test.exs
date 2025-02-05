@@ -85,7 +85,7 @@ defmodule AshSqlite.BulkCreateTest do
   describe "validation errors" do
     test "skips invalid by default" do
       assert %{records: [_], errors: [_]} =
-               Ash.bulk_create!([%{title: "fred"}, %{title: "not allowed"}], Post, :create,
+               Ash.bulk_create([%{title: "fred"}, %{title: "not allowed"}], Post, :create,
                  return_records?: true,
                  return_errors?: true
                )
