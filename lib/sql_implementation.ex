@@ -3,6 +3,7 @@ defmodule AshSqlite.SqlImplementation do
   use AshSql.Implementation
 
   require Ecto.Query
+  require Ash.Expr
 
   @impl true
   def manual_relationship_function, do: :ash_sqlite_join
@@ -44,6 +45,49 @@ defmodule AshSqlite.SqlImplementation do
     else
       {:ok, Ecto.Query.dynamic(type(^inner_dyn, ^type)), acc}
     end
+  end
+
+  def expr(
+        query,
+        %Ash.Query.Operator.In{
+          right: %Ash.Query.Function.Type{arguments: [right | _]} = type
+        } = op,
+        bindings,
+        embedded?,
+        acc,
+        type
+      )
+      when is_list(right) or is_struct(right, MapSet) do
+    expr(query, %{op | right: right}, bindings, embedded?, acc, type)
+  end
+
+  def expr(
+        query,
+        %Ash.Query.Operator.In{left: left, right: right, embedded?: pred_embedded?},
+        bindings,
+        embedded?,
+        acc,
+        type
+      )
+      when is_list(right) or is_struct(right, MapSet) do
+    right
+    |> Enum.reduce(nil, fn val, acc ->
+      if is_nil(acc) do
+        %Ash.Query.Operator.Eq{left: left, right: val}
+      else
+        %Ash.Query.BooleanExpression{
+          op: :or,
+          left: acc,
+          right: %Ash.Query.Operator.Eq{left: left, right: val}
+        }
+      end
+    end)
+    |> then(fn expr ->
+      {expr, acc} =
+        AshSql.Expr.dynamic_expr(query, expr, bindings, pred_embedded? || embedded?, type, acc)
+
+      {:ok, expr, acc}
+    end)
   end
 
   def expr(
