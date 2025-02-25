@@ -21,7 +21,7 @@ In this guide we will:
 
 Add the `:ash_sqlite` dependency to your application
 
-`{:ash_sqlite, "~> 0.2.3"}`
+`{:ash_sqlite, "~> 0.2.4"}`
 
 Add `:ash_sqlite` to your `.formatter.exs` file
 

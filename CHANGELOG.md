@@ -5,6 +5,15 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.4](https://github.com/ash-project/ash_sqlite/compare/v0.2.3...v0.2.4) (2025-02-25)
+
+
+
+
+### Bug Fixes:
+
+* remove list literal usage for `in` in ash_sqlite
+
 ## [v0.2.3](https://github.com/ash-project/ash_sqlite/compare/v0.2.2...v0.2.3) (2025-01-26)
 
 
