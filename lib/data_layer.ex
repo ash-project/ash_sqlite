@@ -1218,6 +1218,28 @@ defmodule AshSqlite.DataLayer do
            upsert_fields: upsert_fields,
            return_records?: true
          }) do
+      {:ok, []} ->
+        key_filters =
+          Enum.map(keys, fn key ->
+            {key,
+             Ash.Changeset.get_attribute(changeset, key) || Map.get(changeset.params, key) ||
+               Map.get(changeset.params, to_string(key))}
+          end)
+
+        ash_query =
+          resource
+          |> Ash.Query.do_filter(and: [key_filters])
+          |> Ash.Query.set_tenant(changeset.tenant)
+
+        {:ok,
+         {:upsert_skipped, ash_query,
+          fn ->
+            with {:ok, ecto_query} <- Ash.Query.data_layer_query(ash_query),
+                 {:ok, [result]} <- run_query(ecto_query, resource) do
+              {:ok, Ash.Resource.put_metadata(result, :upsert_skipped, true)}
+            end
+          end}}
+
       {:ok, [result]} ->
         {:ok, result}
 
