@@ -3,7 +3,7 @@ defmodule AshSqlite.Functions.ILike do
   Maps to the builtin sqlite function `ilike`.
   """
 
-  use Ash.Query.Function, name: :ilike
+  use Ash.Query.Function, name: :ilike, predicate?: true
 
   def args, do: [[:string, :string]]
 end
