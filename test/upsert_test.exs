@@ -22,7 +22,7 @@ defmodule AshSqlite.Test.UpsertTest do
       Post
       |> Ash.Changeset.for_create(:create, %{
         id: id,
-        title: "title2"
+        title: "title3"
       })
       |> Ash.create!(upsert?: true)
 

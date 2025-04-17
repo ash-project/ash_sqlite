@@ -617,11 +617,19 @@ defmodule AshSqlite.DataLayer do
     stream
     |> Enum.group_by(&Map.keys(&1.attributes))
     |> Enum.reduce_while({:ok, []}, fn {_, changesets}, {:ok, acc} ->
-      opts = repo_opts(nil, options[:tenant], resource)
+      repo = AshSql.dynamic_repo(resource, AshSqlite.SqlImplementation, Enum.at(changesets, 0))
+      opts = AshSql.repo_opts(repo, AshSqlite.SqlImplementation, nil, options[:tenant], resource)
 
       opts =
         if options.return_records? do
-          Keyword.put(opts, :returning, true)
+          returning =
+            case options[:action_select] do
+              nil -> true
+              [] -> Ash.Resource.Info.primary_key(resource)
+              fields -> fields
+            end
+
+          Keyword.put(opts, :returning, returning)
         else
           opts
         end
@@ -639,7 +647,12 @@ defmodule AshSqlite.DataLayer do
             |> AshSql.Bindings.default_bindings(resource, AshSqlite.SqlImplementation)
 
           upsert_set =
-            upsert_set(resource, changesets, options)
+            upsert_set(
+              resource,
+              changesets,
+              options[:upsert_keys] || Ash.Resource.Info.primary_key(resource),
+              options
+            )
 
           on_conflict =
             case AshSql.Atomics.query_with_atomics(
@@ -650,6 +663,9 @@ defmodule AshSqlite.DataLayer do
                    %{},
                    upsert_set
                  ) do
+              {:empty, _query} ->
+                raise "Cannot upsert with no fields to specify in the upsert statement. This can only happen on resources without a primary key."
+
               {:ok, query} ->
                 query
 
@@ -678,8 +694,6 @@ defmodule AshSqlite.DataLayer do
         else
           resource
         end
-
-      repo = dynamic_repo(resource, Enum.at(changesets, 0))
 
       source
       |> repo.insert_all(ecto_changesets, opts)
@@ -727,7 +741,7 @@ defmodule AshSqlite.DataLayer do
       )
   end
 
-  defp upsert_set(resource, changesets, options) do
+  defp upsert_set(resource, changesets, keys, options) do
     attributes_changing_anywhere =
       changesets |> Enum.flat_map(&Map.keys(&1.attributes)) |> Enum.uniq()
 
@@ -739,10 +753,18 @@ defmodule AshSqlite.DataLayer do
       (options[:upsert_fields] || []) |> Enum.filter(&(&1 in attributes_changing_anywhere))
 
     fields_to_upsert =
-      (upsert_fields ++ Keyword.keys(update_defaults)) --
-        Keyword.keys(Enum.at(changesets, 0).atomics)
+      upsert_fields --
+        (Keyword.keys(Enum.at(changesets, 0).atomics) -- keys)
 
-    Enum.map(fields_to_upsert, fn upsert_field ->
+    fields_to_upsert =
+      case fields_to_upsert do
+        [] -> keys
+        fields_to_upsert -> fields_to_upsert
+      end
+
+    fields_to_upsert
+    |> Enum.uniq()
+    |> Enum.map(fn upsert_field ->
       # for safety, we check once more at the end that all values in
       # upsert_fields are names of attributes. This is because
       # below we use `literal/1` to bring them into the query
@@ -758,7 +780,7 @@ defmodule AshSqlite.DataLayer do
                [],
                fragment(
                  "COALESCE(EXCLUDED.?, ?)",
-                 literal(^to_string(upsert_field)),
+                 literal(^to_string(get_source_for_upsert_field(upsert_field, resource))),
                  ^default
                )
              )}
@@ -770,10 +792,24 @@ defmodule AshSqlite.DataLayer do
           {upsert_field,
            Ecto.Query.dynamic(
              [],
-             fragment("EXCLUDED.?", literal(^to_string(upsert_field)))
+             fragment(
+               "EXCLUDED.?",
+               literal(^to_string(get_source_for_upsert_field(upsert_field, resource)))
+             )
            )}
       end
     end)
+  end
+
+  @doc false
+  def get_source_for_upsert_field(field, resource) do
+    case Ash.Resource.Info.attribute(resource, field) do
+      %{source: source} when not is_nil(source) ->
+        source
+
+      _ ->
+        field
+    end
   end
 
   @impl true
@@ -1204,8 +1240,14 @@ defmodule AshSqlite.DataLayer do
   def upsert(resource, changeset, keys \\ nil) do
     keys = keys || Ash.Resource.Info.primary_key(keys)
 
+    update_defaults = update_defaults(resource)
+
     explicitly_changing_attributes =
-      Map.keys(changeset.attributes) -- (Map.get(changeset, :defaults, []) -- keys)
+      changeset.attributes
+      |> Map.keys()
+      |> Enum.concat(Keyword.keys(update_defaults))
+      |> Kernel.--(Map.get(changeset, :defaults, []))
+      |> Kernel.--(keys)
 
     upsert_fields =
       changeset.context[:private][:upsert_fields] || explicitly_changing_attributes
@@ -1298,6 +1340,9 @@ defmodule AshSqlite.DataLayer do
             apply(m, f, a)
         end
 
+      {:ok, default_value} =
+        Ash.Type.cast_input(attribute.type, default_value, attribute.constraints)
+
       {attribute.name, default_value}
     end)
   end
@@ -1305,8 +1350,8 @@ defmodule AshSqlite.DataLayer do
   defp lazy_matching_defaults(attributes) do
     attributes
     |> Enum.filter(&(&1.match_other_defaults? && get_default_fun(&1)))
-    |> Enum.group_by(& &1.update_default)
-    |> Enum.flat_map(fn {default_fun, attributes} ->
+    |> Enum.group_by(&{&1.update_default, &1.type, &1.constraints})
+    |> Enum.flat_map(fn {{default_fun, type, constraints}, attributes} ->
       default_value =
         case default_fun do
           function when is_function(function) ->
@@ -1315,6 +1360,9 @@ defmodule AshSqlite.DataLayer do
           {m, f, a} when is_atom(m) and is_atom(f) and is_list(a) ->
             apply(m, f, a)
         end
+
+      {:ok, default_value} =
+        Ash.Type.cast_input(type, default_value, constraints)
 
       Enum.map(attributes, &{&1.name, default_value})
     end)
