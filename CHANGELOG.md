@@ -5,6 +5,17 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.6](https://github.com/ash-project/ash_sqlite/compare/v0.2.5...v0.2.6) (2025-04-29)
+
+
+
+
+### Bug Fixes:
+
+* ensure upsert_fields honor update_defaults
+
+* ensure all upsert_fields are accounted for
+
 ## [v0.2.5](https://github.com/ash-project/ash_sqlite/compare/v0.2.4...v0.2.5) (2025-03-11)
 
 
