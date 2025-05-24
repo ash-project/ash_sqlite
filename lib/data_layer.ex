@@ -369,7 +369,7 @@ defmodule AshSqlite.DataLayer do
         |> Module.split()
         |> List.last()
         |> Macro.underscore()
-        |> Inflex.pluralize()
+        |> Igniter.Inflex.pluralize()
 
       {options, _, _} = OptionParser.parse(argv, switches: [repo: :string])
 
