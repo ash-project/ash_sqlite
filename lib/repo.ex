@@ -16,6 +16,7 @@ defmodule AshSqlite.Repo do
 
   - `:tenant_migrations_path` - The path where your tenant migrations are stored (only relevant for a multitenant implementation)
   - `:snapshots_path` - The path where the resource snapshots for the migration generator are stored.
+  - `:transactions_enabled?` - Due to [SQLite's single writer paradigm](https://sqlite.org/lang_transaction.html#read_transactions_versus_write_transactions) they are disabled by default. See the [transactions guide](/documentation/topics/transactions.md) for more information.
   """
 
   @doc "Use this to inform the data layer about what extensions are installed"
@@ -56,6 +57,7 @@ defmodule AshSqlite.Repo do
           |> Keyword.put(:installed_extensions, installed_extensions())
           |> Keyword.put(:migrations_path, migrations_path())
           |> Keyword.put(:case_sensitive_like, :on)
+          |> Keyword.put_new(:transactions_enabled?, false)
 
         {:ok, new_config}
       end

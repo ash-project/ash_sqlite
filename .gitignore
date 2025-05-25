@@ -25,6 +25,6 @@ ash_sqlite-*.tar
 test_migration_path
 test_snapshots_path
 
-test/test.db
-test/test.db-shm
-test/test.db-wal
+test/*test.db
+test/*test.db-shm
+test/*test.db-wal

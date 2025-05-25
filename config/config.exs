@@ -28,8 +28,15 @@ if Mix.env() == :test do
     pool: Ecto.Adapters.SQL.Sandbox,
     migration_primary_key: [name: :id, type: :binary_id]
 
+  config :ash_sqlite, AshSqlite.TransactingRepo,
+    database: Path.join(__DIR__, "../test/transacting_test.db"),
+    pool_size: 1,
+    migration_lock: false,
+    pool: Ecto.Adapters.SQL.Sandbox,
+    migration_primary_key: [name: :id, type: :binary_id]
+
   config :ash_sqlite,
-    ecto_repos: [AshSqlite.TestRepo],
+    ecto_repos: [AshSqlite.TestRepo, AshSqlite.TransactingRepo],
     ash_domains: [
       AshSqlite.Test.Domain
     ]

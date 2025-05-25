@@ -413,7 +413,14 @@ defmodule AshSqlite.DataLayer do
   def can?(_, :bulk_create), do: true
   def can?(_, {:lock, _}), do: false
 
-  def can?(_, :transact), do: false
+  # def can?(_, :transact), do: false
+
+  def can?(resource, :transact) do
+    repo = AshSqlite.DataLayer.Info.repo(resource)
+
+    repo.config()[:transactions_enabled?]
+  end
+
   def can?(_, :composite_primary_key), do: true
   def can?(_, {:atomic, :update}), do: true
   def can?(_, {:atomic, :upsert}), do: true

@@ -17,10 +17,11 @@ defmodule AshSqlite.RepoCase do
   end
 
   setup tags do
-    :ok = Sandbox.checkout(AshSqlite.TestRepo)
+    repo = tags[:repo] || AshSqlite.TestRepo
+    :ok = Sandbox.checkout(repo)
 
     unless tags[:async] do
-      Sandbox.mode(AshSqlite.TestRepo, {:shared, self()})
+      Sandbox.mode(repo, {:shared, self()})
     end
 
     :ok

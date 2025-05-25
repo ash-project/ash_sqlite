@@ -1,5 +1,6 @@
 defmodule AshSqlite.Test.Domain do
   @moduledoc false
+
   use Ash.Domain
 
   resources do
@@ -15,6 +16,7 @@ defmodule AshSqlite.Test.Domain do
     resource(AshSqlite.Test.Account)
     resource(AshSqlite.Test.Organization)
     resource(AshSqlite.Test.Manager)
+    resource(AshSqlite.Test.TransactingPost)
   end
 
   authorization do
