@@ -19,8 +19,8 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     @impl true
-    def igniter(igniter, argv) do
-      opts = options!(argv)
+    def igniter(igniter) do
+      opts = options!(igniter.argv)
 
       repo =
         case opts[:repo] do
