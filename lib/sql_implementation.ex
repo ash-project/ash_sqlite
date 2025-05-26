@@ -206,22 +206,20 @@ defmodule AshSqlite.SqlImplementation do
   def multicolumn_distinct?, do: false
 
   @impl true
-  def parameterized_type(type, constraints, no_maps? \\ false)
-
-  def parameterized_type({:parameterized, _, _} = type, _, _) do
+  def parameterized_type({:parameterized, _} = type, _) do
     type
   end
 
-  def parameterized_type({:parameterized, _} = type, _, _) do
+  def parameterized_type({:parameterized, _, _} = type, _) do
     type
   end
 
-  def parameterized_type({:in, type}, constraints, no_maps?) do
-    parameterized_type({:array, type}, constraints, no_maps?)
+  def parameterized_type({:in, type}, constraints) do
+    parameterized_type({:array, type}, constraints)
   end
 
-  def parameterized_type({:array, type}, constraints, no_maps?) do
-    case parameterized_type(type, constraints[:items] || [], no_maps?) do
+  def parameterized_type({:array, type}, constraints) do
+    case parameterized_type(type, constraints[:items] || []) do
       nil ->
         nil
 
@@ -230,11 +228,15 @@ defmodule AshSqlite.SqlImplementation do
     end
   end
 
-  def parameterized_type(type, _constraints, _no_maps?)
+  def parameterized_type({type, constraints}, []) do
+    parameterized_type(type, constraints)
+  end
+
+  def parameterized_type(type, _constraints)
       when type in [Ash.Type.Map, Ash.Type.Map.EctoType],
       do: nil
 
-  def parameterized_type(type, constraints, no_maps?) do
+  def parameterized_type(type, constraints) do
     if Ash.Type.ash_type?(type) do
       cast_in_query? =
         if function_exported?(Ash.Type, :cast_in_query?, 2) do
@@ -244,7 +246,7 @@ defmodule AshSqlite.SqlImplementation do
         end
 
       if cast_in_query? do
-        parameterized_type(Ash.Type.ecto_type(type), constraints, no_maps?)
+        parameterized_type(Ash.Type.ecto_type(type), constraints)
       else
         nil
       end
@@ -258,135 +260,21 @@ defmodule AshSqlite.SqlImplementation do
   end
 
   @impl true
-  def determine_types(mod, values) do
-    Code.ensure_compiled(mod)
-
-    cond do
-      :erlang.function_exported(mod, :types, 0) ->
-        mod.types()
-
-      :erlang.function_exported(mod, :args, 0) ->
-        mod.args()
-
-      true ->
-        [:any]
-    end
-    |> Enum.map(fn types ->
-      case types do
-        :same ->
-          types =
-            for _ <- values do
-              :same
-            end
-
-          closest_fitting_type(types, values)
-
-        :any ->
-          for _ <- values do
-            :any
-          end
-
-        types ->
-          closest_fitting_type(types, values)
+  def determine_types(mod, args, returns \\ nil) do
+    returns =
+      case returns do
+        {:parameterized, _} -> nil
+        {:array, {:parameterized, _}} -> nil
+        {:array, {type, constraints}} when type != :array -> {type, [items: constraints]}
+        {:array, _} -> nil
+        {type, constraints} -> {type, constraints}
+        other -> other
       end
-    end)
-    |> Enum.filter(fn types ->
-      Enum.all?(types, &(vagueness(&1) == 0))
-    end)
-    |> case do
-      [type] ->
-        if type == :any || type == {:in, :any} do
-          nil
-        else
-          type
-        end
 
-      # There are things we could likely do here
-      # We only say "we know what types these are" when we explicitly know
-      _ ->
-        Enum.map(values, fn _ -> nil end)
-    end
+    {types, new_returns} = Ash.Expr.determine_types(mod, args, returns)
+
+    {types, new_returns || returns}
   end
-
-  defp closest_fitting_type(types, values) do
-    types_with_values = Enum.zip(types, values)
-
-    types_with_values
-    |> fill_in_known_types()
-    |> clarify_types()
-  end
-
-  defp clarify_types(types) do
-    basis =
-      types
-      |> Enum.map(&elem(&1, 0))
-      |> Enum.min_by(&vagueness(&1))
-
-    Enum.map(types, fn {type, _value} ->
-      replace_same(type, basis)
-    end)
-  end
-
-  defp replace_same({:in, type}, basis) do
-    {:in, replace_same(type, basis)}
-  end
-
-  defp replace_same(:same, :same) do
-    :any
-  end
-
-  defp replace_same(:same, {:in, :same}) do
-    {:in, :any}
-  end
-
-  defp replace_same(:same, basis) do
-    basis
-  end
-
-  defp replace_same(other, _basis) do
-    other
-  end
-
-  defp fill_in_known_types(types) do
-    Enum.map(types, &fill_in_known_type/1)
-  end
-
-  defp fill_in_known_type(
-         {vague_type, %Ash.Query.Ref{attribute: %{type: type, constraints: constraints}}} = ref
-       )
-       when vague_type in [:any, :same] do
-    if Ash.Type.ash_type?(type) do
-      type = type |> parameterized_type(constraints, true) |> array_to_in()
-
-      {type || :any, ref}
-    else
-      type =
-        if is_atom(type) && :erlang.function_exported(type, :type, 1) do
-          parameterized_type(type, constraints, true) |> array_to_in()
-        else
-          type |> array_to_in()
-        end
-
-      {type, ref}
-    end
-  end
-
-  defp fill_in_known_type(
-         {{:array, type}, %Ash.Query.Ref{attribute: %{type: {:array, type}} = attribute} = ref}
-       ) do
-    {:in, fill_in_known_type({type, %{ref | attribute: %{attribute | type: type}}})}
-  end
-
-  defp fill_in_known_type({type, value}), do: {array_to_in(type), value}
-
-  defp array_to_in({:array, v}), do: {:in, array_to_in(v)}
-
-  defp array_to_in(v), do: v
-
-  defp vagueness({:in, type}), do: vagueness(type)
-  defp vagueness(:same), do: 2
-  defp vagueness(:any), do: 1
-  defp vagueness(_), do: 0
 
   defp do_get_path(
          query,
@@ -438,13 +326,6 @@ defmodule AshSqlite.SqlImplementation do
     path
     |> Enum.reject(&is_integer/1)
     |> do_determine_type_at_path(type)
-    |> case do
-      nil ->
-        nil
-
-      {type, constraints} ->
-        AshSqlite.Types.parameterized_type(type, constraints)
-    end
   end
 
   defp do_determine_type_at_path([], _), do: nil
