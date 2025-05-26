@@ -5,6 +5,23 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.7](https://github.com/ash-project/ash_sqlite/compare/v0.2.6...v0.2.7) (2025-05-26)
+
+
+
+
+### Bug Fixes:
+
+* various fixes around parameterized type data shape change
+
+* Remove unused `:inflex` dependency
+
+* Fix leftover reference to `Inflex` after it was moved to Igniter instead
+
+### Improvements:
+
+* Fix igniter deprecation warning. (#152)
+
 ## [v0.2.6](https://github.com/ash-project/ash_sqlite/compare/v0.2.5...v0.2.6) (2025-04-29)
 
 
