@@ -876,14 +876,13 @@ defmodule AshSqlite.MigrationGenerator do
   end
 
   defp require_name!(opts) do
-    if !opts.name && !opts.dry_run && !opts.check && !opts.snapshots_only && !opts.dev &&
-         !opts.auto_name do
+    if !opts.name && !opts.dry_run && !opts.check && !opts.dev && !opts.auto_name do
       raise """
       Name must be provided when generating migrations, unless `--dry-run` or `--check` or `--dev` is also provided.
 
       Please provide a name. for example:
 
-          mix ash_postgres.generate_migrations <name> ...args
+          mix ash_sqlite.generate_migrations <name> ...args
       """
     end
 
