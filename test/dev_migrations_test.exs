@@ -2,8 +2,6 @@ defmodule AshSqlite.DevMigrationsTest do
   use AshSqlite.RepoCase, async: false
   @moduletag :migration
 
-
-
   alias Ecto.Adapters.SQL.Sandbox
 
   setup do
