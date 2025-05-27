@@ -6,11 +6,30 @@ Ash comes with its own tasks, and AshSqlite exposes lower level tasks that you c
 
 ## Basic Workflow
 
-- Make resource changes
-- Run `mix ash.codegen --name add_a_combobulator` to generate migrations and resource snapshots
-- Run `mix ash.migrate` to run those migrations
+### Development Workflow (Recommended)
 
-For more information on generating migrations, run `mix help ash_sqlite.generate_migrations` (the underlying task that is called by `mix ash.migrate`)
+For development iterations, use the dev workflow to avoid naming migrations prematurely:
+
+1. Make resource changes
+2. Run `mix ash.codegen --dev` to generate dev migrations
+3. Review the migrations and run `mix ash.migrate` to run them
+4. Continue making changes and running `mix ash.codegen --dev` as needed
+5. When your feature is complete, run `mix ash.codegen add_feature_name` to generate final named migrations (this will remove dev migrations and squash them)
+6. Review the migrations and run `mix ash.migrate` to run them
+
+### Traditional Migration Generation
+
+For single-step changes or when you know the final feature name:
+
+1. Make resource changes
+2. Run `mix ash.codegen --name add_a_combobulator` to generate migrations and resource snapshots
+3. Run `mix ash.migrate` to run those migrations
+
+> **Tip**: The dev workflow (`--dev` flag) is preferred during development as it allows you to iterate without thinking of migration names and provides better development ergonomics.
+
+> **Warning**: Always review migrations before applying them to ensure they are correct and safe.
+
+For more information on generating migrations, run `mix help ash_sqlite.generate_migrations` (the underlying task that is called by `mix ash.codegen`)
 
 ### Regenerating Migrations
 

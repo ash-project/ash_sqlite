@@ -170,6 +170,8 @@ Then we will generate database migrations. This is one of the many ways that Ash
 mix ash_sqlite.generate_migrations --name add_tickets_and_representatives
 ```
 
+> **Development Tip**: For iterative development, you can use `mix ash_sqlite.generate_migrations --dev` to create dev migrations without needing to name them immediately. When you're ready to finalize your changes, run the command with a proper name to consolidate all dev migrations into a single, well-named migration.
+
 If you are unfamiliar with database migrations, it is a good idea to get a rough idea of what they are and how they work. See the links at the bottom of this guide for more. A rough overview of how migrations work is that each time you need to make changes to your database, they are saved as small, reproducible scripts that can be applied in order. This is necessary both for clean deploys as well as working with multiple developers making changes to the structure of a single database.
 
 Typically, you need to write these by hand. AshSqlite, however, will store snapshots each time you run the command to generate migrations and will figure out what migrations need to be created.
