@@ -90,7 +90,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       :ok
@@ -170,7 +171,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       :ok
@@ -198,7 +200,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       assert [_file1, file2] =
@@ -227,7 +230,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       assert [_file1, file2] =
@@ -253,7 +257,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       assert [_file1, file2] =
@@ -278,7 +283,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       assert [_file1, file2] =
@@ -306,7 +312,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       assert [_file1, file2] =
@@ -336,7 +343,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       assert [_file1, file2] =
@@ -367,7 +375,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       assert [_file1, file2] =
@@ -402,7 +411,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       :ok
@@ -438,7 +448,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
                AshSqlite.MigrationGenerator.generate(domain,
                  snapshot_path: "test_snapshot_path",
                  migration_path: "test_migration_path",
-                 check: true
+                 check: true,
+                 auto_name: true
                )
              ) == {:shutdown, 1}
 
@@ -481,7 +492,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
@@ -516,7 +528,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
@@ -551,7 +564,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       defposts Post2 do
@@ -575,7 +589,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       assert file =
@@ -663,7 +678,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       [domain: Domain]
@@ -700,7 +716,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
           snapshot_path: "test_snapshots_path",
           migration_path: "test_migration_path",
           quiet: true,
-          format: false
+          format: false,
+          auto_name: true
         )
       end)
 
@@ -754,7 +771,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       :ok
@@ -794,7 +812,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
         snapshot_path: "test_snapshots_path",
         migration_path: "test_migration_path",
         quiet: true,
-        format: false
+        format: false,
+        auto_name: true
       )
 
       assert [_file1, file2] =

@@ -17,6 +17,8 @@ defmodule AshSqlite.MigrationGenerator do
             format: true,
             dry_run: false,
             check: false,
+            dev: false,
+            auto_name: false,
             drop_columns: false
 
   def generate(domains, opts \\ []) do
@@ -213,7 +215,7 @@ defmodule AshSqlite.MigrationGenerator do
         migration_file =
           opts
           |> migration_path(repo)
-          |> Path.join(migration_name <> ".exs")
+          |> Path.join(migration_name <> "#{if opts.dev, do: "_dev"}.exs")
 
         sanitized_module =
           module
@@ -332,6 +334,22 @@ defmodule AshSqlite.MigrationGenerator do
           :ok
 
         operations ->
+          dev_migrations = get_dev_migrations(opts, repo)
+
+          if !opts.dev and dev_migrations != [] do
+            if opts.check do
+              Mix.shell().error("""
+              Generated migrations are from dev mode.
+
+              Generate migrations without `--dev` flag.
+              """)
+
+              exit({:shutdown, 1})
+            else
+              remove_dev_migrations_and_snapshots(dev_migrations, repo, opts, snapshots)
+            end
+          end
+
           if opts.check do
             IO.puts("""
             Migrations would have been generated, but the --check flag was provided.
@@ -349,6 +367,46 @@ defmodule AshSqlite.MigrationGenerator do
           |> write_migration!(repo, opts)
 
           create_new_snapshot(snapshots, repo_name(repo), opts)
+      end
+    end)
+  end
+
+  defp get_dev_migrations(opts, repo) do
+    opts
+    |> migration_path(repo)
+    |> File.ls()
+    |> case do
+      {:error, _error} -> []
+      {:ok, migrations} -> Enum.filter(migrations, &String.contains?(&1, "_dev.exs"))
+    end
+  end
+
+  defp remove_dev_migrations_and_snapshots(dev_migrations, repo, opts, snapshots) do
+    # Remove dev migration files
+    Enum.each(dev_migrations, fn migration_name ->
+      opts
+      |> migration_path(repo)
+      |> Path.join(migration_name)
+      |> File.rm!()
+    end)
+
+    # Remove dev snapshots
+    Enum.each(snapshots, fn snapshot ->
+      snapshot_folder =
+        opts
+        |> snapshot_path(snapshot.repo)
+        |> Path.join(repo_name(snapshot.repo))
+        |> Path.join(snapshot.table)
+
+      if File.exists?(snapshot_folder) do
+        snapshot_folder
+        |> File.ls!()
+        |> Enum.filter(&String.contains?(&1, "_dev.json"))
+        |> Enum.each(fn snapshot_name ->
+          snapshot_folder
+          |> Path.join(snapshot_name)
+          |> File.rm!()
+        end)
       end
     end)
   end
@@ -712,6 +770,8 @@ defmodule AshSqlite.MigrationGenerator do
   defp write_migration!({up, down}, repo, opts) do
     migration_path = migration_path(opts, repo)
 
+    require_name!(opts)
+
     {migration_name, last_part} =
       if opts.name do
         {"#{timestamp(true)}_#{opts.name}", "#{opts.name}"}
@@ -742,7 +802,7 @@ defmodule AshSqlite.MigrationGenerator do
 
     migration_file =
       migration_path
-      |> Path.join(migration_name <> ".exs")
+      |> Path.join(migration_name <> "#{if opts.dev, do: "_dev"}.exs")
 
     module_name =
       Module.concat([repo, Migrations, Macro.camelize(last_part)])
@@ -815,6 +875,20 @@ defmodule AshSqlite.MigrationGenerator do
     end
   end
 
+  defp require_name!(opts) do
+    if !opts.name && !opts.dry_run && !opts.check && !opts.dev && !opts.auto_name do
+      raise """
+      Name must be provided when generating migrations, unless `--dry-run` or `--check` or `--dev` is also provided.
+
+      Please provide a name. for example:
+
+          mix ash_sqlite.generate_migrations <name> ...args
+      """
+    end
+
+    :ok
+  end
+
   defp add_line_numbers(contents) do
     lines = String.split(contents, "\n")
 
@@ -837,15 +911,16 @@ defmodule AshSqlite.MigrationGenerator do
           |> snapshot_path(snapshot.repo)
           |> Path.join(repo_name)
 
-        snapshot_file = Path.join(snapshot_folder, "#{snapshot.table}/#{timestamp()}.json")
+        dev = if opts.dev, do: "_dev"
+        snapshot_file = Path.join(snapshot_folder, "#{snapshot.table}/#{timestamp()}#{dev}.json")
 
         File.mkdir_p(Path.dirname(snapshot_file))
         File.write!(snapshot_file, snapshot_binary, [])
 
-        old_snapshot_folder = Path.join(snapshot_folder, "#{snapshot.table}.json")
+        old_snapshot_folder = Path.join(snapshot_folder, "#{snapshot.table}#{dev}.json")
 
         if File.exists?(old_snapshot_folder) do
-          new_snapshot_folder = Path.join(snapshot_folder, "#{snapshot.table}/initial.json")
+          new_snapshot_folder = Path.join(snapshot_folder, "#{snapshot.table}/initial#{dev}.json")
           File.rename(old_snapshot_folder, new_snapshot_folder)
         end
       end)

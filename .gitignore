@@ -28,3 +28,6 @@ test_snapshots_path
 test/test.db
 test/test.db-shm
 test/test.db-wal
+test/dev_test.db
+test/dev_test.db-shm
+test/dev_test.db-wal

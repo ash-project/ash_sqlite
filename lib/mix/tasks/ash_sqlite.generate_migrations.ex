@@ -20,6 +20,7 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
   * `no-format` - files that are created will not be formatted with the code formatter
   * `dry-run` - no files are created, instead the new migration is printed
   * `check` - no files are created, returns an exit(1) code if the current snapshots and resources don't fit
+  * `dev` - dev files are created (see Development Workflow section below)
 
   #### Snapshots
 
@@ -58,6 +59,25 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
   Non-function default values will be dumped to their native type and inspected. This may not work for some types,
   and may require manual intervention/patches to the migration generator code.
 
+  #### Development Workflow
+
+  The `--dev` flag enables a development-focused migration workflow that allows you to iterate
+  on resource changes without committing to migration names prematurely:
+
+  1. Make resource changes
+  2. Run `mix ash_sqlite.generate_migrations --dev` to generate dev migrations
+     - Creates migration files with `_dev.exs` suffix
+     - Creates snapshot files with `_dev.json` suffix
+     - No migration name required
+  3. Continue making changes and running `--dev` as needed
+  4. When ready, run `mix ash_sqlite.generate_migrations my_feature_name` to:
+     - Remove all dev migrations and snapshots
+     - Generate final named migrations that consolidate all changes
+     - Create clean snapshots
+
+  This workflow prevents migration history pollution during development while maintaining
+  the ability to generate clean, well-named migrations for production.
+
   #### Identities
 
   Identities will cause the migration generator to generate unique constraints. If multiple
@@ -79,6 +99,8 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
           no_format: :boolean,
           dry_run: :boolean,
           check: :boolean,
+          dev: :boolean,
+          auto_name: :boolean,
           drop_columns: :boolean
         ]
       )
