@@ -75,6 +75,7 @@ defmodule AshSqlite.DevMigrationsTest do
   end
 
   setup do
+    File.mkdir_p!("priv/dev_test_repo/migrations")
     resource_dev_path = "priv/resource_snapshots/dev_test_repo"
 
     initial_resource_files =
