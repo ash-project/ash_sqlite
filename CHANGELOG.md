@@ -5,6 +5,19 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.8](https://github.com/ash-project/ash_sqlite/compare/v0.2.7...v0.2.8) (2025-05-29)
+
+
+
+
+### Bug Fixes:
+
+* properly fetch options in installer
+
+### Improvements:
+
+* --dev codegen flag (#154)
+
 ## [v0.2.7](https://github.com/ash-project/ash_sqlite/compare/v0.2.6...v0.2.7) (2025-05-26)
 
 
