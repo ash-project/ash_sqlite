@@ -391,7 +391,7 @@ defmodule AshSqlite.DataLayer do
   end
 
   def codegen(args) do
-    # TODO: take args that we care about
+    Mix.Task.reenable("ash_sqlite.generate_migrations")
     Mix.Task.run("ash_sqlite.generate_migrations", args)
   end
 

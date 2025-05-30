@@ -3,8 +3,6 @@ defmodule AshSqlite.MigrationGenerator do
 
   require Logger
 
-  import Mix.Generator
-
   alias AshSqlite.MigrationGenerator.{Operation, Phase}
 
   defstruct snapshot_path: nil,
@@ -40,10 +38,45 @@ defmodule AshSqlite.MigrationGenerator do
       |> Enum.map(& &1.repo)
       |> Enum.uniq()
 
-    Mix.shell().info("\nExtension Migrations: ")
-    create_extension_migrations(repos, opts)
-    Mix.shell().info("\nGenerating Migrations:")
-    create_migrations(snapshots, opts)
+    extension_migration_files =
+      create_extension_migrations(repos, opts)
+
+    migration_files =
+      create_migrations(snapshots, opts)
+
+    files = extension_migration_files ++ migration_files
+
+    case files do
+      [] ->
+        if !opts.check || opts.dry_run do
+          Mix.shell().info(
+            "No changes detected, so no migrations or snapshots have been created."
+          )
+        end
+
+        :ok
+
+      files ->
+        cond do
+          opts.check ->
+            raise Ash.Error.Framework.PendingCodegen,
+              diff: files
+
+          opts.dry_run ->
+            Mix.shell().info(
+              files
+              |> Enum.sort_by(&elem(&1, 0))
+              |> Enum.map_join("\n\n", fn {file, contents} ->
+                "#{file}\n#{contents}"
+              end)
+            )
+
+          true ->
+            Enum.each(files, fn {file, contents} ->
+              Mix.Generator.create_file(file, contents, force?: true)
+            end)
+        end
+    end
   end
 
   @doc """
@@ -195,8 +228,7 @@ defmodule AshSqlite.MigrationGenerator do
         |> Enum.map(fn {_name, extension} -> extension end)
 
       if Enum.empty?(to_install) do
-        Mix.shell().info("No extensions to install")
-        :ok
+        []
       else
         {module, migration_name} =
           case to_install do
@@ -276,43 +308,19 @@ defmodule AshSqlite.MigrationGenerator do
 
         contents = format(contents, opts)
 
-        if opts.dry_run do
-          Mix.shell().info(snapshot_contents)
-          Mix.shell().info(contents)
-
-          if opts.check do
-            Mix.shell().error("""
-            Migrations would have been generated, but the --check flag was provided.
-
-            To see what migration would have been generated, run with the `--dry-run`
-            option instead. To generate those migrations, run without either flag.
-            """)
-
-            exit({:shutdown, 1})
-          end
-        else
-          if opts.check do
-            Mix.shell().error("""
-            Migrations would have been generated, but the --check flag was provided.
-
-            To see what migration would have been generated, run with the `--dry-run`
-            option instead. To generate those migrations, run without either flag.
-            """)
-
-            exit({:shutdown, 1})
-          end
-
-          create_file(snapshot_file, snapshot_contents, force: true)
-          create_file(migration_file, contents)
-        end
+        [
+          {snapshot_file, snapshot_contents},
+          {migration_file, contents}
+        ]
       end
     end
+    |> List.flatten()
   end
 
   defp create_migrations(snapshots, opts) do
     snapshots
     |> Enum.group_by(& &1.repo)
-    |> Enum.each(fn {repo, snapshots} ->
+    |> Enum.flat_map(fn {repo, snapshots} ->
       deduped = deduplicate_snapshots(snapshots, opts)
 
       snapshots_with_operations =
@@ -327,11 +335,7 @@ defmodule AshSqlite.MigrationGenerator do
       |> Enum.uniq()
       |> case do
         [] ->
-          Mix.shell().info(
-            "No changes detected, so no migrations or snapshots have been created."
-          )
-
-          :ok
+          []
 
         operations ->
           dev_migrations = get_dev_migrations(opts, repo)
@@ -350,23 +354,15 @@ defmodule AshSqlite.MigrationGenerator do
             end
           end
 
-          if opts.check do
-            IO.puts("""
-            Migrations would have been generated, but the --check flag was provided.
+          migration_files =
+            operations
+            |> organize_operations
+            |> build_up_and_down()
+            |> migration(repo, opts)
 
-            To see what migration would have been generated, run with the `--dry-run`
-            option instead. To generate those migrations, run without either flag.
-            """)
+          snapshot_files = create_new_snapshot(snapshots, repo_name(repo), opts)
 
-            exit({:shutdown, 1})
-          end
-
-          operations
-          |> organize_operations
-          |> build_up_and_down()
-          |> write_migration!(repo, opts)
-
-          create_new_snapshot(snapshots, repo_name(repo), opts)
+          [migration_files] ++ snapshot_files
       end
     end)
   end
@@ -844,7 +840,7 @@ defmodule AshSqlite.MigrationGenerator do
     repo |> Module.split() |> List.last() |> Macro.underscore()
   end
 
-  defp write_migration!({up, down}, repo, opts) do
+  defp migration({up, down}, repo, opts) do
     migration_path = migration_path(opts, repo)
 
     require_name!(opts)
@@ -905,35 +901,7 @@ defmodule AshSqlite.MigrationGenerator do
     """
 
     try do
-      contents = format(contents, opts)
-
-      if opts.dry_run do
-        Mix.shell().info(contents)
-
-        if opts.check do
-          Mix.shell().error("""
-          Migrations would have been generated, but the --check flag was provided.
-
-          To see what migration would have been generated, run with the `--dry-run`
-          option instead. To generate those migrations, run without either flag.
-          """)
-
-          exit({:shutdown, 1})
-        end
-      else
-        if opts.check do
-          Mix.shell().error("""
-          Migrations would have been generated, but the --check flag was provided.
-
-          To see what migration would have been generated, run with the `--dry-run`
-          option instead. To generate those migrations, run without either flag.
-          """)
-
-          exit({:shutdown, 1})
-        end
-
-        create_file(migration_file, contents)
-      end
+      {migration_file, format(contents, opts)}
     rescue
       exception ->
         reraise(
@@ -979,29 +947,30 @@ defmodule AshSqlite.MigrationGenerator do
   end
 
   defp create_new_snapshot(snapshots, repo_name, opts) do
-    unless opts.dry_run do
-      Enum.each(snapshots, fn snapshot ->
-        snapshot_binary = snapshot_to_binary(snapshot)
+    Enum.map(snapshots, fn snapshot ->
+      snapshot_binary = snapshot_to_binary(snapshot)
 
-        snapshot_folder =
-          opts
-          |> snapshot_path(snapshot.repo)
-          |> Path.join(repo_name)
+      snapshot_folder =
+        opts
+        |> snapshot_path(snapshot.repo)
+        |> Path.join(repo_name)
 
-        dev = if opts.dev, do: "_dev"
-        snapshot_file = Path.join(snapshot_folder, "#{snapshot.table}/#{timestamp()}#{dev}.json")
+      dev = if opts.dev, do: "_dev"
 
-        File.mkdir_p(Path.dirname(snapshot_file))
-        File.write!(snapshot_file, snapshot_binary, [])
+      snapshot_file =
+        Path.join(snapshot_folder, "#{snapshot.table}/#{timestamp()}#{dev}.json")
 
-        old_snapshot_folder = Path.join(snapshot_folder, "#{snapshot.table}#{dev}.json")
+      old_snapshot_folder = Path.join(snapshot_folder, "#{snapshot.table}#{dev}.json")
 
-        if File.exists?(old_snapshot_folder) do
-          new_snapshot_folder = Path.join(snapshot_folder, "#{snapshot.table}/initial#{dev}.json")
-          File.rename(old_snapshot_folder, new_snapshot_folder)
-        end
-      end)
-    end
+      if File.exists?(old_snapshot_folder) do
+        new_snapshot_folder = Path.join(snapshot_folder, "#{snapshot.table}/initial#{dev}.json")
+        File.rename(old_snapshot_folder, new_snapshot_folder)
+      end
+
+      File.mkdir_p(Path.dirname(snapshot_file))
+
+      {snapshot_file, snapshot_binary}
+    end)
   end
 
   @doc false
@@ -2108,10 +2077,14 @@ defmodule AshSqlite.MigrationGenerator do
   end
 
   defp renaming?(table, removing, opts) do
-    if opts.no_shell? do
-      raise "Unimplemented: cannot determine: Are you renaming #{table}.#{removing.source}? without shell input"
+    if opts.dev do
+      false
     else
-      Mix.shell().yes?("Are you renaming #{table}.#{removing.source}?")
+      if opts.no_shell? do
+        raise "Unimplemented: cannot determine: Are you renaming #{table}.#{removing.source}? without shell input"
+      else
+        Mix.shell().yes?("Are you renaming #{table}.#{removing.source}?")
+      end
     end
   end
 

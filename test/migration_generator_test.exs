@@ -443,15 +443,15 @@ defmodule AshSqlite.MigrationGeneratorTest do
       [domain: Domain]
     end
 
-    test "returns code(1) if snapshots and resources don't fit", %{domain: domain} do
-      assert catch_exit(
-               AshSqlite.MigrationGenerator.generate(domain,
-                 snapshot_path: "test_snapshot_path",
-                 migration_path: "test_migration_path",
-                 check: true,
-                 auto_name: true
-               )
-             ) == {:shutdown, 1}
+    test "raises an error on pending codegen", %{domain: domain} do
+      assert_raise Ash.Error.Framework.PendingCodegen, fn ->
+        AshSqlite.MigrationGenerator.generate(domain,
+          snapshot_path: "test_snapshot_path",
+          migration_path: "test_migration_path",
+          check: true,
+          auto_name: true
+        )
+      end
 
       refute File.exists?(Path.wildcard("test_migration_path2/**/*_migrate_resources*.exs"))
       refute File.exists?(Path.wildcard("test_snapshots_path2/test_repo/posts/*.json"))
