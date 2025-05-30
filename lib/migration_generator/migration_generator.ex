@@ -343,9 +343,12 @@ defmodule AshSqlite.MigrationGenerator do
           if !opts.dev and dev_migrations != [] do
             if opts.check do
               Mix.shell().error("""
-              Generated migrations are from dev mode.
+              Codegen check failed.
 
-              Generate migrations without `--dev` flag.
+              You have migrations remaining that were generated with the --dev flag.
+
+              Run `mix ash.codegen <name>` to remove the dev migraitons and replace them
+              with production ready migrations.
               """)
 
               exit({:shutdown, 1})
