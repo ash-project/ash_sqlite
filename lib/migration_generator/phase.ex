@@ -3,12 +3,17 @@ defmodule AshSqlite.MigrationGenerator.Phase do
 
   defmodule Create do
     @moduledoc false
-    defstruct [:table, :multitenancy, operations: [], commented?: false]
+    defstruct [:table, :multitenancy, operations: [], options: [], commented?: false]
 
     import AshSqlite.MigrationGenerator.Operation.Helper, only: [as_atom: 1]
 
-    def up(%{table: table, operations: operations}) do
-      opts = ""
+    def up(%{table: table, operations: operations, options: options}) do
+      opts =
+        if options[:strict?] do
+          ~s', options: "STRICT"'
+        else
+          ""
+        end
 
       "create table(:#{as_atom(table)}, primary_key: false#{opts}) do\n" <>
         Enum.map_join(operations, "\n", fn operation -> operation.__struct__.up(operation) end) <>

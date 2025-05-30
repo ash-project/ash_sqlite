@@ -145,6 +145,53 @@ defmodule AshSqlite.MigrationGeneratorTest do
     end
   end
 
+  describe "strict table" do
+    setup do
+      on_exit(fn ->
+        File.rm_rf!("test_snapshots_path")
+        File.rm_rf!("test_migration_path")
+      end)
+
+      defposts do
+        sqlite do
+          strict?(true)
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string)
+        end
+      end
+
+      defdomain([Post])
+
+      Mix.shell(Mix.Shell.Process)
+
+      AshSqlite.MigrationGenerator.generate(Domain,
+        snapshot_path: "test_snapshots_path",
+        migration_path: "test_migration_path",
+        quiet: true,
+        format: false,
+        auto_name: true
+      )
+
+      :ok
+    end
+
+    test "creates the table with the strict option" do
+      # the snapshot exists and contains valid json
+      assert File.read!(Path.wildcard("test_snapshots_path/test_repo/posts/*.json"))
+             |> Jason.decode!(keys: :atoms!)
+
+      assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+
+      file_contents = File.read!(file)
+
+      # the migration creates the table
+      assert file_contents =~ ~s'create table(:posts, primary_key: false, options: "STRICT") do'
+    end
+  end
+
   describe "creating follow up migrations" do
     setup do
       on_exit(fn ->

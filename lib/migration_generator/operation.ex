@@ -67,7 +67,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
   defmodule CreateTable do
     @moduledoc false
-    defstruct [:table, :multitenancy, :old_multitenancy]
+    defstruct [:table, :multitenancy, :old_multitenancy, options: []]
   end
 
   defmodule AddAttribute do

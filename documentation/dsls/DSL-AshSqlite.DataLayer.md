@@ -48,6 +48,7 @@ end
 | [`migration_ignore_attributes`](#sqlite-migration_ignore_attributes){: #sqlite-migration_ignore_attributes } | `list(atom)` | `[]` | A list of attributes that will be ignored when generating migrations. |
 | [`table`](#sqlite-table){: #sqlite-table } | `String.t` |  | The table to store and read the resource from. If this is changed, the migration generator will not remove the old table. |
 | [`polymorphic?`](#sqlite-polymorphic?){: #sqlite-polymorphic? } | `boolean` | `false` | Declares this resource as polymorphic. See the [polymorphic resources guide](/documentation/topics/resources/polymorphic-resources.md) for more. |
+| [`strict?`](#sqlite-strict?){: #sqlite-strict? } | `boolean` | `false` | Whether the migration generator should create a [strict table](https://www.sqlite.org/stricttables.html), which enforces types more strictly. |
 
 
 ### sqlite.custom_indexes
