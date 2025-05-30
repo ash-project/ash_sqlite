@@ -114,4 +114,9 @@ defmodule AshSqlite.DataLayer.Info do
   def skip_unique_indexes(resource) do
     Extension.get_opt(resource, [:sqlite], :skip_unique_indexes, [])
   end
+
+  @doc "Whether the migration generator should create a strict table"
+  def strict?(resource) do
+    Extension.get_opt(resource, [:sqlite], :strict?, false)
+  end
 end

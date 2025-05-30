@@ -1103,7 +1103,8 @@ defmodule AshSqlite.MigrationGenerator do
 
   defp group_into_phases(
          [
-           %Operation.CreateTable{table: table, multitenancy: multitenancy} | rest
+           %Operation.CreateTable{table: table, options: options, multitenancy: multitenancy}
+           | rest
          ],
          nil,
          acc
@@ -1120,6 +1121,7 @@ defmodule AshSqlite.MigrationGenerator do
       %Phase.Create{
         table: table,
         multitenancy: multitenancy,
+        options: options,
         operations: has_to_be_in_this_phase
       },
       acc
@@ -1543,7 +1545,8 @@ defmodule AshSqlite.MigrationGenerator do
       %Operation.CreateTable{
         table: snapshot.table,
         multitenancy: snapshot.multitenancy,
-        old_multitenancy: empty_snapshot.multitenancy
+        old_multitenancy: empty_snapshot.multitenancy,
+        options: [strict?: snapshot.strict?]
       }
       | acc
     ])
@@ -2204,7 +2207,8 @@ defmodule AshSqlite.MigrationGenerator do
       repo: AshSqlite.DataLayer.Info.repo(resource),
       multitenancy: multitenancy(resource),
       base_filter: AshSqlite.DataLayer.Info.base_filter_sql(resource),
-      has_create_action: has_create_action?(resource)
+      has_create_action: has_create_action?(resource),
+      strict?: AshSqlite.DataLayer.Info.strict?(resource)
     }
 
     hash =

@@ -278,6 +278,13 @@ defmodule AshSqlite.DataLayer do
         doc: """
         Declares this resource as polymorphic. See the [polymorphic resources guide](/documentation/topics/resources/polymorphic-resources.md) for more.
         """
+      ],
+      strict?: [
+        type: :boolean,
+        default: false,
+        doc: """
+        Whether the migration generator should create a [strict table](https://www.sqlite.org/stricttables.html), which enforces types more strictly.
+        """
       ]
     ]
   }
