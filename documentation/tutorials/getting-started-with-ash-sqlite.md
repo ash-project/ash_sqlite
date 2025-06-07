@@ -12,8 +12,10 @@ In this guide we will:
 
 ## Requirements
 
-- A working SQLite installation, with a sufficiently permissive user
-- If you would like to follow along, you will need to add begin with [the Ash getting started guide](https://hexdocs.pm/ash/get-started.html)
+### Ash getting started guide
+If you would like to follow along, you will need to add begin with [the Ash getting started guide](https://hexdocs.pm/ash/get-started.html)
+### SQLite
+A working [SQLite](https://sqlite.org/) installation. Verify installation with `sqlite --version`
 
 ## Steps
 
@@ -115,10 +117,12 @@ config :helpdesk, Helpdesk.Repo,
   pool_size: 10
 ```
 
-And finally, add the repo to your application
+add the repo to your application
 
 ```elixir
-# in lib/helpdesk/application.ex
+
+
+# in lib/helpdesk/application.ex (when the file is already exists)
 
   def start(_type, _args) do
     children = [
@@ -128,6 +132,27 @@ And finally, add the repo to your application
     ]
 
     ...
+```
+
+If the application file does not exist you can create a new one
+
+```elixir
+# in lib/helpdesk/application.ex (new file)
+
+defmodule Helpdesk.Application do
+  @moduledoc false
+
+  use Application
+
+  def start(_type, _args) do
+    children = [
+      Helpdesk.Repo
+    ]
+
+    opts = [strategy: :one_for_one, name: Helpdesk.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+end
 ```
 
 ### Add AshSqlite to our resources
@@ -160,6 +185,21 @@ Now we can add the data layer to our resources. The basic configuration for a re
   end
 ```
 
+
+And finaly link the application in your
+
+```elixir
+# in mix.exs
+...
+  def application do
+    [
+      mod: {Helpdesk.Application, []},
+      ...
+    ]
+  end
+...
+```
+
 ### Create the database and tables
 
 First, we'll create the database with `mix ash_sqlite.create`.
@@ -187,44 +227,58 @@ mix ash_sqlite.migrate
 
 ### Try it out
 
-And now we're ready to try it out! Run the following in iex:
+And now we're ready to try it out! Start iex with:
+
+```bash
+iex -S mix
+```
 
 Lets create some data. We'll make a representative and give them some open and some closed tickets.
 
 ```elixir
-require Ash.Query
+#### Create the Representative
 
 representative = (
   Helpdesk.Support.Representative
   |> Ash.Changeset.for_create(:create, %{name: "Joe Armstrong"})
-  |> Helpdesk.Support.create!()
+  |> Ash.create!()
 )
 
-for i <- 0..5 do
+
+#### Create 5 Tickets, Assign representative, and Close Odd Ones
+
+for i <- 1..5 do
+  # 1) open the ticket
   ticket =
     Helpdesk.Support.Ticket
     |> Ash.Changeset.for_create(:open, %{subject: "Issue #{i}"})
-    |> Helpdesk.Support.create!()
-    |> Ash.Changeset.for_update(:assign, %{representative_id: representative.id})
-    |> Helpdesk.Support.update!()
+    |> Ash.create!()
 
-  if rem(i, 2) == 0 do
+  # 2) assign the representative
+  ticket =
     ticket
-    |> Ash.Changeset.for_update(:close)
-    |> Helpdesk.Support.update!()
+    |> Ash.Changeset.for_update(:assign, %{representative_id: representative.id})
+    |> Ash.update!()
+
+  # 3) close if odd
+  if rem(i, 2) == 1 do
+    ticket
+    |> Ash.Changeset.for_update(:close, %{})
+    |> Ash.update!()
   end
 end
-```
+
+``
+
 
 And now we can read that data. You should see some debug logs that show the sql queries AshSqlite is generating.
 
 ```elixir
 require Ash.Query
 
-# Show the tickets where the subject equals "foobar"
 Helpdesk.Support.Ticket
-|> Ash.Query.filter(subject == "foobar")
-|> Helpdesk.Support.read!()
+|> Ash.Query.filter(contains(subject, "2"))
+|> Ash.read!()
 ```
 
 ```elixir
@@ -233,7 +287,7 @@ require Ash.Query
 # Show the tickets that are closed and their subject does not equal "barbaz"
 Helpdesk.Support.Ticket
 |> Ash.Query.filter(status == :closed and not(subject == "barbaz"))
-|> Helpdesk.Support.read!()
+|> Ash.read!()
 ```
 
 And, naturally, now that we are storing this in sqlite, this database is persisted even if we stop/start our application. The nice thing, however, is that this was the _exact_ same code that we ran against our resources when they were backed by ETS.
@@ -243,9 +297,14 @@ And, naturally, now that we are storing this in sqlite, this database is persist
 Simple calculation for Ticket which adds a concatenation of state and subject:
 
 ```
-calculations do
-  calculate :status_subject, :string,
-  expr("#{status}: #{subject}")
+# in lib/helpdesk/support/ticket.ex
+defmodule Helpdesk.Support.Ticket do
+  ...
+  calculations do
+    calculate :status_subject, :string,
+    expr("#{status}: #{subject}")
+  end
+
 end
 ```
 
@@ -254,14 +313,14 @@ Testing of this feature can be done via iex:
 ```
 Ash.Query
 Helpdesk.Support.Ticket
-  |> Ash.Query.filter(status == :open)
-  |> Ash.Query.load(:status_subject)
-  |> Ash.read!()
+|> Ash.Query.filter(status == :open)
+|> Ash.Query.load(:status_subject)
+|> Ash.read!()
 ```
 
 ### Aggregates
 
-As stated in [what-is-ash-sqlite](https://hexdocs.pm/ash_sqlite/getting-started-with-ash-sqlite.html#steps), 
+As stated in [what-is-ash-sqlite](https://hexdocs.pm/ash_sqlite/getting-started-with-ash-sqlite.html#steps),
 **The main feature missing is Aggregate support.**.
 
 In order to use these consider using [ash_postgres](https://github.com/ash-project/ash_postgres) or
