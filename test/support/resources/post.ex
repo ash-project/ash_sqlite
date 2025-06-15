@@ -33,11 +33,7 @@ defmodule AshSqlite.Test.Post do
 
   actions do
     default_accept(:*)
-    defaults([:update, :destroy])
-
-    read :read do
-      primary?(true)
-    end
+    defaults([:read, :update, :destroy])
 
     read :paginated do
       pagination(offset?: true, required?: true)
@@ -59,6 +55,14 @@ defmodule AshSqlite.Test.Post do
     update :increment_score do
       argument(:amount, :integer, default: 1)
       change(atomic_update(:score, expr((score || 0) + ^arg(:amount))))
+    end
+
+    update :update_only_freds do
+      change(filter(expr(title == "fred")))
+    end
+
+    destroy :destroy_only_freds do
+      change(filter(expr(title == "fred")))
     end
   end
 
@@ -147,7 +151,7 @@ defmodule AshSqlite.Test.Post do
   end
 
   validations do
-    validate(attribute_does_not_equal(:title, "not allowed"))
+    validate(attribute_does_not_equal(:title, "not allowed"), where: [changing(:title)])
   end
 
   calculations do

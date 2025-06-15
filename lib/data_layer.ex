@@ -418,6 +418,8 @@ defmodule AshSqlite.DataLayer do
   @impl true
   def can?(_, :async_engine), do: false
   def can?(_, :bulk_create), do: true
+  # def can?(_, :update_query), do: true
+  # def can?(_, :destroy_query), do: true
   def can?(_, {:lock, _}), do: false
 
   def can?(_, :transact), do: false
@@ -572,11 +574,16 @@ defmodule AshSqlite.DataLayer do
         if AshSqlite.DataLayer.Info.polymorphic?(resource) && no_table?(query) do
           raise_table_error!(resource, :read)
         else
-          primary_key = Ash.Resource.Info.primary_key(resource)
+          repo = dynamic_repo(resource, query)
+
+          opts =
+            AshSql.repo_opts(repo, AshSqlite.SqlImplementation, nil, nil, resource)
 
           {:ok,
-           dynamic_repo(resource, query).all(query, repo_opts(nil, nil, resource))
-           |> Enum.uniq_by(&Map.take(&1, primary_key))}
+           repo.all(
+             query,
+             opts
+           )}
         end
     end
   rescue
@@ -586,21 +593,6 @@ defmodule AshSqlite.DataLayer do
 
   defp no_table?(%{from: %{source: {"", _}}}), do: true
   defp no_table?(_), do: false
-
-  defp repo_opts(timeout, nil, _resource) do
-    []
-    |> add_timeout(timeout)
-  end
-
-  defp repo_opts(timeout, _resource) do
-    add_timeout([], timeout)
-  end
-
-  defp add_timeout(opts, timeout) when not is_nil(timeout) do
-    Keyword.put(opts, :timeout, timeout)
-  end
-
-  defp add_timeout(opts, _), do: opts
 
   @impl true
   def functions(_resource) do
@@ -844,33 +836,14 @@ defmodule AshSqlite.DataLayer do
     end
   end
 
-  defp handle_errors({:error, %Ecto.Changeset{errors: errors}}) do
-    {:error, Enum.map(errors, &to_ash_error/1)}
-  end
-
-  defp to_ash_error({field, {message, vars}}) do
-    Ash.Error.Changes.InvalidAttribute.exception(
-      field: field,
-      message: message,
-      private_vars: vars
-    )
-  end
-
-  defp ecto_changeset(record, changeset, type, table_error? \\ true) do
+  defp ecto_changeset(record, changeset, type, table_error?) do
     filters =
       if changeset.action_type == :create do
         %{}
       else
-        Map.get(changeset, :filters, %{})
-      end
-
-    filters =
-      if changeset.action_type == :create do
-        filters
-      else
         changeset.resource
         |> Ash.Resource.Info.primary_key()
-        |> Enum.reduce(filters, fn key, filters ->
+        |> Enum.reduce(%{}, fn key, filters ->
           Map.put(filters, key, Map.get(record, key))
         end)
       end
@@ -1383,75 +1356,51 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def update(resource, changeset) do
-    ecto_changeset =
-      changeset.data
-      |> Map.update!(:__meta__, &Map.put(&1, :source, table(resource, changeset)))
-      |> ecto_changeset(changeset, :update)
+    source = resolve_source(resource, changeset)
 
-    try do
-      query = from(row in resource, as: ^0)
-
-      select = Keyword.keys(changeset.atomics) ++ Ash.Resource.Info.primary_key(resource)
-
-      query =
-        query
-        |> AshSql.Bindings.default_bindings(
-          resource,
-          AshSqlite.SqlImplementation,
-          changeset.context
+    query =
+      from(row in source, as: ^0)
+      |> AshSql.Bindings.default_bindings(
+        resource,
+        AshSqlite.SqlImplementation,
+        changeset.context
+      )
+      |> pkey_filter(changeset.data)
+      |> then(fn query ->
+        Map.put(
+          query,
+          :__ash_bindings__,
+          Map.put_new(query.__ash_bindings__, :tenant, changeset.tenant)
         )
-        |> Ecto.Query.select(^select)
-        |> pkey_filter(changeset.data)
+      end)
 
-      case AshSql.Atomics.query_with_atomics(
-             resource,
-             AshSql.Bindings.default_bindings(
-               query,
-               resource,
-               AshSqlite.SqlImplementation,
-               changeset.context
-             ),
-             changeset.filter,
-             changeset.atomics,
-             ecto_changeset.changes,
-             []
-           ) do
-        {:ok, query} ->
-          repo_opts = repo_opts(changeset.timeout, changeset.tenant, changeset.resource)
+    changeset =
+      Ash.Changeset.set_context(changeset, %{
+        data_layer: %{
+          use_atomic_update_data?: true
+        }
+      })
 
-          repo_opts =
-            Keyword.put(repo_opts, :returning, Keyword.keys(changeset.atomics))
+    case update_query(query, changeset, resource, %{
+           return_records?: true,
+           action_select: changeset.action_select,
+           calculations: []
+         }) do
+      {:ok, []} ->
+        {:error,
+         Ash.Error.Changes.StaleRecord.exception(
+           resource: resource,
+           filter: changeset.filter
+         )}
 
-          result =
-            dynamic_repo(resource, changeset).update_all(
-              query,
-              [],
-              repo_opts
-            )
+      {:ok, [record]} ->
+        {:ok, record}
 
-          case result do
-            {0, []} ->
-              {:error,
-               Ash.Error.Changes.StaleRecord.exception(
-                 resource: resource,
-                 filters: changeset.filter
-               )}
+      {:error, error} ->
+        {:error, error}
 
-            {1, [result]} ->
-              record =
-                changeset.data
-                |> Map.merge(changeset.attributes)
-                |> Map.merge(Map.take(result, Keyword.keys(changeset.atomics)))
-
-              {:ok, record}
-          end
-
-        {:error, error} ->
-          {:error, error}
-      end
-    rescue
-      e ->
-        handle_raised_error(e, __STACKTRACE__, ecto_changeset, resource)
+      {:error, :no_rollback, error} ->
+        {:error, :no_rollback, error}
     end
   end
 
@@ -1466,24 +1415,464 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def destroy(resource, %{data: record} = changeset) do
-    ecto_changeset = ecto_changeset(record, changeset, :delete)
+    source = resolve_source(resource, changeset)
 
-    try do
-      ecto_changeset
-      |> dynamic_repo(resource, changeset).delete(
-        repo_opts(changeset.timeout, changeset.resource)
+    query =
+      from(row in source, as: ^0)
+      |> AshSql.Bindings.default_bindings(
+        resource,
+        AshSqlite.SqlImplementation,
+        changeset.context
       )
-      |> from_ecto()
-      |> case do
-        {:ok, _record} ->
-          :ok
+      |> pkey_filter(record)
 
+    repo = AshSql.dynamic_repo(resource, AshSqlite.SqlImplementation, changeset)
+
+    with {:ok, query} <- filter(query, changeset.filter, resource) do
+      ecto_changeset =
+        case changeset.data do
+          %Ash.Changeset.OriginalDataNotAvailable{} ->
+            changeset.resource.__struct__()
+
+          data ->
+            data
+        end
+        |> Map.update!(:__meta__, &Map.put(&1, :source, table(resource, changeset)))
+        |> ecto_changeset(changeset, :delete, true)
+
+      case bulk_updatable_query(
+             query,
+             resource,
+             [],
+             [],
+             changeset.context,
+             :destroy
+           ) do
         {:error, error} ->
-          handle_errors({:error, error})
+          {:error, error}
+
+        {:ok, query} ->
+          try do
+            repo_opts =
+              AshSql.repo_opts(
+                repo,
+                AshSqlite.SqlImplementation,
+                changeset.timeout,
+                changeset.tenant,
+                changeset.resource
+              )
+
+            query = Ecto.Query.exclude(query, :select)
+
+            repo.delete_all(
+              query,
+              repo_opts
+            )
+            |> case do
+              {0, _} ->
+                {:error,
+                 Ash.Error.Changes.StaleRecord.exception(
+                   resource: resource,
+                   filter: changeset.filter
+                 )}
+
+              _ ->
+                :ok
+            end
+          rescue
+            e ->
+              handle_raised_error(e, __STACKTRACE__, ecto_changeset, resource)
+          end
       end
-    rescue
-      e ->
-        handle_raised_error(e, __STACKTRACE__, ecto_changeset, resource)
+    end
+  end
+
+  @impl true
+  def update_query(query, changeset, resource, options) do
+    repo = AshSql.dynamic_repo(resource, AshSqlite.SqlImplementation, changeset)
+
+    ecto_changeset =
+      case changeset.data do
+        %Ash.Changeset.OriginalDataNotAvailable{} ->
+          changeset.resource.__struct__()
+
+        data ->
+          data
+      end
+      |> Map.update!(:__meta__, &Map.put(&1, :source, table(resource, changeset)))
+      |> ecto_changeset(changeset, :update, true)
+
+    case bulk_updatable_query(
+           query,
+           resource,
+           changeset.atomics,
+           options[:calculations] || [],
+           changeset.context
+         ) do
+      {:error, error} ->
+        {:error, error}
+
+      {:ok, query} ->
+        try do
+          repo_opts =
+            AshSql.repo_opts(
+              repo,
+              AshSqlite.SqlImplementation,
+              changeset.timeout,
+              changeset.tenant,
+              changeset.resource
+            )
+
+          case AshSql.Atomics.query_with_atomics(
+                 resource,
+                 query,
+                 changeset.filter,
+                 changeset.atomics,
+                 ecto_changeset.changes,
+                 []
+               ) do
+            {:empty, query} ->
+              if options[:return_records?] do
+                if changeset.context[:data_layer][:use_atomic_update_data?] do
+                  case query.__ash_bindings__ do
+                    %{expression_accumulator: %AshSql.Expr.ExprInfo{has_error?: true}} ->
+                      # if the query could produce an error
+                      # we must run it even if we will just be returning the original data.
+                      repo.all(query, repo_opts)
+
+                    _ ->
+                      :ok
+                  end
+
+                  {:ok, [changeset.data]}
+                else
+                  {:ok, repo.all(query, repo_opts)}
+                end
+              else
+                :ok
+              end
+
+            {:ok, query} ->
+              query =
+                if options[:return_records?] do
+                  {:ok, query} =
+                    if options[:action_select] do
+                      query
+                      |> Ecto.Query.exclude(:select)
+                      |> Ecto.Query.select([row], struct(row, ^options[:action_select]))
+                      |> add_calculations(options[:calculations] || [], resource)
+                    else
+                      query
+                      |> Ecto.Query.exclude(:select)
+                      |> Ecto.Query.select([row], row)
+                      |> add_calculations(options[:calculations] || [], resource)
+                    end
+
+                  query
+                else
+                  Ecto.Query.exclude(query, :select)
+                end
+
+              {_, results} =
+                repo.update_all(
+                  Map.delete(query, :__ash_bindings__),
+                  [],
+                  repo_opts
+                )
+
+              if options[:return_records?] do
+                results = AshSql.Query.remap_mapped_fields(results, query)
+
+                if changeset.context[:data_layer][:use_atomic_update_data?] &&
+                     Enum.count_until(results, 2) == 1 do
+                  modifying =
+                    Map.keys(changeset.attributes) ++
+                      Keyword.keys(changeset.atomics) ++ Ash.Resource.Info.primary_key(resource)
+
+                  result = hd(results)
+
+                  Map.merge(changeset.data, Map.take(result, modifying))
+                  |> Map.update!(:aggregates, &Map.merge(&1, result.aggregates))
+                  |> Map.update!(:calculations, &Map.merge(&1, result.calculations))
+                  |> then(&{:ok, [&1]})
+                else
+                  {:ok, results}
+                end
+              else
+                :ok
+              end
+
+            {:error, error} ->
+              {:error, error}
+          end
+        rescue
+          e ->
+            handle_raised_error(e, __STACKTRACE__, ecto_changeset, resource)
+        end
+    end
+  end
+
+  @impl true
+  def destroy_query(query, changeset, resource, options) do
+    repo = AshSql.dynamic_repo(resource, AshSqlite.SqlImplementation, changeset)
+
+    ecto_changeset =
+      case changeset.data do
+        %Ash.Changeset.OriginalDataNotAvailable{} ->
+          changeset.resource.__struct__()
+
+        data ->
+          data
+      end
+      |> Map.update!(:__meta__, &Map.put(&1, :source, table(resource, changeset)))
+      |> ecto_changeset(changeset, :delete, true)
+
+    case bulk_updatable_query(
+           query,
+           resource,
+           [],
+           options[:calculations] || [],
+           changeset.context,
+           :destroy
+         ) do
+      {:error, error} ->
+        {:error, error}
+
+      {:ok, query} ->
+        try do
+          repo_opts =
+            AshSql.repo_opts(
+              repo,
+              AshSqlite.SqlImplementation,
+              changeset.timeout,
+              changeset.tenant,
+              changeset.resource
+            )
+
+          query =
+            if options[:return_records?] do
+              {:ok, query} =
+                case options[:action_select] do
+                  nil ->
+                    query
+                    |> Ecto.Query.exclude(:select)
+                    |> Ecto.Query.select([row], row)
+                    |> add_calculations(options[:calculations] || [], resource)
+
+                  action_select ->
+                    query
+                    |> Ecto.Query.exclude(:select)
+                    |> Ecto.Query.select([row], struct(row, ^action_select))
+                    |> add_calculations(options[:calculations] || [], resource)
+                end
+
+              query
+            else
+              Ecto.Query.exclude(query, :select)
+            end
+
+          {_, results} =
+            repo.delete_all(
+              query,
+              repo_opts
+            )
+
+          if options[:return_records?] do
+            {:ok, AshSql.Query.remap_mapped_fields(results, query)}
+          else
+            :ok
+          end
+        rescue
+          e ->
+            handle_raised_error(e, __STACKTRACE__, ecto_changeset, resource)
+        end
+    end
+  end
+
+  defp bulk_updatable_query(query, resource, atomics, calculations, context, type \\ :update) do
+    Enum.reduce_while(atomics, {:ok, query}, fn {_, expr}, {:ok, query} ->
+      used_aggregates =
+        Ash.Filter.used_aggregates(expr, [])
+
+      with {:ok, query} <-
+             AshSql.Join.join_all_relationships(
+               query,
+               %Ash.Filter{
+                 resource: resource,
+                 expression: expr
+               },
+               left_only?: true
+             ),
+           {:ok, query} <-
+             AshSql.Aggregate.add_aggregates(query, used_aggregates, resource, false, 0) do
+        {:cont, {:ok, query}}
+      else
+        {:error, error} ->
+          {:halt, {:error, error}}
+      end
+    end)
+    |> case do
+      {:ok, query} ->
+        requires_adding_inner_join? =
+          case type do
+            :update ->
+              # could potentially optimize this to avoid the subquery by shuffling free
+              # inner joins to the top of the query
+              has_inner_join_to_start? =
+                case Enum.at(query.joins, 0) do
+                  nil ->
+                    false
+
+                  %{qual: :inner} ->
+                    true
+
+                  _ ->
+                    false
+                end
+
+              cond do
+                has_inner_join_to_start? ->
+                  false
+
+                Enum.any?(query.joins, &(&1.qual != :inner)) ->
+                  true
+
+                Enum.any?(atomics ++ calculations, fn {_, expr} ->
+                  Ash.Filter.list_refs(expr) |> Enum.any?(&(&1.relationship_path != []))
+                end) ->
+                  true
+
+                true ->
+                  false
+              end
+
+            :destroy ->
+              Enum.any?(query.joins, &(&1.qual != :inner)) ||
+                Enum.any?(atomics ++ calculations, fn {_, expr} ->
+                  expr |> Ash.Filter.list_refs() |> Enum.any?(&(&1.relationship_path != []))
+                end)
+          end
+
+        has_exists? =
+          Enum.any?(atomics, fn {_key, expr} ->
+            Ash.Filter.find(expr, fn
+              %Ash.Query.Exists{} ->
+                true
+
+              _ ->
+                false
+            end)
+          end)
+
+        needs_to_join? =
+          requires_adding_inner_join? || query.distinct ||
+            query.limit || query.offset || has_exists? || query.combinations != []
+
+        query =
+          if needs_to_join? do
+            root_query = Ecto.Query.exclude(query, :select)
+
+            root_query_result =
+              cond do
+                query.limit || query.offset ->
+                  with {:ok, root_query} <-
+                         AshSql.Atomics.select_atomics(resource, root_query, atomics) do
+                    {:ok, from(row in Ecto.Query.subquery(root_query), []),
+                     root_query.__ash_bindings__.expression_accumulator, atomics != []}
+                  end
+
+                !Enum.empty?(query.joins) || has_exists? ->
+                  with root_query <- Ecto.Query.exclude(root_query, :order_by),
+                       {:ok, root_query} <-
+                         AshSql.Atomics.select_atomics(resource, root_query, atomics) do
+                    {:ok, from(row in Ecto.Query.subquery(root_query), []),
+                     root_query.__ash_bindings__.expression_accumulator, atomics != []}
+                  end
+
+                true ->
+                  {:ok, Ecto.Query.exclude(root_query, :order_by),
+                   Map.get(root_query, :__ash_bindings__).expression_accumulator, false}
+              end
+
+            case root_query_result do
+              {:ok, root_query, acc, selected_atomics?} ->
+                dynamic =
+                  Enum.reduce(Ash.Resource.Info.primary_key(resource), nil, fn pkey, dynamic ->
+                    if dynamic do
+                      Ecto.Query.dynamic(
+                        [row, joining],
+                        field(row, ^pkey) == field(joining, ^pkey) and ^dynamic
+                      )
+                    else
+                      Ecto.Query.dynamic(
+                        [row, joining],
+                        field(row, ^pkey) == field(joining, ^pkey)
+                      )
+                    end
+                  end)
+
+                faked_query =
+                  from(row in query.from.source,
+                    inner_join: limiter in ^root_query,
+                    as: ^0,
+                    on: ^dynamic
+                  )
+                  |> AshSql.Bindings.default_bindings(
+                    query.__ash_bindings__.resource,
+                    AshSqlite.SqlImplementation,
+                    context
+                  )
+                  |> AshSql.Bindings.merge_expr_accumulator(acc)
+                  |> then(fn query ->
+                    if selected_atomics? do
+                      Map.update!(query, :__ash_bindings__, &Map.put(&1, :atomics_in_binding, 0))
+                    else
+                      query
+                    end
+                  end)
+
+                {:ok, faked_query}
+
+              {:error, error} ->
+                {:error, error}
+            end
+          else
+            {:ok,
+             query
+             |> Ecto.Query.exclude(:select)
+             |> Ecto.Query.exclude(:order_by)}
+          end
+
+        case query do
+          {:ok, query} ->
+            Enum.reduce_while(calculations, {:ok, query}, fn {_, expr}, {:ok, query} ->
+              used_aggregates =
+                Ash.Filter.used_aggregates(expr, [])
+
+              with {:ok, query} <-
+                     AshSql.Join.join_all_relationships(
+                       query,
+                       %Ash.Filter{
+                         resource: resource,
+                         expression: expr
+                       },
+                       left_only?: true
+                     ),
+                   {:ok, query} <-
+                     AshSql.Aggregate.add_aggregates(query, used_aggregates, resource, false, 0) do
+                {:cont, {:ok, query}}
+              else
+                {:error, error} ->
+                  {:halt, {:error, error}}
+              end
+            end)
+
+          {:error, error} ->
+            {:error, error}
+        end
+
+      {:error, error} ->
+        {:error, error}
     end
   end
 
@@ -1615,5 +2004,13 @@ defmodule AshSqlite.DataLayer do
 
   defp dynamic_repo(resource, _) do
     AshSqlite.DataLayer.Info.repo(resource)
+  end
+
+  defp resolve_source(resource, changeset) do
+    if table = changeset.context[:data_layer][:table] do
+      {table, resource}
+    else
+      resource
+    end
   end
 end
