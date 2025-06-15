@@ -1398,9 +1398,6 @@ defmodule AshSqlite.DataLayer do
 
       {:error, error} ->
         {:error, error}
-
-      {:error, :no_rollback, error} ->
-        {:error, :no_rollback, error}
     end
   end
 
