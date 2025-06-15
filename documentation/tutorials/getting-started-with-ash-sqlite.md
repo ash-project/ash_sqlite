@@ -268,7 +268,7 @@ for i <- 1..5 do
   end
 end
 
-``
+```
 
 
 And now we can read that data. You should see some debug logs that show the sql queries AshSqlite is generating.
@@ -296,7 +296,7 @@ And, naturally, now that we are storing this in sqlite, this database is persist
 
 Simple calculation for Ticket which adds a concatenation of state and subject:
 
-```
+```elixir
 # in lib/helpdesk/support/ticket.ex
 defmodule Helpdesk.Support.Ticket do
   ...
@@ -310,7 +310,7 @@ end
 
 Testing of this feature can be done via iex:
 
-```
+```elixir
 Ash.Query
 Helpdesk.Support.Ticket
 |> Ash.Query.filter(status == :open)
