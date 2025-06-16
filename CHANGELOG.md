@@ -5,6 +5,15 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.11](https://github.com/ash-project/ash_sqlite/compare/v0.2.10...v0.2.11) (2025-06-16)
+
+
+
+
+### Improvements:
+
+* support update_query and destroy_query by Zach Daniel
+
 ## [v0.2.10](https://github.com/ash-project/ash_sqlite/compare/v0.2.9...v0.2.10) (2025-06-15)
 
 
