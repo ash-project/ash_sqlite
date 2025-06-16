@@ -151,7 +151,7 @@ defmodule AshSqlite.Test.Post do
   end
 
   validations do
-    validate(attribute_does_not_equal(:title, "not allowed"), where: [changing(:title)])
+    validate(attribute_does_not_equal(:title, "not allowed"))
   end
 
   calculations do

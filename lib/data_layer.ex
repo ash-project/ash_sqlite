@@ -418,8 +418,8 @@ defmodule AshSqlite.DataLayer do
   @impl true
   def can?(_, :async_engine), do: false
   def can?(_, :bulk_create), do: true
-  # def can?(_, :update_query), do: true
-  # def can?(_, :destroy_query), do: true
+  def can?(_, :update_query), do: true
+  def can?(_, :destroy_query), do: true
   def can?(_, {:lock, _}), do: false
 
   def can?(_, :transact), do: false

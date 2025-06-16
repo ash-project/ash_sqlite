@@ -5,6 +5,8 @@ defmodule AshSqlite.BulkUpdateTest do
   test "bulk updates honor update action filters" do
     Ash.bulk_create!([%{title: "fred"}, %{title: "george"}], Post, :create)
 
+    Logger.configure(level: :debug)
+
     Post
     |> Ash.bulk_update!(:update_only_freds, %{title: "fred_stuff"}, return_errors?: true)
 
