@@ -779,7 +779,7 @@ defmodule AshSqlite.DataLayer do
                [],
                fragment(
                  "COALESCE(EXCLUDED.?, ?)",
-                 literal(^to_string(get_source_for_upsert_field(upsert_field, resource))),
+                 identifier(^to_string(get_source_for_upsert_field(upsert_field, resource))),
                  ^default
                )
              )}
@@ -793,7 +793,7 @@ defmodule AshSqlite.DataLayer do
              [],
              fragment(
                "EXCLUDED.?",
-               literal(^to_string(get_source_for_upsert_field(upsert_field, resource)))
+               identifier(^to_string(get_source_for_upsert_field(upsert_field, resource)))
              )
            )}
       end
