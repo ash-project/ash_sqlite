@@ -136,7 +136,7 @@ if Code.ensure_loaded?(Igniter) do
           |> case do
             {:ok, zipper} ->
               zipper
-              |> Igniter.Project.Config.modify_configuration_code(
+              |> modify_configuration_code(
                 [repo, :pool_size],
                 otp_app,
                 Sourceror.parse_string!("""
@@ -326,6 +326,13 @@ if Code.ensure_loaded?(Igniter) do
       else
         _ ->
           zipper
+      end
+    end
+
+    defp modify_configuration_code(zipper, path, otp_app, code) do
+      case Igniter.Project.Config.modify_config_code(zipper, path, otp_app, code) do
+        {:ok, zipper} -> zipper
+        _ -> zipper
       end
     end
 
