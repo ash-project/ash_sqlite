@@ -333,10 +333,14 @@ defmodule AshSqlite.DataLayer do
         |> Enum.reverse()
         |> Enum.take(20)
         |> Enum.map(&String.trim_leading(&1, migrations_path))
+        |> Enum.map(&String.trim_leading(&1, "/"))
+
+      indexed =
+        files
         |> Enum.with_index()
         |> Enum.map(fn {file, index} -> "#{index + 1}: #{file}" end)
 
-      n =
+      to =
         Mix.shell().prompt(
           """
           How many migrations should be rolled back#{for_repo}? (default: 0)
@@ -344,7 +348,7 @@ defmodule AshSqlite.DataLayer do
           Last 20 migration names, with the input you must provide to
           rollback up to *and including* that migration:
 
-          #{Enum.join(files, "\n")}
+          #{Enum.join(indexed, "\n")}
           Rollback to:
           """
           |> String.trim_trailing()
@@ -352,20 +356,29 @@ defmodule AshSqlite.DataLayer do
         |> String.trim()
         |> case do
           "" ->
-            0
+            nil
+
+          "0" ->
+            nil
 
           n ->
             try do
-              String.to_integer(n)
+              files
+              |> Enum.at(String.to_integer(n) - 1)
             rescue
               _ ->
                 # credo:disable-for-next-line
                 raise "Required an integer value, got: #{n}"
             end
+            |> String.split("_", parts: 2)
+            |> Enum.at(0)
+            |> String.to_integer()
         end
 
-      Mix.Task.run("ash_sqlite.rollback", args ++ ["-r", inspect(repo), "-n", to_string(n)])
-      Mix.Task.reenable("ash_sqlite.rollback")
+      if to do
+        Mix.Task.run("ash_sqlite.rollback", args ++ ["-r", inspect(repo), "--to", to_string(to)])
+        Mix.Task.reenable("ash_sqlite.rollback")
+      end
     end
   end
 
