@@ -94,7 +94,7 @@ defmodule AshSqlite.Mix.Helpers do
   def delete_flag(args, arg) do
     case Enum.split_while(args, &(&1 != arg)) do
       {left, [_ | rest]} ->
-        left ++ rest
+        delete_flag(left ++ rest, arg)
 
       _ ->
         args
@@ -104,7 +104,7 @@ defmodule AshSqlite.Mix.Helpers do
   def delete_arg(args, arg) do
     case Enum.split_while(args, &(&1 != arg)) do
       {left, [_, _ | rest]} ->
-        left ++ rest
+        delete_arg(left ++ rest, arg)
 
       _ ->
         args
