@@ -5,6 +5,21 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.12](https://github.com/ash-project/ash_sqlite/compare/v0.2.11...v0.2.12) (2025-07-22)
+
+
+
+
+### Bug Fixes:
+
+* Reverse migrations order when reverting dev migrations (#167) by Kenneth Kostrešević
+
+* update ecto & ecto_sql by Zach Daniel
+
+### Improvements:
+
+* make rollback more reliable by using `--to` instead of `-n` by Zach Daniel
+
 ## [v0.2.11](https://github.com/ash-project/ash_sqlite/compare/v0.2.10...v0.2.11) (2025-06-16)
 
 
