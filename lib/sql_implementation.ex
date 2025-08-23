@@ -140,6 +140,31 @@ defmodule AshSqlite.SqlImplementation do
     do_get_path(query, get_path, bindings, embedded?, acc, type)
   end
 
+  def expr(
+        query,
+        %Ash.Query.Function.StringTrim{arguments: [value], embedded?: pred_embedded?},
+        bindings,
+        embedded?,
+        acc,
+        type
+      ) do
+    AshSql.Expr.dynamic_expr(
+      query,
+      %Ash.Query.Function.Fragment{
+        embedded?: pred_embedded?,
+        arguments: [
+          raw: "TRIM(",
+          expr: value,
+          raw: ")"
+        ]
+      },
+      bindings,
+      embedded?,
+      type,
+      acc
+    )
+  end
+
   @impl true
   def expr(
         _query,
