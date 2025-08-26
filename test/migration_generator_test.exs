@@ -192,6 +192,67 @@ defmodule AshSqlite.MigrationGeneratorTest do
     end
   end
 
+  describe "dev migrations" do
+    setup do
+      on_exit(fn ->
+        File.rm_rf!("test_snapshots_path")
+        File.rm_rf!("test_migration_path")
+      end)
+
+      defposts do
+        identities do
+          identity(:title, [:title])
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string)
+        end
+      end
+
+      defdomain([Post])
+
+      Mix.shell(Mix.Shell.Process)
+
+      AshSqlite.MigrationGenerator.generate(Domain,
+        snapshot_path: "test_snapshots_path",
+        migration_path: "test_migration_path",
+        quiet: true,
+        format: false,
+        auto_name: true,
+        dev: true
+      )
+
+      :ok
+    end
+
+    test "running it again doesn't create a new file" do
+      defposts do
+        identities do
+          identity(:title, [:title])
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string)
+        end
+      end
+
+      defdomain([Post])
+
+      AshSqlite.MigrationGenerator.generate(Domain,
+        snapshot_path: "test_snapshots_path",
+        migration_path: "test_migration_path",
+        quiet: true,
+        format: false,
+        auto_name: true,
+        dev: true
+      )
+
+      assert [_] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+    end
+  end
+
   describe "creating follow up migrations" do
     setup do
       on_exit(fn ->
@@ -223,6 +284,31 @@ defmodule AshSqlite.MigrationGeneratorTest do
       )
 
       :ok
+    end
+
+    test "without change" do
+      defposts do
+        identities do
+          identity(:title, [:title])
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string)
+        end
+      end
+
+      defdomain([Post])
+
+      AshSqlite.MigrationGenerator.generate(Domain,
+        snapshot_path: "test_snapshots_path",
+        migration_path: "test_migration_path",
+        quiet: true,
+        format: false,
+        auto_name: true
+      )
+
+      assert [_] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
     end
 
     test "when renaming an index, it is properly renamed" do
