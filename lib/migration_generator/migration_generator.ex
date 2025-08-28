@@ -2006,25 +2006,13 @@ defmodule AshSqlite.MigrationGenerator do
       snapshot_folder
       |> File.ls!()
       |> Enum.filter(&String.ends_with?(&1, ".json"))
-      |> Enum.map(&String.trim_trailing(&1, ".json"))
-      |> Enum.map(&Integer.parse/1)
-      |> Enum.filter(fn
-        {_int, remaining} ->
-          remaining == ""
-
-        :error ->
-          false
-      end)
-      |> Enum.map(&elem(&1, 0))
       |> case do
         [] ->
           get_old_snapshot(folder, snapshot)
 
-        timestamps ->
-          timestamp = Enum.max(timestamps)
-          snapshot_file = Path.join(snapshot_folder, "#{timestamp}.json")
-
-          snapshot_file
+        snapshot_files ->
+          snapshot_folder
+          |> Path.join(Enum.max(snapshot_files))
           |> File.read!()
           |> load_snapshot()
       end
