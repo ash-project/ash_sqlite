@@ -64,6 +64,12 @@ defmodule AshSqlite.Test.Post do
     destroy :destroy_only_freds do
       change(filter(expr(title == "fred")))
     end
+
+    create :create_with_failing_change do
+      change after_action(fn _cs, _post, _ctx ->
+          {:error, field: :org, message: "Failing action"}
+        end)
+    end
   end
 
   identities do

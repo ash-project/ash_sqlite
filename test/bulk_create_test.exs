@@ -140,4 +140,21 @@ defmodule AshSqlite.BulkCreateTest do
                |> Ash.read!()
     end
   end
+
+  describe "transaction errors" do
+    @tag this: "this"
+    test "transaction errors rolls back" do
+      org =
+        AshSqlite.Test.Organization
+        |> Ash.Changeset.for_create(:create, %{name: "foo"})
+        |> Ash.create!()
+
+
+      assert {:error, _} = AshSqlite.Test.Post
+      |> Ash.Changeset.for_create(:create_with_failing_change, %{organization_id: org.id, title: "foo"})
+      |> Ash.create()
+
+      assert {:ok, []} = Ash.read(AshSqlite.Test.Post)
+    end
+  end
 end
