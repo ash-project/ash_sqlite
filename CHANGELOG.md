@@ -5,6 +5,17 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.13](https://github.com/ash-project/ash_sqlite/compare/v0.2.12...v0.2.13) (2025-08-31)
+
+
+
+
+### Bug Fixes:
+
+* generate_migrations --dev duplicating migration files (#173) by Georges Dubus
+
+* override default implementation of string trim test by Zach Daniel
+
 ## [v0.2.12](https://github.com/ash-project/ash_sqlite/compare/v0.2.11...v0.2.12) (2025-07-22)
 
 
