@@ -269,9 +269,14 @@ defmodule AshSqlite.MigrationGeneratorTest do
           uuid_primary_key(:id)
           attribute(:title, :string)
         end
+
+        relationships do
+          belongs_to(:creator, AshSqlite.Test.User)
+          belongs_to(:contributer, AshSqlite.Test.User)
+        end
       end
 
-      defdomain([Post])
+      defdomain([Post, AshSqlite.Test.User])
 
       Mix.shell(Mix.Shell.Process)
 
@@ -457,6 +462,50 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       # Down migration
       assert File.read!(file2) =~ ~S[rename table(:posts), :subject, to: :title]
+    end
+
+    @tag teste: "teste"
+    test "when renaming multiple relationships, it asks which field you are renaming it to, and renames it if you are" do
+      defposts do
+        attributes do
+          uuid_primary_key(:id)
+        end
+
+        relationships do
+          belongs_to(:creator2, AshSqlite.Test.User)
+          belongs_to(:contributer2, AshSqlite.Test.User)
+        end
+      end
+
+      defdomain([Post, AshSqlite.Test.User])
+
+      send(self(), {:mix_shell_input, :yes?, false})
+      send(self(), {:mix_shell_input, :yes?, true})
+      send(self(), {:mix_shell_input, :prompt, "creator2_id"})
+      send(self(), {:mix_shell_input, :yes?, true})
+
+      AshSqlite.MigrationGenerator.generate(Domain,
+        snapshot_path: "test_snapshots_path",
+        migration_path: "test_migration_path",
+        quiet: true,
+        format: false,
+        auto_name: true
+      )
+
+      assert [file1, file2] =
+               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+
+      File.write!("c:/tmp/mig.txt", File.read!(file1))
+      File.write!("c:/tmp/mig2.txt", File.read!(file2))
+      # Up migration
+      assert File.read!(file2) =~ ~S[rename table(:posts), :creator_id, to: :creator2_id]
+      assert File.read!(file2) =~ ~S[rename table(:posts), :contributer_id, to: :contributer2_id]
+
+      refute File.read!(file2) =~ ~S[alter table(:posts)]
+
+      # Down migration
+      assert File.read!(file2) =~ ~S[rename table(:posts), :creator2_id, to: :creator_id]
+      assert File.read!(file2) =~ ~S[rename table(:posts), :contributer2_id, to: :contributer_id]
     end
 
     test "when renaming a field, it asks which field you are renaming it to, and adds it if you arent" do
