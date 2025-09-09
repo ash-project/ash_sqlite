@@ -492,11 +492,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
         auto_name: true
       )
 
-      assert [file1, file2] =
+      assert [_file1, file2] =
                Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
 
-      File.write!("c:/tmp/mig.txt", File.read!(file1))
-      File.write!("c:/tmp/mig2.txt", File.read!(file2))
       # Up migration
       assert File.read!(file2) =~ ~S[rename table(:posts), :creator_id, to: :creator2_id]
       assert File.read!(file2) =~ ~S[rename table(:posts), :contributer_id, to: :contributer2_id]
