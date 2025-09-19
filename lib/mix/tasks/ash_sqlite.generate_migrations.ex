@@ -88,8 +88,8 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
 
   @shortdoc "Generates migrations, and stores a snapshot of your resources"
   def run(args) do
-    {opts, _} =
-      OptionParser.parse!(args,
+    {opts, _, _} =
+      OptionParser.parse(args,
         strict: [
           domains: :string,
           snapshot_path: :string,
