@@ -1,6 +1,14 @@
 defmodule AshSqlite.Reference do
   @moduledoc "Represents the configuration of a reference (i.e foreign key)."
-  defstruct [:relationship, :on_delete, :on_update, :name, :deferrable, ignore?: false]
+  defstruct [
+    :relationship,
+    :on_delete,
+    :on_update,
+    :name,
+    :deferrable,
+    :__spark_metadata__,
+    ignore?: false
+  ]
 
   def schema do
     [

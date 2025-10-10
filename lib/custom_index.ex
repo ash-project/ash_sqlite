@@ -11,7 +11,7 @@ defmodule AshSqlite.CustomIndex do
     :message
   ]
 
-  defstruct @fields
+  defstruct [:__spark_metadata__ | @fields]
 
   def fields, do: @fields
 

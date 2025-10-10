@@ -8,7 +8,7 @@ defmodule AshSqlite.Statement do
     :code?
   ]
 
-  defstruct @fields
+  defstruct [:__spark_metadata__ | @fields]
 
   def fields, do: @fields
 
