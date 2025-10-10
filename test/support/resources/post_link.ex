@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.Test.PostLink do
   @moduledoc false
   use Ash.Resource,

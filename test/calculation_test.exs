@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.CalculationTest do
   use AshSqlite.RepoCase, async: false
   alias AshSqlite.Test.{Account, Author, Comment, Post, User}

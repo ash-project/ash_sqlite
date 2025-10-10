@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.SelectTest do
   @moduledoc false
   use AshSqlite.RepoCase, async: false

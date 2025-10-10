@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.Mix.Helpers do
   @moduledoc false
   def domains!(opts, args) do

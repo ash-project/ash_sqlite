@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.Repo do
   @moduledoc """
   Resources that use `AshSqlite.DataLayer` use a `Repo` to access the database.

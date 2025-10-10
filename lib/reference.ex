@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.Reference do
   @moduledoc "Represents the configuration of a reference (i.e foreign key)."
   defstruct [

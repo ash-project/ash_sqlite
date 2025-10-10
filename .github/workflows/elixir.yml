@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 name: CI
 on:
   push:
@@ -11,5 +15,6 @@ jobs:
     uses: ash-project/ash/.github/workflows/ash-ci.yml@main
     with:
       sqlite: true
+      reuse: true
     secrets:
       hex_api_key: ${{ secrets.HEX_API_KEY }}

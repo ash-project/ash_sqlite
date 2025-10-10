@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 ExUnit.start()
 ExUnit.configure(stacktrace_depth: 100)
 
