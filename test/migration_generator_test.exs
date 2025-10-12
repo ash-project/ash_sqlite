@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.MigrationGeneratorTest do
   use AshSqlite.RepoCase, async: false
   @moduletag :migration

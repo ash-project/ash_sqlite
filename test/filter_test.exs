@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.FilterTest do
   use AshSqlite.RepoCase, async: false
   alias AshSqlite.Test.{Author, Comment, Post}

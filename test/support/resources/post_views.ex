@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.Test.PostView do
   @moduledoc false
   use Ash.Resource, domain: AshSqlite.Test.Domain, data_layer: AshSqlite.DataLayer

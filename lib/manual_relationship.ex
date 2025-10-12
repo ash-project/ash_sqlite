@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.ManualRelationship do
   @moduledoc "A behavior for sqlite-specific manual relationship functionality"
 

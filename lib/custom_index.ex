@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.CustomIndex do
   @moduledoc "Represents a custom index on the table backing a resource"
   @fields [
@@ -11,7 +15,7 @@ defmodule AshSqlite.CustomIndex do
     :message
   ]
 
-  defstruct @fields
+  defstruct [:__spark_metadata__ | @fields]
 
   def fields, do: @fields
 

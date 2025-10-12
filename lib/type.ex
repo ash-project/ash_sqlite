@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.Type do
   @moduledoc """
   Sqlite specific callbacks for `Ash.Type`.

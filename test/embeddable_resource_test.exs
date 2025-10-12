@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.EmbeddableResourceTest do
   @moduledoc false
   use AshSqlite.RepoCase, async: false

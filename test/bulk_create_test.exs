@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.BulkCreateTest do
   use AshSqlite.RepoCase, async: false
   alias AshSqlite.Test.Post

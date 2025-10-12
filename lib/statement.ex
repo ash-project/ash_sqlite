@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite.Statement do
   @moduledoc "Represents a custom statement to be run in generated migrations"
 
@@ -8,7 +12,7 @@ defmodule AshSqlite.Statement do
     :code?
   ]
 
-  defstruct @fields
+  defstruct [:__spark_metadata__ | @fields]
 
   def fields, do: @fields
 

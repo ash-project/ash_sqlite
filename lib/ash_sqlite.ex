@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2020 Zach Daniel
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshSqlite do
   @moduledoc """
   The AshSqlite extension gives you tools to map a resource to a sqlite database table.

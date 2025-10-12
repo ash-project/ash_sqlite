@@ -1,3 +1,9 @@
+<!--
+SPDX-FileCopyrightText: 2020 Zach Daniel
+
+SPDX-License-Identifier: MIT
+-->
+
 # Testing With Sqlite
 
 Testing resources with SQLite generally requires passing `async?: false` to
