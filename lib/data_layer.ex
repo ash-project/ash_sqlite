@@ -1947,12 +1947,12 @@ defmodule AshSqlite.DataLayer do
         if binding_type in types do
           if name_match do
             if data[:name] == name_match do
-              if Ash.SatSolver.synonymous_relationship_paths?(resource, candidate_path, path) do
+              if Ash.Resource.Info.synonymous_relationship_paths?(resource, candidate_path, path) do
                 binding
               end
             end
           else
-            if Ash.SatSolver.synonymous_relationship_paths?(resource, candidate_path, path) do
+            if Ash.Resource.Info.synonymous_relationship_paths?(resource, candidate_path, path) do
               binding
             else
               false
