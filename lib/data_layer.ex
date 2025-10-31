@@ -1566,9 +1566,9 @@ defmodule AshSqlite.DataLayer do
                       :ok
                   end
 
-                  {:ok, [changeset.data]}
+                  {:ok, [add_bulk_metadata(changeset.data, changeset)]}
                 else
-                  {:ok, repo.all(query, repo_opts)}
+                  {:ok, Enum.map(repo.all(query, repo_opts), &add_bulk_metadata(&1, changeset))}
                 end
               else
                 :ok
@@ -1616,9 +1616,10 @@ defmodule AshSqlite.DataLayer do
                   Map.merge(changeset.data, Map.take(result, modifying))
                   |> Map.update!(:aggregates, &Map.merge(&1, result.aggregates))
                   |> Map.update!(:calculations, &Map.merge(&1, result.calculations))
+                  |> add_bulk_metadata(changeset)
                   |> then(&{:ok, [&1]})
                 else
-                  {:ok, results}
+                  {:ok, Enum.map(results, &add_bulk_metadata(&1, changeset))}
                 end
               else
                 :ok
@@ -1700,7 +1701,8 @@ defmodule AshSqlite.DataLayer do
             )
 
           if options[:return_records?] do
-            {:ok, AshSql.Query.remap_mapped_fields(results, query)}
+            results = AshSql.Query.remap_mapped_fields(results, query)
+            {:ok, Enum.map(results, &add_bulk_metadata(&1, changeset))}
           else
             :ok
           end
@@ -2033,6 +2035,35 @@ defmodule AshSqlite.DataLayer do
       {table, resource}
     else
       resource
+    end
+  end
+
+  defp add_bulk_metadata(record, changeset) do
+    cond do
+      changeset.context[:bulk_update] ->
+        record
+        |> Ash.Resource.put_metadata(
+          :bulk_update_index,
+          changeset.context.bulk_update.index
+        )
+        |> Ash.Resource.put_metadata(
+          :bulk_action_ref,
+          changeset.context.bulk_update.ref
+        )
+
+      changeset.context[:bulk_destroy] ->
+        record
+        |> Ash.Resource.put_metadata(
+          :bulk_destroy_index,
+          changeset.context.bulk_destroy.index
+        )
+        |> Ash.Resource.put_metadata(
+          :bulk_action_ref,
+          changeset.context.bulk_destroy.ref
+        )
+
+      true ->
+        record
     end
   end
 end

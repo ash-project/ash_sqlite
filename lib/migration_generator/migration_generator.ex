@@ -861,6 +861,7 @@ defmodule AshSqlite.MigrationGenerator do
           migration_path
           |> Path.join("*_migrate_resources*")
           |> Path.wildcard()
+          |> Enum.reject(&String.contains?(&1, "_dev.exs"))
           |> Enum.map(fn path ->
             path
             |> Path.basename()
@@ -2010,6 +2011,14 @@ defmodule AshSqlite.MigrationGenerator do
       snapshot_folder
       |> File.ls!()
       |> Enum.filter(&String.ends_with?(&1, ".json"))
+      |> then(fn files ->
+        if opts.dev do
+          files
+        else
+          # Exclude dev snapshots when not in dev mode
+          Enum.reject(files, &String.contains?(&1, "_dev.json"))
+        end
+      end)
       |> case do
         [] ->
           get_old_snapshot(folder, snapshot)
