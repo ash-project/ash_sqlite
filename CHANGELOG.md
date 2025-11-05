@@ -11,6 +11,17 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.14](https://github.com/ash-project/ash_sqlite/compare/v0.2.13...v0.2.14) (2025-11-05)
+
+
+
+
+### Bug Fixes:
+
+* Get rid of deprecation warnings (#188) by Jonatan Männchen
+
+* ignore unkown option in generate_migrations task #180 (#181) by Abdessabour Moutik
+
 ## [v0.2.13](https://github.com/ash-project/ash_sqlite/compare/v0.2.12...v0.2.13) (2025-08-31)
 
 
