@@ -735,8 +735,8 @@ defmodule AshSqlite.DataLayer do
                 Enum.zip_with(results, changesets, fn result, changeset ->
                   Ash.Resource.put_metadata(
                     result,
-                    :bulk_create_index,
-                    changeset.context.bulk_create.index
+                    :bulk_action_ref,
+                    changeset.context.bulk_create.ref
                   )
                 end)}}
           end

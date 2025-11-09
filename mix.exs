@@ -140,7 +140,7 @@ defmodule AshSqlite.MixProject do
       {:ecto_sqlite3, "~> 0.12"},
       {:ecto, "~> 3.13"},
       {:jason, "~> 1.0"},
-      {:ash, ash_version("~> 3.7")},
+      {:ash, ash_version("~> 3.9")},
       {:ash_sql, ash_sql_version("~> 0.2 and >= 0.2.20")},
       {:igniter, "~> 0.6 and >= 0.6.14", optional: true},
       {:simple_sat, ">= 0.0.0", only: [:dev, :test]},
