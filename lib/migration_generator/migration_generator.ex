@@ -351,8 +351,8 @@ defmodule AshSqlite.MigrationGenerator do
 
               You have migrations remaining that were generated with the --dev flag.
 
-              Run `mix ash.codegen <name>` to remove the dev migraitons and replace them
-              with production ready migrations.
+              Run `mix ash.codegen <name>` to remove the dev migrations and replace them
+              with production-ready migrations.
               """)
 
               exit({:shutdown, 1})
@@ -2009,7 +2009,10 @@ defmodule AshSqlite.MigrationGenerator do
     if File.exists?(snapshot_folder) do
       snapshot_folder
       |> File.ls!()
-      |> Enum.filter(&String.ends_with?(&1, ".json"))
+      |> Enum.filter(
+        &(String.match?(&1, ~r/^\d{14}\.json$/) or
+            (opts.dev and String.match?(&1, ~r/^\d{14}\_dev.json$/)))
+      )
       |> case do
         [] ->
           get_old_snapshot(folder, snapshot)
