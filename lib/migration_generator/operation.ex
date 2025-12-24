@@ -366,10 +366,10 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     # We only need to drop it before altering an attribute with `references/3`
     defstruct [:attribute, :table, :multitenancy, :direction, no_phase: true]
 
-    import Helper
-
     def up(%{table: table, attribute: %{references: reference}, direction: :up}) do
-      "drop constraint(:#{as_atom(table)}, #{join([inspect(reference.name)])})"
+      ~s[raise "SQLite does not support dropping foreign key constraints. " <>
+          "You will need to manually recreate the `#{table}` table without the `#{reference.name}` constraint. " <>
+          "See https://www.techonthenet.com/sqlite/foreign_keys/drop.php for guidance."]
     end
 
     def up(_) do
@@ -381,7 +381,9 @@ defmodule AshSqlite.MigrationGenerator.Operation do
           attribute: %{references: reference},
           direction: :down
         }) do
-      "drop constraint(:#{as_atom(table)}, #{join([inspect(reference.name)])})"
+      ~s[raise "SQLite does not support dropping foreign key constraints. " <>
+          "You will need to manually recreate the `#{table}` table without the `#{reference.name}` constraint. " <>
+          "See https://www.techonthenet.com/sqlite/foreign_keys/drop.php for guidance."]
     end
 
     def down(_) do

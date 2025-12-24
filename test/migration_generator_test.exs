@@ -740,14 +740,86 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert file =~
                ~S[references(:posts, column: :id, name: "special_post_fkey", type: :uuid, on_delete: :delete_all, on_update: :update_all)]
 
-      assert file =~ ~S[drop constraint(:posts, "posts_post_id_fkey")]
+      assert file =~ ~S[raise "SQLite does not support dropping foreign key constraints.]
+      assert file =~ ~S[posts_post_id_fkey]
 
       assert [_, down_code] = String.split(file, "def down do")
 
-      assert [_, after_drop] =
-               String.split(down_code, "drop constraint(:posts, \"special_post_fkey\")")
+      assert down_code =~ ~S[raise "SQLite does not support dropping foreign key constraints.]
+      assert down_code =~ ~S[special_post_fkey]
+      assert down_code =~ ~S[references(:posts]
+    end
 
-      assert after_drop =~ ~S[references(:posts]
+    test "dropping foreign keys raises with guidance since SQLite doesn't support it" do
+      defposts do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string)
+        end
+      end
+
+      defposts Post2 do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string)
+        end
+
+        relationships do
+          belongs_to(:post, Post)
+        end
+      end
+
+      defdomain([Post, Post2])
+
+      AshSqlite.MigrationGenerator.generate(Domain,
+        snapshot_path: "test_snapshots_path",
+        migration_path: "test_migration_path",
+        quiet: true,
+        format: false,
+        auto_name: true
+      )
+
+      # Modify the reference to trigger constraint modification
+      defposts Post2 do
+        sqlite do
+          references do
+            reference(:post, name: "new_post_fkey", on_delete: :delete)
+          end
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string)
+        end
+
+        relationships do
+          belongs_to(:post, Post)
+        end
+      end
+
+      AshSqlite.MigrationGenerator.generate(Domain,
+        snapshot_path: "test_snapshots_path",
+        migration_path: "test_migration_path",
+        quiet: true,
+        format: false,
+        auto_name: true
+      )
+
+      assert [_file1, file2] =
+               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+
+      file_contents = File.read!(file2)
+
+      # Up migration should raise with helpful message
+      assert file_contents =~ ~S[raise "SQLite does not support dropping foreign key constraints.]
+      assert file_contents =~ ~S[posts_post_id_fkey]
+      assert file_contents =~ ~S[https://www.techonthenet.com/sqlite/foreign_keys/drop.php]
+
+      # Down migration should also raise
+      [_, down_code] = String.split(file_contents, "def down do")
+
+      assert down_code =~ ~S[raise "SQLite does not support dropping foreign key constraints.]
+      assert down_code =~ ~S[new_post_fkey]
     end
   end
 
@@ -961,7 +1033,10 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert [before_index_drop, after_index_drop] =
                String.split(file, ~S[drop constraint("posts", "posts_pkey")], parts: 2)
 
-      assert before_index_drop =~ ~S[drop constraint(:comments, "comments_post_id_fkey")]
+      assert before_index_drop =~
+               ~S[raise "SQLite does not support dropping foreign key constraints.]
+
+      assert before_index_drop =~ ~S[comments_post_id_fkey]
 
       assert after_index_drop =~ ~S[modify :id, :uuid, null: true, primary_key: false]
 
