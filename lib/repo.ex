@@ -133,6 +133,10 @@ defmodule AshSqlite.Repo do
         Enum.map(value, &to_ecto/1)
       end
 
+      def to_ecto(%Ecto.Changeset{} = changeset) do
+        Map.put(changeset, :data, to_ecto(changeset.data))
+      end
+
       def to_ecto(%resource{} = record) do
         if Spark.Dsl.is?(resource, Ash.Resource) do
           resource
