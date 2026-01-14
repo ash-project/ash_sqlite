@@ -61,11 +61,6 @@ defmodule Mix.Tasks.AshSqlite.Rollback do
 
     repos = AshSqlite.Mix.Helpers.repos!(opts, args)
 
-    repo_args =
-      Enum.flat_map(repos, fn repo ->
-        ["-r", to_string(repo)]
-      end)
-
     rest_opts =
       args
       |> AshSqlite.Mix.Helpers.delete_arg("--domains")
@@ -76,7 +71,7 @@ defmodule Mix.Tasks.AshSqlite.Rollback do
     for repo <- repos do
       Mix.Task.run(
         "ecto.rollback",
-        repo_args ++ rest_opts ++ ["--migrations-path", migrations_path(opts, repo)]
+        ["-r", to_string(repo)] ++ rest_opts ++ ["--migrations-path", migrations_path(opts, repo)]
       )
 
       Mix.Task.reenable("ecto.rollback")
