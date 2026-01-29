@@ -8,6 +8,27 @@ defmodule AshSqlite.Test.UpdateTest do
 
   require Ash.Query
 
+  test "updating a map attribute with update_timestamp works" do
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{
+        title: "test",
+        stuff: %{}
+      })
+      |> Ash.create!()
+
+    assert post.stuff == %{}
+
+    updated =
+      post
+      |> Ash.Changeset.for_update(:update, %{
+        stuff: %{"upload_status" => "testing"}
+      })
+      |> Ash.update!()
+
+    assert updated.stuff == %{"upload_status" => "testing"}
+  end
+
   test "updating a record when multiple records are in the table will only update the desired record" do
     # This test is here because of a previous bug in update that caused
     # all records in the table to be updated.
