@@ -251,6 +251,18 @@ defmodule AshSqlite.CalculationTest do
            |> Ash.read_one!()
   end
 
+  test "string_length works" do
+    Post
+    |> Ash.Changeset.for_create(:create, %{
+      title: "hello"
+    })
+    |> Ash.create!()
+
+    assert Post
+           |> Ash.Query.filter(string_length(title) == 5)
+           |> Ash.read_one!()
+  end
+
   test "runtime expression calcs" do
     author =
       Author
