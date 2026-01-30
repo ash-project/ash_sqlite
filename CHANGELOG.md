@@ -11,6 +11,29 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.15](https://github.com/ash-project/ash_sqlite/compare/v0.2.14...v0.2.15) (2026-01-30)
+
+
+
+
+### Bug Fixes:
+
+* handle map comparisons via json encoding. by Zach Daniel
+
+* use custom string_length implementation for SQLite by Zach Daniel
+
+* only migrate/rollback one repo at a time (#199) by ydo-kollins
+
+* missing case in to_ecto (#198) by spicychickensauce
+
+* ensure we always clean dev migrations by Zach Daniel
+
+### Improvements:
+
+* raise clearer error on unsupported foreign key drops in SQLite migrations by Zach Daniel
+
+* update to use bulk refs from latest ash by Zach Daniel
+
 ## [v0.2.14](https://github.com/ash-project/ash_sqlite/compare/v0.2.13...v0.2.14) (2025-11-05)
 
 

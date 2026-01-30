@@ -29,7 +29,7 @@ A working [SQLite](https://sqlite.org/) installation. Verify installation with `
 
 Add the `:ash_sqlite` dependency to your application
 
-`{:ash_sqlite, "~> 0.2.14"}`
+`{:ash_sqlite, "~> 0.2.15"}`
 
 Add `:ash_sqlite` to your `.formatter.exs` file
 
