@@ -109,6 +109,35 @@ defmodule AshSqlite.Test.LoadTest do
              results
   end
 
+  describe "no_attributes relationships with parent filter" do
+    test "can load no_attributes? relationship with parent() in filter" do
+      post1 =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "matching"})
+        |> Ash.create!()
+
+      post2 =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "matching"})
+        |> Ash.create!()
+
+      _post3 =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "no match"})
+        |> Ash.create!()
+
+      post2_id = post2.id
+
+      results =
+        Post
+        |> Ash.Query.load(:posts_with_matching_title)
+        |> Ash.Query.filter(id == ^post1.id)
+        |> Ash.read!()
+
+      assert [%{posts_with_matching_title: [%{id: ^post2_id}]}] = results
+    end
+  end
+
   describe "lateral join loads" do
     # uncomment when lateral join is supported
     # it does not necessarily have to be implemented *exactly* as lateral join

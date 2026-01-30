@@ -65,6 +65,10 @@ defmodule AshSqlite.Test.Post do
       change(filter(expr(title == "fred")))
     end
 
+    update :update_stuff do
+      accept [:stuff]
+    end
+
     destroy :destroy_only_freds do
       change(filter(expr(title == "fred")))
     end
@@ -152,6 +156,12 @@ defmodule AshSqlite.Test.Post do
     )
 
     has_many(:views, AshSqlite.Test.PostView, public?: true)
+
+    has_many :posts_with_matching_title, __MODULE__ do
+      public?(true)
+      no_attributes?(true)
+      filter(expr(title == parent(title) and id != parent(id)))
+    end
   end
 
   validations do

@@ -200,6 +200,32 @@ defmodule AshSqlite.SqlImplementation do
     {:ok, expr, acc}
   end
 
+  # Handle comparisons involving map values - SQLite can't directly compare maps,
+  # so we convert both sides to JSON strings for comparison
+  def expr(
+        query,
+        %Ash.Query.Operator.NotEq{left: left, right: right, embedded?: pred_embedded?},
+        bindings,
+        embedded?,
+        acc,
+        type
+      )
+      when is_non_struct_map(left) or is_non_struct_map(right) do
+    handle_map_comparison(query, :!=, left, right, pred_embedded?, bindings, embedded?, acc, type)
+  end
+
+  def expr(
+        query,
+        %Ash.Query.Operator.Eq{left: left, right: right, embedded?: pred_embedded?},
+        bindings,
+        embedded?,
+        acc,
+        type
+      )
+      when is_non_struct_map(left) or is_non_struct_map(right) do
+    handle_map_comparison(query, :==, left, right, pred_embedded?, bindings, embedded?, acc, type)
+  end
+
   @impl true
   def expr(
         _query,
@@ -211,6 +237,57 @@ defmodule AshSqlite.SqlImplementation do
       ) do
     :error
   end
+
+  defp handle_map_comparison(
+         query,
+         operator,
+         left,
+         right,
+         pred_embedded?,
+         bindings,
+         embedded?,
+         acc,
+         type
+       ) do
+    {left_expr, acc} = as_json(query, left, pred_embedded?, bindings, embedded?, acc, type)
+    {right_expr, acc} = as_json(query, right, pred_embedded?, bindings, embedded?, acc, type)
+
+    result =
+      case operator do
+        :== -> Ecto.Query.dynamic(^left_expr == ^right_expr)
+        :!= -> Ecto.Query.dynamic(^left_expr != ^right_expr)
+      end
+
+    {:ok, result, acc}
+  end
+
+  defp as_json(query, value, pred_embedded?, bindings, embedded?, acc, type) do
+    if is_plain_map?(value) do
+      AshSql.Expr.dynamic_expr(
+        query,
+        Jason.encode!(value),
+        bindings,
+        pred_embedded? || embedded?,
+        :string,
+        acc
+      )
+    else
+      AshSql.Expr.dynamic_expr(
+        query,
+        %Ash.Query.Function.Fragment{
+          embedded?: pred_embedded?,
+          arguments: [raw: "json(", expr: value, raw: ")"]
+        },
+        bindings,
+        embedded?,
+        type,
+        acc
+      )
+    end
+  end
+
+  defp is_plain_map?(value) when is_map(value) and not is_struct(value), do: true
+  defp is_plain_map?(_), do: false
 
   @impl true
   def type_expr(expr, nil), do: expr

@@ -29,6 +29,51 @@ defmodule AshSqlite.Test.UpdateTest do
     assert updated.stuff == %{"upload_status" => "testing"}
   end
 
+  test "updating a map attribute with a specific update action works" do
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{
+        title: "test",
+        stuff: %{}
+      })
+      |> Ash.create!()
+
+    assert post.stuff == %{}
+
+    updated =
+      post
+      |> Ash.Changeset.for_update(:update_stuff, %{
+        stuff: %{"upload_status" => "testing"}
+      })
+      |> Ash.update!()
+
+    assert updated.stuff == %{"upload_status" => "testing"}
+  end
+
+  test "updating a map attribute on resource without authorizer triggers atomic update and works" do
+    alias AshSqlite.Test.Device
+
+    device =
+      Device
+      |> Ash.Changeset.for_create(:create, %{
+        id: "1",
+        name: "test",
+        entity: %{}
+      })
+      |> Ash.create!()
+
+    assert device.entity == %{}
+
+    updated =
+      device
+      |> Ash.Changeset.for_update(:update_entity, %{
+        entity: %{"upload_status" => "testing"}
+      })
+      |> Ash.update!()
+
+    assert updated.entity == %{"upload_status" => "testing"}
+  end
+
   test "updating a record when multiple records are in the table will only update the desired record" do
     # This test is here because of a previous bug in update that caused
     # all records in the table to be updated.
