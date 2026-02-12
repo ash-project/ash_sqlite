@@ -66,7 +66,7 @@ defmodule AshSqlite.Test.Post do
     end
 
     update :update_stuff do
-      accept [:stuff]
+      accept([:stuff])
     end
 
     destroy :destroy_only_freds do
