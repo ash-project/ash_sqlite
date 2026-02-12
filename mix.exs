@@ -20,17 +20,7 @@ defmodule AshSqlite.MixProject do
       deps: deps(),
       description: @description,
       elixirc_paths: elixirc_paths(Mix.env()),
-      preferred_cli_env: [
-        coveralls: :test,
-        "coveralls.github": :test,
-        "test.create": :test,
-        "test.migrate": :test,
-        "test.rollback": :test,
-        "test.check_migrations": :test,
-        "test.drop": :test,
-        "test.generate_migrations": :test,
-        "test.reset": :test
-      ],
+      cli: cli(),
       dialyzer: [
         plt_add_apps: [:ecto, :ash, :mix]
       ],
@@ -40,6 +30,22 @@ defmodule AshSqlite.MixProject do
       source_url: "https://github.com/ash-project/ash_sqlite",
       homepage_url: "https://github.com/ash-project/ash_sqlite",
       consolidate_protocols: Mix.env() != :test
+    ]
+  end
+
+  defp cli do
+    [
+      preferred_envs: [
+        coveralls: :test,
+        "coveralls.github": :test,
+        "test.create": :test,
+        "test.migrate": :test,
+        "test.rollback": :test,
+        "test.check_migrations": :test,
+        "test.drop": :test,
+        "test.generate_migrations": :test,
+        "test.reset": :test
+      ]
     ]
   end
 
