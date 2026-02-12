@@ -5,10 +5,11 @@
 defmodule AshSqlite.DevMigrationsTest do
   use AshSqlite.RepoCase, async: false
   @moduletag :migration
+  @moduletag :tmp_dir
 
   alias Ecto.Adapters.SQL.Sandbox
 
-  setup do
+  setup %{tmp_dir: tmp_dir} do
     current_shell = Mix.shell()
 
     :ok = Mix.shell(Mix.Shell.Process)
@@ -19,6 +20,11 @@ defmodule AshSqlite.DevMigrationsTest do
 
     Sandbox.checkout(AshSqlite.DevTestRepo)
     Sandbox.mode(AshSqlite.DevTestRepo, {:shared, self()})
+
+    %{
+      snapshot_path: Path.join(tmp_dir, "snapshots"),
+      migration_path: Path.join(tmp_dir, "migrations")
+    }
   end
 
   defmacrop defresource(mod, do: body) do
@@ -103,20 +109,19 @@ defmodule AshSqlite.DevMigrationsTest do
         Enum.each(new_migration_files, &File.rm!(Path.join(migrations_dev_path, &1)))
       end
 
-      # Clean up test directories
-      File.rm_rf!("test_snapshots_path")
-      File.rm_rf!("test_migration_path")
-
       try do
         AshSqlite.DevTestRepo.query!("DROP TABLE IF EXISTS posts")
-      rescue
-        _ -> :ok
+      catch
+        _, _ -> :ok
       end
     end)
   end
 
   describe "--dev option" do
-    test "generates dev migration" do
+    test "generates dev migration", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -127,32 +132,35 @@ defmodule AshSqlite.DevMigrationsTest do
       defdomain([Post])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         dev: true
       )
 
       assert [dev_file] =
-               Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+               Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
 
       assert String.contains?(dev_file, "_dev.exs")
       contents = File.read!(dev_file)
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         auto_name: true
       )
 
       assert [file] =
-               Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+               Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
 
       refute String.contains?(file, "_dev.exs")
 
       assert contents == File.read!(file)
     end
 
-    test "removes dev migrations when generating regular migrations" do
+    test "removes dev migrations when generating regular migrations", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -164,31 +172,34 @@ defmodule AshSqlite.DevMigrationsTest do
 
       # Generate dev migration first
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         dev: true
       )
 
       assert [dev_file] =
-               Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+               Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
 
       assert String.contains?(dev_file, "_dev.exs")
 
       # Generate regular migration - should remove dev migration
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         auto_name: true
       )
 
       # Should only have regular migration now
-      files = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+      files = Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
       assert length(files) == 1
       assert [regular_file] = files
       refute String.contains?(regular_file, "_dev.exs")
     end
 
-    test "requires name when not using dev option" do
+    test "requires name when not using dev option", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -200,8 +211,8 @@ defmodule AshSqlite.DevMigrationsTest do
 
       assert_raise RuntimeError, ~r/Name must be provided/, fn ->
         AshSqlite.MigrationGenerator.generate(Domain,
-          snapshot_path: "test_snapshots_path",
-          migration_path: "test_migration_path"
+          snapshot_path: snapshot_path,
+          migration_path: migration_path
         )
       end
     end

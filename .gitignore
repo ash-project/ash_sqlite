@@ -5,6 +5,8 @@
 # The directory Mix will write compiled artifacts to.
 /_build/
 
+/tmp/
+
 # If you run "mix test --cover", coverage assets end up here.
 /cover/
 

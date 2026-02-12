@@ -5,8 +5,23 @@
 defmodule AshSqlite.MigrationGeneratorTest do
   use AshSqlite.RepoCase, async: false
   @moduletag :migration
+  @moduletag :tmp_dir
 
   import ExUnit.CaptureLog
+
+  setup %{tmp_dir: tmp_dir} do
+    current_shell = Mix.shell()
+    :ok = Mix.shell(Mix.Shell.Process)
+
+    on_exit(fn ->
+      Mix.shell(current_shell)
+    end)
+
+    %{
+      snapshot_path: Path.join(tmp_dir, "snapshots"),
+      migration_path: Path.join(tmp_dir, "migrations")
+    }
+  end
 
   defmacrop defposts(mod \\ Post, do: body) do
     quote do
@@ -58,12 +73,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
   end
 
   describe "creating initial snapshots" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-
+    setup %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defposts do
         sqlite do
           migration_types(second_title: {:varchar, 16})
@@ -88,11 +98,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defdomain([Post])
 
-      Mix.shell(Mix.Shell.Process)
-
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
@@ -101,12 +109,15 @@ defmodule AshSqlite.MigrationGeneratorTest do
       :ok
     end
 
-    test "the migration sets up resources correctly" do
+    test "the migration sets up resources correctly", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       # the snapshot exists and contains valid json
-      assert File.read!(Path.wildcard("test_snapshots_path/test_repo/posts/*.json"))
+      assert File.read!(Path.wildcard("#{snapshot_path}/test_repo/posts/*.json"))
              |> Jason.decode!(keys: :atoms!)
 
-      assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+      assert [file] = Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
 
       file_contents = File.read!(file)
 
@@ -150,12 +161,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
   end
 
   describe "strict table" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-
+    setup %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defposts do
         sqlite do
           strict?(true)
@@ -169,11 +175,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defdomain([Post])
 
-      Mix.shell(Mix.Shell.Process)
-
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
@@ -182,12 +186,15 @@ defmodule AshSqlite.MigrationGeneratorTest do
       :ok
     end
 
-    test "creates the table with the strict option" do
+    test "creates the table with the strict option", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       # the snapshot exists and contains valid json
-      assert File.read!(Path.wildcard("test_snapshots_path/test_repo/posts/*.json"))
+      assert File.read!(Path.wildcard("#{snapshot_path}/test_repo/posts/*.json"))
              |> Jason.decode!(keys: :atoms!)
 
-      assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+      assert [file] = Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
 
       file_contents = File.read!(file)
 
@@ -197,12 +204,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
   end
 
   describe "dev migrations" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-
+    setup %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defposts do
         identities do
           identity(:title, [:title])
@@ -216,11 +218,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defdomain([Post])
 
-      Mix.shell(Mix.Shell.Process)
-
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true,
@@ -230,7 +230,10 @@ defmodule AshSqlite.MigrationGeneratorTest do
       :ok
     end
 
-    test "running it again doesn't create a new file" do
+    test "running it again doesn't create a new file", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         identities do
           identity(:title, [:title])
@@ -245,25 +248,20 @@ defmodule AshSqlite.MigrationGeneratorTest do
       defdomain([Post])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true,
         dev: true
       )
 
-      assert [_] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+      assert [_] = Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
     end
   end
 
   describe "creating follow up migrations" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-
+    setup %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defposts do
         identities do
           identity(:title, [:title])
@@ -277,11 +275,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defdomain([Post])
 
-      Mix.shell(Mix.Shell.Process)
-
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
@@ -290,7 +286,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
       :ok
     end
 
-    test "without change" do
+    test "without change", %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defposts do
         identities do
           identity(:title, [:title])
@@ -305,17 +301,20 @@ defmodule AshSqlite.MigrationGeneratorTest do
       defdomain([Post])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
-      assert [_] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+      assert [_] = Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
     end
 
-    test "when renaming an index, it is properly renamed" do
+    test "when renaming an index, it is properly renamed", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         sqlite do
           identity_index_names(title: "titles_r_unique_dawg")
@@ -334,21 +333,24 @@ defmodule AshSqlite.MigrationGeneratorTest do
       defdomain([Post])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
       assert [_file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+               Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
 
       assert File.read!(file2) =~
                ~S[ALTER INDEX posts_title_index RENAME TO titles_r_unique_dawg]
     end
 
-    test "when adding a field, it adds the field" do
+    test "when adding a field, it adds the field", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         identities do
           identity(:title, [:title])
@@ -364,21 +366,24 @@ defmodule AshSqlite.MigrationGeneratorTest do
       defdomain([Post])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
       assert [_file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+               Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
 
       assert File.read!(file2) =~
                ~S[add :name, :text, null: false]
     end
 
-    test "when renaming a field, it asks if you are renaming it, and renames it if you are" do
+    test "when renaming a field, it asks if you are renaming it, and renames it if you are", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -391,20 +396,23 @@ defmodule AshSqlite.MigrationGeneratorTest do
       send(self(), {:mix_shell_input, :yes?, true})
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
       assert [_file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+               Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
 
       assert File.read!(file2) =~ ~S[rename table(:posts), :title, to: :name]
     end
 
-    test "when renaming a field, it asks if you are renaming it, and adds it if you aren't" do
+    test "when renaming a field, it asks if you are renaming it, and adds it if you aren't", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -417,21 +425,22 @@ defmodule AshSqlite.MigrationGeneratorTest do
       send(self(), {:mix_shell_input, :yes?, false})
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
       assert [_file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+               Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
 
       assert File.read!(file2) =~
                ~S[add :name, :text, null: false]
     end
 
-    test "when renaming a field, it asks which field you are renaming it to, and renames it if you are" do
+    test "when renaming a field, it asks which field you are renaming it to, and renames it if you are",
+         %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -446,15 +455,15 @@ defmodule AshSqlite.MigrationGeneratorTest do
       send(self(), {:mix_shell_input, :prompt, "subject"})
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
       assert [_file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+               Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
 
       # Up migration
       assert File.read!(file2) =~ ~S[rename table(:posts), :title, to: :subject]
@@ -463,7 +472,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert File.read!(file2) =~ ~S[rename table(:posts), :subject, to: :title]
     end
 
-    test "when renaming a field, it asks which field you are renaming it to, and adds it if you arent" do
+    test "when renaming a field, it asks which field you are renaming it to, and adds it if you arent",
+         %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -477,21 +487,22 @@ defmodule AshSqlite.MigrationGeneratorTest do
       send(self(), {:mix_shell_input, :yes?, false})
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
       assert [_file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+               Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
 
       assert File.read!(file2) =~
                ~S[add :subject, :text, null: false]
     end
 
-    test "when an attribute exists only on some of the resources that use the same table, it isn't marked as null: false" do
+    test "when an attribute exists only on some of the resources that use the same table, it isn't marked as null: false",
+         %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -509,15 +520,15 @@ defmodule AshSqlite.MigrationGeneratorTest do
       defdomain([Post, Post2])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
       assert [_file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+               Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
 
       assert File.read!(file2) =~
                ~S[add :example, :text] <> "\n"
@@ -527,12 +538,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
   end
 
   describe "auto incrementing integer, when generated" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-
+    setup %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defposts do
         attributes do
           attribute(:id, :integer, generated?: true, allow_nil?: false, primary_key?: true)
@@ -542,11 +548,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defdomain([Post])
 
-      Mix.shell(Mix.Shell.Process)
-
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
@@ -555,8 +559,10 @@ defmodule AshSqlite.MigrationGeneratorTest do
       :ok
     end
 
-    test "when an integer is generated and default nil, it is a bigserial" do
-      assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+    test "when an integer is generated and default nil, it is a bigserial", %{
+      migration_path: migration_path
+    } do
+      assert [file] = Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
 
       assert File.read!(file) =~
                ~S[add :id, :bigserial, null: false, primary_key: true]
@@ -580,30 +586,32 @@ defmodule AshSqlite.MigrationGeneratorTest do
       [domain: Domain]
     end
 
-    test "raises an error on pending codegen", %{domain: domain} do
+    test "raises an error on pending codegen", %{
+      domain: domain,
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       assert_raise Ash.Error.Framework.PendingCodegen, fn ->
         AshSqlite.MigrationGenerator.generate(domain,
-          snapshot_path: "test_snapshot_path",
-          migration_path: "test_migration_path",
+          snapshot_path: snapshot_path,
+          migration_path: migration_path,
           check: true,
           auto_name: true
         )
       end
 
-      refute File.exists?(Path.wildcard("test_migration_path2/**/*_migrate_resources*.exs"))
-      refute File.exists?(Path.wildcard("test_snapshots_path2/test_repo/posts/*.json"))
+      refute File.exists?(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
+      refute File.exists?(Path.wildcard("#{snapshot_path}/test_repo/posts/*.json"))
     end
   end
 
   describe "references" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-    end
+    setup do: :ok
 
-    test "references are inferred automatically" do
+    test "references are inferred automatically", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -626,20 +634,23 @@ defmodule AshSqlite.MigrationGeneratorTest do
       defdomain([Post, Post2])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
-      assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+      assert [file] = Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
 
       assert File.read!(file) =~
                ~S[references(:posts, column: :id, name: "posts_post_id_fkey", type: :uuid)]
     end
 
-    test "references are inferred automatically if the attribute has a different type" do
+    test "references are inferred automatically if the attribute has a different type", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         attributes do
           attribute(:id, :string, primary_key?: true, allow_nil?: false)
@@ -662,20 +673,23 @@ defmodule AshSqlite.MigrationGeneratorTest do
       defdomain([Post, Post2])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
-      assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+      assert [file] = Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
 
       assert File.read!(file) =~
                ~S[references(:posts, column: :id, name: "posts_post_id_fkey", type: :text)]
     end
 
-    test "when modified, the foreign key is dropped before modification" do
+    test "when modified, the foreign key is dropped before modification", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -698,8 +712,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
       defdomain([Post, Post2])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
@@ -723,15 +737,15 @@ defmodule AshSqlite.MigrationGeneratorTest do
       end
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
       assert file =
-               "test_migration_path/**/*_migrate_resources*.exs"
+               "#{migration_path}/**/*_migrate_resources*.exs"
                |> Path.wildcard()
                |> Enum.sort()
                |> Enum.at(1)
@@ -750,7 +764,10 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert down_code =~ ~S[references(:posts]
     end
 
-    test "dropping foreign keys raises with guidance since SQLite doesn't support it" do
+    test "dropping foreign keys raises with guidance since SQLite doesn't support it", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -772,8 +789,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
       defdomain([Post, Post2])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
@@ -798,15 +815,15 @@ defmodule AshSqlite.MigrationGeneratorTest do
       end
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
       assert [_file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+               Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
 
       file_contents = File.read!(file2)
 
@@ -824,12 +841,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
   end
 
   describe "polymorphic resources" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-
+    setup %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defmodule Comment do
         use Ash.Resource,
           domain: nil,
@@ -884,8 +896,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
       defdomain([Post, Comment])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
@@ -894,8 +906,10 @@ defmodule AshSqlite.MigrationGeneratorTest do
       [domain: Domain]
     end
 
-    test "it uses the relationship's table context if it is set" do
-      assert [file] = Path.wildcard("test_migration_path/**/*_migrate_resources*.exs")
+    test "it uses the relationship's table context if it is set", %{
+      migration_path: migration_path
+    } do
+      assert [file] = Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
 
       assert File.read!(file) =~
                ~S[references(:post_comments, column: :id, name: "posts_best_comment_id_fkey", type: :uuid)]
@@ -903,14 +917,12 @@ defmodule AshSqlite.MigrationGeneratorTest do
   end
 
   describe "default values" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-    end
+    setup do: :ok
 
-    test "when default value is specified that has no impl" do
+    test "when default value is specified that has no impl", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -922,15 +934,15 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       capture_log(fn ->
         AshSqlite.MigrationGenerator.generate(Domain,
-          snapshot_path: "test_snapshots_path",
-          migration_path: "test_migration_path",
+          snapshot_path: snapshot_path,
+          migration_path: migration_path,
           quiet: true,
           format: false,
           auto_name: true
         )
       end)
 
-      assert [file1] = Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+      assert [file1] = Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
 
       file = File.read!(file1)
 
@@ -940,12 +952,7 @@ defmodule AshSqlite.MigrationGeneratorTest do
   end
 
   describe "follow up with references" do
-    setup do
-      on_exit(fn ->
-        File.rm_rf!("test_snapshots_path")
-        File.rm_rf!("test_migration_path")
-      end)
-
+    setup %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defposts do
         attributes do
           uuid_primary_key(:id)
@@ -974,11 +981,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       defdomain([Post, Comment])
 
-      Mix.shell(Mix.Shell.Process)
-
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
@@ -987,7 +992,10 @@ defmodule AshSqlite.MigrationGeneratorTest do
       :ok
     end
 
-    test "when changing the primary key, it changes properly" do
+    test "when changing the primary key, it changes properly", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
       defposts do
         attributes do
           attribute(:id, :uuid, primary_key?: false, default: &Ecto.UUID.generate/0)
@@ -1018,15 +1026,15 @@ defmodule AshSqlite.MigrationGeneratorTest do
       defdomain([Post, Comment])
 
       AshSqlite.MigrationGenerator.generate(Domain,
-        snapshot_path: "test_snapshots_path",
-        migration_path: "test_migration_path",
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
         quiet: true,
         format: false,
         auto_name: true
       )
 
       assert [_file1, file2] =
-               Enum.sort(Path.wildcard("test_migration_path/**/*_migrate_resources*.exs"))
+               Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
 
       file = File.read!(file2)
 
