@@ -262,7 +262,7 @@ defmodule AshSqlite.SqlImplementation do
   end
 
   defp as_json(query, value, pred_embedded?, bindings, embedded?, acc, type) do
-    if is_plain_map?(value) do
+    if plain_map?(value) do
       AshSql.Expr.dynamic_expr(
         query,
         Jason.encode!(value),
@@ -286,8 +286,8 @@ defmodule AshSqlite.SqlImplementation do
     end
   end
 
-  defp is_plain_map?(value) when is_map(value) and not is_struct(value), do: true
-  defp is_plain_map?(_), do: false
+  defp plain_map?(value) when is_map(value) and not is_struct(value), do: true
+  defp plain_map?(_), do: false
 
   @impl true
   def type_expr(expr, nil), do: expr

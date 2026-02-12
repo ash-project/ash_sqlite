@@ -451,6 +451,7 @@ defmodule AshSqlite.DataLayer do
   def can?(_, :composite_primary_key), do: true
   def can?(_, {:atomic, :update}), do: true
   def can?(_, {:atomic, :upsert}), do: true
+  def can?(_, {:atomic, :create}), do: true
   def can?(_, :upsert), do: true
   def can?(_, :changeset_filter), do: true
 
@@ -710,7 +711,28 @@ defmodule AshSqlite.DataLayer do
           opts
         end
 
-      ecto_changesets = changesets |> Enum.map(& &1.attributes)
+      create_atomics = Map.get(Enum.at(changesets, 0), :create_atomics, [])
+
+      atomic_insert_values =
+        if create_atomics != [] do
+          query = from(row in resource, as: ^0)
+
+          query =
+            query
+            |> AshSql.Bindings.default_bindings(resource, AshSqlite.SqlImplementation)
+
+          case AshSql.Atomics.atomics_to_insert_values(resource, query, create_atomics) do
+            {:ok, values} -> values
+            {:error, error} -> raise Ash.Error.to_ash_error(error)
+          end
+        else
+          %{}
+        end
+
+      ecto_changesets =
+        Enum.map(changesets, fn cs ->
+          Map.merge(cs.attributes, atomic_insert_values)
+        end)
 
       source =
         if table = Enum.at(changesets, 0).context[:data_layer][:table] do
