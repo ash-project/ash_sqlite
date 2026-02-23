@@ -1052,4 +1052,74 @@ defmodule AshSqlite.MigrationGeneratorTest do
                ~S[modify :post_id, references(:posts, column: :id, name: "comments_post_id_fkey", type: :uuid)]
     end
   end
+
+  describe "renaming multiple relationships" do
+    setup %{snapshot_path: snapshot_path, migration_path: migration_path} do
+      defposts do
+        attributes do
+          uuid_primary_key(:id)
+        end
+
+        relationships do
+          belongs_to(:creator, AshSqlite.Test.User)
+          belongs_to(:contributer, AshSqlite.Test.User)
+        end
+      end
+
+      defdomain([Post, AshSqlite.Test.User])
+
+      AshSqlite.MigrationGenerator.generate(Domain,
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
+        quiet: true,
+        format: false,
+        auto_name: true
+      )
+
+      :ok
+    end
+
+    test "renames columns without adding duplicate columns", %{
+      snapshot_path: snapshot_path,
+      migration_path: migration_path
+    } do
+      defposts do
+        attributes do
+          uuid_primary_key(:id)
+        end
+
+        relationships do
+          belongs_to(:creator2, AshSqlite.Test.User)
+          belongs_to(:contributer2, AshSqlite.Test.User)
+        end
+      end
+
+      defdomain([Post, AshSqlite.Test.User])
+
+      send(self(), {:mix_shell_input, :yes?, true})
+      send(self(), {:mix_shell_input, :prompt, "creator2_id"})
+      send(self(), {:mix_shell_input, :yes?, true})
+
+      AshSqlite.MigrationGenerator.generate(Domain,
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
+        quiet: true,
+        format: false,
+        auto_name: true
+      )
+
+      assert [_file1, file2] =
+               Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
+
+      # Up migration
+      assert File.read!(file2) =~ ~S[rename table(:posts), :creator_id, to: :creator2_id]
+      assert File.read!(file2) =~ ~S[rename table(:posts), :contributer_id, to: :contributer2_id]
+
+      refute File.read!(file2) =~ ~S[alter table(:posts)]
+
+      # Down migration
+      assert File.read!(file2) =~ ~S[rename table(:posts), :creator2_id, to: :creator_id]
+      assert File.read!(file2) =~ ~S[rename table(:posts), :contributer2_id, to: :contributer_id]
+    end
+  end
 end
