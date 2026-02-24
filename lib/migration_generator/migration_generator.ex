@@ -2648,7 +2648,13 @@ defmodule AshSqlite.MigrationGenerator do
     |> Map.put(:type, type)
     |> Map.put(:size, size)
     |> Map.put_new(:default, "nil")
-    |> Map.update!(:default, &(&1 || "nil"))
+    |> Map.update!(:default, fn value ->
+      if is_nil(value) do
+        "nil"
+      else
+        value
+      end
+    end)
     |> Map.update!(:references, fn
       nil ->
         nil
