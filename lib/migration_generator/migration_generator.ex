@@ -1633,7 +1633,8 @@ defmodule AshSqlite.MigrationGenerator do
           Enum.find(snapshot.identities, fn identity ->
             identity.name == old_identity.name &&
               Enum.sort(old_identity.keys) == Enum.sort(identity.keys) &&
-              old_identity.base_filter == identity.base_filter
+              old_identity.base_filter == identity.base_filter &&
+              Map.get(old_identity, :nils_distinct?, true) == Map.get(identity, :nils_distinct?, true)
           end)
         end)
       end
@@ -1675,7 +1676,8 @@ defmodule AshSqlite.MigrationGenerator do
           Enum.find(old_snapshot.identities, fn old_identity ->
             old_identity.name == identity.name &&
               Enum.sort(old_identity.keys) == Enum.sort(identity.keys) &&
-              old_identity.base_filter == identity.base_filter
+              old_identity.base_filter == identity.base_filter &&
+              Map.get(old_identity, :nils_distinct?, true) == Map.get(identity, :nils_distinct?, true)
           end)
         end)
       end
@@ -2454,7 +2456,7 @@ defmodule AshSqlite.MigrationGenerator do
       end)
     end)
     |> Enum.sort_by(& &1.name)
-    |> Enum.map(&Map.take(&1, [:name, :keys]))
+    |> Enum.map(&Map.take(&1, [:name, :keys, :nils_distinct?]))
     |> Enum.map(fn %{keys: keys} = identity ->
       %{
         identity
@@ -2473,6 +2475,7 @@ defmodule AshSqlite.MigrationGenerator do
           "#{AshSqlite.DataLayer.Info.table(resource)}_#{identity.name}_index"
       )
     end)
+    |> Enum.map(&Map.put_new(&1, :nils_distinct?, true))
     |> Enum.map(&Map.put(&1, :base_filter, AshSqlite.DataLayer.Info.base_filter_sql(resource)))
   end
 

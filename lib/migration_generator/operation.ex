@@ -31,6 +31,12 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     # sobelow_skip ["DOS.StringToAtom"]
     def as_atom(value), do: Macro.inspect_atom(:remote_call, String.to_atom(value))
 
+    def option(key, value) when key in [:nulls_distinct, "nulls_distinct"] do
+      if !value do
+        "#{as_atom(key)}: #{inspect(value)}"
+      end
+    end
+
     def option(key, value) do
       if value do
         "#{as_atom(key)}: #{inspect(value)}"
@@ -478,10 +484,12 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     import Helper
 
     def up(%{
-          identity: %{name: name, keys: keys, base_filter: base_filter, index_name: index_name},
+          identity: %{name: name, keys: keys, base_filter: base_filter, index_name: index_name} = identity,
           table: table,
           multitenancy: multitenancy
         }) do
+      nils_distinct? = Map.get(identity, :nils_distinct?, true)
+
       keys =
         case multitenancy.strategy do
           :attribute ->
@@ -494,9 +502,9 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       index_name = index_name || "#{table}_#{name}_index"
 
       if base_filter do
-        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], where: \"#{base_filter}\", #{join(["name: \"#{index_name}\""])})"
+        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], where: \"#{base_filter}\", #{join(["name: \"#{index_name}\"", option("nulls_distinct", nils_distinct?)])})"
       else
-        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\""])})"
+        "create unique_index(:#{as_atom(table)}, [#{Enum.map_join(keys, ", ", &inspect/1)}], #{join(["name: \"#{index_name}\"", option("nulls_distinct", nils_distinct?)])})"
       end
     end
 
