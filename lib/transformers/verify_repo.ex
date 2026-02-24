@@ -13,6 +13,9 @@ defmodule AshSqlite.Transformers.VerifyRepo do
     repo = Transformer.get_option(dsl, [:sqlite], :repo)
 
     cond do
+      is_function(repo) ->
+        {:ok, dsl}
+
       match?({:error, _}, Code.ensure_compiled(repo)) ->
         {:error, "Could not find repo module #{repo}"}
 
