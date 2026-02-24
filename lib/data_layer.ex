@@ -198,10 +198,10 @@ defmodule AshSqlite.DataLayer do
     ],
     schema: [
       repo: [
-        type: :atom,
+        type: {:or, [{:behaviour, Ecto.Repo}, {:fun, 2}]},
         required: true,
         doc:
-          "The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more"
+          "The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more. Can also be a function that takes a resource and a type `:read | :mutate` and returns the repo."
       ],
       migrate?: [
         type: :boolean,
@@ -2016,7 +2016,7 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def rollback(resource, term) do
-    AshSqlite.DataLayer.Info.repo(resource).rollback(term)
+    AshSqlite.DataLayer.Info.repo(resource, :mutate).rollback(term)
   end
 
   defp table(resource, changeset) do
@@ -2039,15 +2039,15 @@ defmodule AshSqlite.DataLayer do
   end
 
   defp dynamic_repo(resource, %{__ash_bindings__: %{context: %{data_layer: %{repo: repo}}}}) do
-    repo || AshSqlite.DataLayer.Info.repo(resource)
+    repo || AshSqlite.DataLayer.Info.repo(resource, :read)
   end
 
   defp dynamic_repo(resource, %{context: %{data_layer: %{repo: repo}}}) do
-    repo || AshSqlite.DataLayer.Info.repo(resource)
+    repo || AshSqlite.DataLayer.Info.repo(resource, :read)
   end
 
   defp dynamic_repo(resource, _) do
-    AshSqlite.DataLayer.Info.repo(resource)
+    AshSqlite.DataLayer.Info.repo(resource, :read)
   end
 
   defp resolve_source(resource, changeset) do

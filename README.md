@@ -24,6 +24,7 @@ Welcome! `AshSqlite` is the SQLite data layer for [Ash Framework](https://hexdoc
 ## Topics
 
 - [What is AshSqlite?](documentation/topics/about-ash-sqlite/what-is-ash-sqlite.md)
+- [Transactions](documentation/topics/about-ash-sqlite/transactions.md)
 
 ### Resources
 

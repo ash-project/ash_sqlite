@@ -335,8 +335,8 @@ defmodule AshSqlite.SqlImplementation do
   end
 
   @impl true
-  def repo(resource, _kind) do
-    AshSqlite.DataLayer.Info.repo(resource)
+  def repo(resource, kind) do
+    AshSqlite.DataLayer.Info.repo(resource, kind)
   end
 
   @impl true
