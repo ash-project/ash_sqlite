@@ -467,11 +467,13 @@ defmodule AshSqlite.MigrationGenerator do
   defp load_migration!({version, _, file}) when is_binary(file) do
     loaded_modules = file |> compile_file() |> Enum.map(&elem(&1, 0))
 
-    if mod = Enum.find(loaded_modules, &migration?/1) do
-      {version, mod}
-    else
-      raise Ecto.MigrationError,
-            "file #{Path.relative_to_cwd(file)} does not define an Ecto.Migration"
+    case Enum.find(loaded_modules, &migration?/1) do
+      nil ->
+        raise Ecto.MigrationError,
+              "file #{Path.relative_to_cwd(file)} does not define an Ecto.Migration"
+
+      mod ->
+        {version, mod}
     end
   end
 
@@ -834,13 +836,15 @@ defmodule AshSqlite.MigrationGenerator do
     config = repo.config()
     app = Keyword.fetch!(config, :otp_app)
 
-    if path = opts.migration_path || config[:tenant_migrations_path] do
-      path
-    else
-      priv =
-        config[:priv] || "priv/#{repo |> Module.split() |> List.last() |> Macro.underscore()}"
+    case opts.migration_path || config[:tenant_migrations_path] do
+      nil ->
+        priv =
+          config[:priv] || "priv/#{repo |> Module.split() |> List.last() |> Macro.underscore()}"
 
-      Application.app_dir(app, Path.join(priv, "migrations"))
+        Application.app_dir(app, Path.join(priv, "migrations"))
+
+      path ->
+        path
     end
   end
 
@@ -1634,7 +1638,8 @@ defmodule AshSqlite.MigrationGenerator do
             identity.name == old_identity.name &&
               Enum.sort(old_identity.keys) == Enum.sort(identity.keys) &&
               old_identity.base_filter == identity.base_filter &&
-              Map.get(old_identity, :nils_distinct?, true) == Map.get(identity, :nils_distinct?, true)
+              Map.get(old_identity, :nils_distinct?, true) ==
+                Map.get(identity, :nils_distinct?, true)
           end)
         end)
       end
@@ -1677,7 +1682,8 @@ defmodule AshSqlite.MigrationGenerator do
             old_identity.name == identity.name &&
               Enum.sort(old_identity.keys) == Enum.sort(identity.keys) &&
               old_identity.base_filter == identity.base_filter &&
-              Map.get(old_identity, :nils_distinct?, true) == Map.get(identity, :nils_distinct?, true)
+              Map.get(old_identity, :nils_distinct?, true) ==
+                Map.get(identity, :nils_distinct?, true)
           end)
         end)
       end

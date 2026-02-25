@@ -35,7 +35,7 @@ end
 
 | Name | Type | Default | Docs |
 |------|------|---------|------|
-| [`repo`](#sqlite-repo){: #sqlite-repo .spark-required} | `atom` |  | The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more |
+| [`repo`](#sqlite-repo){: #sqlite-repo .spark-required} | `module \| (any, any -> any)` |  | The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more. Can also be a function that takes a resource and a type `:read \| :mutate` and returns the repo. |
 | [`migrate?`](#sqlite-migrate?){: #sqlite-migrate? } | `boolean` | `true` | Whether or not to include this resource in the generated migrations with `mix ash.generate_migrations` |
 | [`migration_types`](#sqlite-migration_types){: #sqlite-migration_types } | `keyword` | `[]` | A keyword list of attribute names to the ecto migration type that should be used for that attribute. Only necessary if you need to override the defaults. |
 | [`migration_defaults`](#sqlite-migration_defaults){: #sqlite-migration_defaults } | `keyword` | `[]` | A keyword list of attribute names to the ecto migration default that should be used for that attribute. The string you use will be placed verbatim in the migration. Use fragments like `fragment(\\"now()\\")`, or for `nil`, use `\\"nil\\"`. |

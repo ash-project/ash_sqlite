@@ -484,7 +484,8 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     import Helper
 
     def up(%{
-          identity: %{name: name, keys: keys, base_filter: base_filter, index_name: index_name} = identity,
+          identity:
+            %{name: name, keys: keys, base_filter: base_filter, index_name: index_name} = identity,
           table: table,
           multitenancy: multitenancy
         }) do
