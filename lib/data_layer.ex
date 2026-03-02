@@ -1286,7 +1286,7 @@ defmodule AshSqlite.DataLayer do
   end
 
   @impl true
-  def upsert(resource, changeset, keys \\ nil, _identity \\ nil) do
+  def upsert(resource, changeset, keys \\ nil) do
     keys = keys || Ash.Resource.Info.primary_key(keys)
 
     touch_update_defaults? =
