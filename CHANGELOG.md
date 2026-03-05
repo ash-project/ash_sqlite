@@ -11,6 +11,29 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.16](https://github.com/ash-project/ash_sqlite/compare/v0.2.15...v0.2.16) (2026-03-05)
+
+
+
+
+### Bug Fixes:
+
+* bulk_create with upsert now updates update_timestamp fields by Michael Bärtschi
+
+* bulk_create with upsert now updates update_timestamp fields (#207) by Michael Bärtschi
+
+* Handle nil default values in migration generator by Zach Daniel
+
+* don't double count renaming & adding attributes by Zach Daniel
+
+### Improvements:
+
+* support positional name argument in `generate_migrations` by Zach Daniel
+
+* read touch_update_defaults? from options instead of changeset context (#208) by Michael Bärtschi
+
+* support `nils_distinct?` in identities by Zach Daniel
+
 ## [v0.2.15](https://github.com/ash-project/ash_sqlite/compare/v0.2.14...v0.2.15) (2026-01-30)
 
 

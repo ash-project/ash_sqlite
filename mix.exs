@@ -9,7 +9,7 @@ defmodule AshSqlite.MixProject do
   The SQLite data layer for Ash Framework.
   """
 
-  @version "0.2.15"
+  @version "0.2.16"
 
   def project do
     [
