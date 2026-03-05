@@ -92,6 +92,18 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
 
   @shortdoc "Generates migrations, and stores a snapshot of your resources"
   def run(args) do
+    {name, args} =
+      case args do
+        ["-" <> _ | _] ->
+          {nil, args}
+
+        [first | rest] ->
+          {first, rest}
+
+        [] ->
+          {nil, []}
+      end
+
     {opts, _, _} =
       OptionParser.parse(args,
         strict: [
@@ -122,6 +134,7 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
       opts
       |> Keyword.put(:format, !opts[:no_format])
       |> Keyword.delete(:no_format)
+      |> Keyword.put_new(:name, name)
 
     AshSqlite.MigrationGenerator.generate(domains, opts)
   end
