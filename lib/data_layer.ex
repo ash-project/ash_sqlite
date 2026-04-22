@@ -931,7 +931,8 @@ defmodule AshSqlite.DataLayer do
       record
       |> to_ecto()
       |> set_table(changeset, type, table_error?)
-      |> Ecto.Changeset.change(Map.take(changeset.attributes, attributes_to_change))
+      |> Ecto.Changeset.cast(%{}, [])
+      |> force_changes(Map.take(changeset.attributes, attributes_to_change))
       |> Map.update!(:filters, &Map.merge(&1, filters))
       |> add_configured_foreign_key_constraints(record.__struct__)
       |> add_unique_indexes(record.__struct__, changeset)
@@ -951,6 +952,12 @@ defmodule AshSqlite.DataLayer do
         ecto_changeset
         |> add_related_foreign_key_constraints(record.__struct__)
     end
+  end
+
+  defp force_changes(changeset, changes) do
+    Enum.reduce(changes, changeset, fn {key, value}, acc ->
+      Ecto.Changeset.force_change(acc, key, value)
+    end)
   end
 
   defp handle_raised_error(

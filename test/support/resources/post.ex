@@ -69,6 +69,10 @@ defmodule AshSqlite.Test.Post do
       accept([:stuff])
     end
 
+    update :update_decimal do
+      accept([:decimal])
+    end
+
     destroy :destroy_only_freds do
       change(filter(expr(title == "fred")))
     end

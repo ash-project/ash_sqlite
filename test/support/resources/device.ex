@@ -24,6 +24,10 @@ defmodule AshSqlite.Test.Device do
     update :update_entity do
       accept([:entity])
     end
+
+    update :update_status do
+      accept([:status])
+    end
   end
 
   attributes do
@@ -43,6 +47,13 @@ defmodule AshSqlite.Test.Device do
     attribute :entity, :map do
       allow_nil?(false)
       public?(true)
+    end
+
+    attribute :status, :atom do
+      public?(true)
+      allow_nil?(false)
+      default(:active)
+      constraints(one_of: [:active, :inactive])
     end
 
     timestamps()

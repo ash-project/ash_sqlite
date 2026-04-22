@@ -1,0 +1,88 @@
+{
+  "attributes": [
+    {
+      "default": "nil",
+      "size": null,
+      "type": "text",
+      "source": "id",
+      "references": null,
+      "generated?": false,
+      "primary_key?": true,
+      "allow_nil?": false
+    },
+    {
+      "default": "nil",
+      "size": null,
+      "type": "text",
+      "source": "name",
+      "references": null,
+      "generated?": false,
+      "primary_key?": false,
+      "allow_nil?": false
+    },
+    {
+      "default": "nil",
+      "size": null,
+      "type": "map",
+      "source": "entity",
+      "references": null,
+      "generated?": false,
+      "primary_key?": false,
+      "allow_nil?": false
+    },
+    {
+      "default": "nil",
+      "size": null,
+      "type": "text",
+      "source": "status",
+      "references": null,
+      "generated?": false,
+      "primary_key?": false,
+      "allow_nil?": false
+    },
+    {
+      "default": "nil",
+      "size": null,
+      "type": "utc_datetime_usec",
+      "source": "inserted_at",
+      "references": null,
+      "generated?": false,
+      "primary_key?": false,
+      "allow_nil?": false
+    },
+    {
+      "default": "nil",
+      "size": null,
+      "type": "utc_datetime_usec",
+      "source": "updated_at",
+      "references": null,
+      "generated?": false,
+      "primary_key?": false,
+      "allow_nil?": false
+    }
+  ],
+  "table": "devices",
+  "hash": "250529CF025C08BD396A008D0EED1A9AB5762EA20131D4B4FE9DC989840B05CE",
+  "repo": "Elixir.AshSqlite.TestRepo",
+  "strict?": false,
+  "identities": [
+    {
+      "name": "unique_id",
+      "keys": [
+        "id"
+      ],
+      "base_filter": null,
+      "nils_distinct?": true,
+      "index_name": "devices_unique_id_index"
+    }
+  ],
+  "custom_indexes": [],
+  "base_filter": null,
+  "custom_statements": [],
+  "multitenancy": {
+    "global": null,
+    "attribute": null,
+    "strategy": null
+  },
+  "has_create_action": true
+}

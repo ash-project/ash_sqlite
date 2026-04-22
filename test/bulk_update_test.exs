@@ -4,6 +4,7 @@
 
 defmodule AshSqlite.BulkUpdateTest do
   use AshSqlite.RepoCase, async: false
+  require Ash.Query
   alias AshSqlite.Test.Post
 
   test "bulk updates honor update action filters" do
@@ -19,5 +20,25 @@ defmodule AshSqlite.BulkUpdateTest do
       |> Enum.sort()
 
     assert titles == ["fred_stuff", "george"]
+  end
+
+  test "atomic bulk updates persist attributes set to the resource default" do
+    alias AshSqlite.Test.Device
+
+    device =
+      Device
+      |> Ash.Changeset.for_create(:create, %{id: "1", name: "test", entity: %{}})
+      |> Ash.Changeset.force_change_attribute(:status, :inactive)
+      |> Ash.create!()
+
+    assert device.status == :inactive
+
+    Device
+    |> Ash.Query.filter(id == ^device.id)
+    |> Ash.bulk_update!(:update_status, %{status: :active}, return_errors?: true)
+
+    reloaded = Ash.get!(Device, device.id)
+
+    assert reloaded.status == :active
   end
 end
