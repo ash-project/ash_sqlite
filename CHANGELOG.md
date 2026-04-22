@@ -11,6 +11,15 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.17](https://github.com/ash-project/ash_sqlite/compare/v0.2.16...v0.2.17) (2026-04-22)
+
+
+
+
+### Bug Fixes:
+
+* ensure atomic updates properly update all fields by Zach Daniel
+
 ## [v0.2.16](https://github.com/ash-project/ash_sqlite/compare/v0.2.15...v0.2.16) (2026-03-05)
 
 
