@@ -40,9 +40,10 @@ defmodule AshSqlite.Repo do
   defmacro __using__(opts) do
     quote bind_quoted: [opts: opts] do
       otp_app = opts[:otp_app] || raise("Must configure OTP app")
+      adapter = opts[:adapter] || Ecto.Adapters.SQLite3
 
       use Ecto.Repo,
-        adapter: Ecto.Adapters.SQLite3,
+        adapter: adapter,
         otp_app: otp_app
 
       @behaviour AshSqlite.Repo
