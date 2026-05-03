@@ -251,6 +251,54 @@ defmodule AshSqlite.CalculationTest do
            |> Ash.read_one!()
   end
 
+  test "string_starts_with? matches a prefix" do
+    Post
+    |> Ash.Changeset.for_create(:create, %{title: "foo-dude-bar"})
+    |> Ash.create!()
+
+    assert Post
+           |> Ash.Query.filter(string_starts_with?(title, "foo-"))
+           |> Ash.read_one!()
+
+    refute Post
+           |> Ash.Query.filter(string_starts_with?(title, "bar"))
+           |> Ash.read_one!()
+  end
+
+  test "string_starts_with? escapes wildcards" do
+    Post
+    |> Ash.Changeset.for_create(:create, %{title: "abc-100-off"})
+    |> Ash.create!()
+
+    refute Post
+           |> Ash.Query.filter(string_starts_with?(title, "a%"))
+           |> Ash.read_one!()
+  end
+
+  test "string_ends_with? matches a suffix" do
+    Post
+    |> Ash.Changeset.for_create(:create, %{title: "foo-dude-bar"})
+    |> Ash.create!()
+
+    assert Post
+           |> Ash.Query.filter(string_ends_with?(title, "-bar"))
+           |> Ash.read_one!()
+
+    refute Post
+           |> Ash.Query.filter(string_ends_with?(title, "foo"))
+           |> Ash.read_one!()
+  end
+
+  test "string_ends_with? escapes wildcards" do
+    Post
+    |> Ash.Changeset.for_create(:create, %{title: "abc-off-xyz"})
+    |> Ash.create!()
+
+    refute Post
+           |> Ash.Query.filter(string_ends_with?(title, "%z"))
+           |> Ash.read_one!()
+  end
+
   test "string_length works" do
     Post
     |> Ash.Changeset.for_create(:create, %{
