@@ -251,27 +251,27 @@ defmodule AshSqlite.CalculationTest do
            |> Ash.read_one!()
   end
 
-  test "string_starts_with? matches a prefix" do
+  test "string_starts_with matches a prefix" do
     Post
     |> Ash.Changeset.for_create(:create, %{title: "foo-dude-bar"})
     |> Ash.create!()
 
     assert Post
-           |> Ash.Query.filter(string_starts_with?(title, "foo-"))
+           |> Ash.Query.filter(string_starts_with(title, "foo-"))
            |> Ash.read_one!()
 
     refute Post
-           |> Ash.Query.filter(string_starts_with?(title, "bar"))
+           |> Ash.Query.filter(string_starts_with(title, "bar"))
            |> Ash.read_one!()
   end
 
-  test "string_starts_with? escapes wildcards" do
+  test "string_starts_with escapes wildcards" do
     Post
     |> Ash.Changeset.for_create(:create, %{title: "abc-100-off"})
     |> Ash.create!()
 
     refute Post
-           |> Ash.Query.filter(string_starts_with?(title, "a%"))
+           |> Ash.Query.filter(string_starts_with(title, "a%"))
            |> Ash.read_one!()
   end
 
