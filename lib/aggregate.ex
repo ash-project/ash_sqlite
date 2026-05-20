@@ -641,6 +641,7 @@ defmodule AshSqlite.Aggregate do
 
       with {:ok, through_query} <- through_query(parent_query, relationship, through_binding) do
         root_binding = query.__ash_bindings__.root_binding
+        ash_bindings = query.__ash_bindings__
         through_query = Ecto.Query.subquery(through_query)
 
         query =
@@ -656,6 +657,7 @@ defmodule AshSqlite.Aggregate do
                 field(through, ^relationship.source_attribute_on_join_resource)
             }
           )
+          |> Map.put(:__ash_bindings__, ash_bindings)
           |> AshSql.Bindings.add_binding(%{
             type: :through,
             relationship: relationship
