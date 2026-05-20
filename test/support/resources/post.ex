@@ -180,6 +180,7 @@ defmodule AshSqlite.Test.Post do
     count(:count_of_comments, :comments)
     count(:count_of_popular_comments, :popular_comments)
     count(:count_of_linked_posts, :linked_posts)
+    count(:count_of_comments_through_linked_posts, [:linked_posts, :comments])
     count(:count_of_liked_comments, :comments, read_action: :liked)
     count(:count_of_comment_ratings, [:comments, :ratings])
     sum(:sum_of_comment_likes, :comments, :likes)
@@ -187,6 +188,10 @@ defmodule AshSqlite.Test.Post do
 
     sum(:sum_of_comment_likes_with_popular_ratings, :comments, :likes) do
       filter(expr(not is_nil(popular_ratings.id)))
+    end
+
+    sum(:sum_of_comment_likes_with_popular_ratings_exists, :comments, :likes) do
+      filter(expr(exists(popular_ratings, score > 5)))
     end
 
     sum(:sum_of_linked_post_scores, :linked_posts, :score)
@@ -290,6 +295,10 @@ defmodule AshSqlite.Test.Post do
 
     custom(:comment_titles_joined, :comments, :string) do
       implementation({AshSqlite.Test.StringAgg, field: :title, delimiter: ","})
+    end
+
+    custom(:total_comment_likes_custom, :comments, :float) do
+      implementation({AshSqlite.Test.TotalAgg, field: :likes})
     end
 
     custom(:comment_titles_joined_with_popular_ratings, :comments, :string) do

@@ -45,6 +45,10 @@ defmodule AshSqlite.Test.Author do
     avg(:avg_comment_likes_through_posts, [:posts, :comments], :likes)
     min(:min_comment_likes_through_posts, [:posts, :comments], :likes)
     max(:max_comment_likes_through_posts, [:posts, :comments], :likes)
+    sum(:sum_of_linked_post_scores_through_posts, [:posts, :linked_posts], :score)
+    avg(:avg_linked_post_score_through_posts, [:posts, :linked_posts], :score)
+    min(:min_linked_post_score_through_posts, [:posts, :linked_posts], :score)
+    max(:max_linked_post_score_through_posts, [:posts, :linked_posts], :score)
 
     count :count_of_comments_on_public_posts, [:posts, :comments] do
       join_filter(:posts, expr(public == true))
@@ -55,6 +59,10 @@ defmodule AshSqlite.Test.Author do
     end
 
     exists :has_comment_called_match_through_posts, [:posts, :comments] do
+      filter(expr(title == "match"))
+    end
+
+    exists :has_linked_post_called_match_through_posts, [:posts, :linked_posts] do
       filter(expr(title == "match"))
     end
 
@@ -75,6 +83,10 @@ defmodule AshSqlite.Test.Author do
     end
 
     list :comment_titles_through_posts, [:posts, :comments], :title do
+      sort(title: :asc_nils_last)
+    end
+
+    list :linked_post_titles_through_posts, [:posts, :linked_posts], :title do
       sort(title: :asc_nils_last)
     end
 
@@ -137,6 +149,12 @@ defmodule AshSqlite.Test.Author do
       :comment_likes_through_posts_plus_one,
       :integer,
       expr((sum_of_comment_likes_through_posts || 0) + 1)
+    )
+
+    calculate(
+      :linked_post_score_through_posts_plus_one,
+      :integer,
+      expr((sum_of_linked_post_scores_through_posts || 0) + 1)
     )
 
     calculate(:total_profiles_plus_one, :integer, expr(total_profiles + 1))

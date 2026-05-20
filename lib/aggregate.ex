@@ -318,7 +318,7 @@ defmodule AshSqlite.Aggregate do
 
   defp add_aggregate_group(query, resource, relationship_path, aggregates) do
     with {:ok, relationships} <- relationships(resource, relationship_path),
-         :ok <- validate_relationships(resource, relationship_path, relationships) do
+         :ok <- validate_relationships(resource, relationship_path, relationships, aggregates) do
       do_add_aggregate_group(query, relationships, aggregates)
     end
   end
@@ -340,7 +340,7 @@ defmodule AshSqlite.Aggregate do
     end
   end
 
-  defp validate_relationships(resource, relationship_path, relationships) do
+  defp validate_relationships(resource, relationship_path, relationships, aggregates) do
     cond do
       Enum.any?(relationships, &match?(%{manual: {_, _}}, &1)) ->
         {:error, "AshSqlite does not support loading aggregates over manual relationships"}
@@ -357,7 +357,7 @@ defmodule AshSqlite.Aggregate do
         {:error,
          "AshSqlite does not support loading aggregates over many_to_many relationships with parent-dependent join filters"}
 
-      length(relationships) > 1 && Enum.any?(relationships, &(&1.type == :many_to_many)) ->
+      unsupported_multi_hop_many_to_many?(relationships, aggregates) ->
         {:error,
          "AshSqlite does not support loading aggregates over multi-hop paths that include many_to_many relationships"}
 
@@ -368,6 +368,18 @@ defmodule AshSqlite.Aggregate do
       true ->
         :ok
     end
+  end
+
+  defp unsupported_multi_hop_many_to_many?(relationships, aggregates) do
+    length(relationships) > 1 &&
+      Enum.any?(relationships, &(&1.type == :many_to_many)) &&
+      !supported_multi_hop_many_to_many?(relationships, aggregates)
+  end
+
+  defp supported_multi_hop_many_to_many?(relationships, aggregates) do
+    List.last(relationships).type == :many_to_many &&
+      Enum.count(relationships, &(&1.type == :many_to_many)) == 1 &&
+      Enum.all?(aggregates, &(&1.kind in @scalar_aggregate_kinds))
   end
 
   defp do_add_unrelated_aggregate_group(query, aggregates) do
@@ -466,7 +478,13 @@ defmodule AshSqlite.Aggregate do
   end
 
   defp aggregate_query(parent_query, relationships, aggregates, binding) do
-    multi_hop_aggregate_query(parent_query, relationships, aggregates, binding)
+    case List.last(relationships) do
+      %{type: :many_to_many} ->
+        multi_hop_many_to_many_aggregate_query(parent_query, relationships, aggregates, binding)
+
+      _relationship ->
+        multi_hop_aggregate_query(parent_query, relationships, aggregates, binding)
+    end
   end
 
   defp unrelated_aggregate_query(parent_query, [%{kind: kind} = aggregate], binding)
@@ -656,6 +674,70 @@ defmodule AshSqlite.Aggregate do
     end
   end
 
+  defp multi_hop_many_to_many_aggregate_query(parent_query, relationships, aggregates, binding) do
+    final_relationship = List.last(relationships)
+    relationship_path = Enum.map(relationships, & &1.name)
+
+    with {:ok, query} <-
+           related_query(
+             parent_query,
+             final_relationship,
+             hd(aggregates),
+             binding,
+             relationship_path
+           ) do
+      through_binding = query.__ash_bindings__.current
+
+      with {:ok, through_query} <-
+             through_query(parent_query, final_relationship, through_binding) do
+        root_binding = query.__ash_bindings__.root_binding
+        through_query = Ecto.Query.subquery(through_query)
+
+        query =
+          from(row in query,
+            join: through in ^through_query,
+            as: ^through_binding,
+            on:
+              field(through, ^final_relationship.destination_attribute_on_join_resource) ==
+                field(as(^root_binding), ^final_relationship.destination_attribute)
+          )
+          |> AshSql.Bindings.add_binding(%{
+            type: :through,
+            relationship: final_relationship
+          })
+
+        with {:ok, query, first_related_binding} <-
+               join_intermediate_relationships(parent_query, query, relationships, hd(aggregates),
+                 current_binding: through_binding
+               ) do
+          first_relationship = hd(relationships)
+
+          query =
+            from(row in query,
+              group_by:
+                field(as(^first_related_binding), ^first_relationship.destination_attribute),
+              select: %{
+                ^first_relationship.destination_attribute =>
+                  field(as(^first_related_binding), ^first_relationship.destination_attribute)
+              }
+            )
+
+          root_binding = query.__ash_bindings__.root_binding
+
+          Enum.reduce_while(aggregates, {:ok, query}, fn aggregate, {:ok, query} ->
+            case aggregate_dynamic(query, final_relationship, aggregate, root_binding) do
+              {:ok, query, dynamic} ->
+                {:cont, {:ok, Ecto.Query.select_merge(query, ^%{aggregate.name => dynamic})}}
+
+              {:error, error} ->
+                {:halt, {:error, error}}
+            end
+          end)
+        end
+      end
+    end
+  end
+
   defp multi_hop_aggregate_query(parent_query, relationships, aggregates, binding) do
     final_relationship = List.last(relationships)
     relationship_path = Enum.map(relationships, & &1.name)
@@ -695,13 +777,15 @@ defmodule AshSqlite.Aggregate do
     end
   end
 
-  defp join_intermediate_relationships(parent_query, query, relationships, aggregate) do
+  defp join_intermediate_relationships(parent_query, query, relationships, aggregate, opts \\ []) do
+    current_binding = Keyword.get(opts, :current_binding, query.__ash_bindings__.root_binding)
+
     relationships
     |> Enum.zip(tl(relationships))
     |> Enum.with_index()
     |> Enum.reverse()
     |> Enum.reduce_while(
-      {:ok, query, query.__ash_bindings__.root_binding, query.__ash_bindings__.current, nil},
+      {:ok, query, current_binding, query.__ash_bindings__.current, nil},
       fn {{relationship, next_relationship}, index},
          {:ok, query, current_binding, next_binding, _first_related_binding} ->
         path =
@@ -713,13 +797,13 @@ defmodule AshSqlite.Aggregate do
           {:ok, related_query} ->
             related_query = Ecto.Query.subquery(related_query)
 
+            on = intermediate_join_on(next_relationship, next_binding, current_binding)
+
             query =
               from(row in query,
                 join: related in ^related_query,
                 as: ^next_binding,
-                on:
-                  field(related, ^next_relationship.source_attribute) ==
-                    field(as(^current_binding), ^next_relationship.destination_attribute)
+                on: ^on
               )
 
             {:cont, {:ok, query, next_binding, next_binding + 1, next_binding}}
@@ -740,6 +824,24 @@ defmodule AshSqlite.Aggregate do
       {:error, error} ->
         {:error, error}
     end
+  end
+
+  defp intermediate_join_on(
+         %{type: :many_to_many} = next_relationship,
+         related_binding,
+         current_binding
+       ) do
+    Ecto.Query.dynamic(
+      field(as(^related_binding), ^next_relationship.source_attribute) ==
+        field(as(^current_binding), ^next_relationship.source_attribute_on_join_resource)
+    )
+  end
+
+  defp intermediate_join_on(next_relationship, related_binding, current_binding) do
+    Ecto.Query.dynamic(
+      field(as(^related_binding), ^next_relationship.source_attribute) ==
+        field(as(^current_binding), ^next_relationship.destination_attribute)
+    )
   end
 
   defp related_query(parent_query, relationship, aggregate, binding, relationship_path) do
@@ -1117,6 +1219,8 @@ defmodule AshSqlite.Aggregate do
 
     query =
       if aggregate.kind == :list && aggregate.uniq? do
+        # This relies on validate_window_aggregate_sort/2 requiring uniq lists to
+        # sort by the listed field, so distinct applies to {parent, value}.
         from(row in query, distinct: true)
       else
         query

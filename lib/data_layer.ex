@@ -590,6 +590,9 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def return_query(query, resource) do
+    # AshSql.Query.return_query/2 also normalizes bindings. Do it here first so
+    # aggregate prebinding can inspect sort/load metadata before return_query
+    # consumes it.
     query =
       query
       |> AshSql.Bindings.default_bindings(resource, AshSqlite.SqlImplementation)
@@ -2081,6 +2084,8 @@ defmodule AshSqlite.DataLayer do
         |> Ash.Filter.used_aggregates([])
         |> Enum.map(&Map.put(&1, :context, calculation.context))
       end)
+      # Preserve context before deduping: identical calculation contexts share
+      # one aggregate binding, different contexts stay isolated.
       |> Enum.uniq()
 
     with {:ok, query} <-

@@ -90,11 +90,12 @@ aggregates do
 end
 ```
 
-One-hop many-to-many relationship aggregates are supported.
+One-hop many-to-many relationship aggregates are supported. Scalar aggregates are also supported when a multi-hop path ends in a many-to-many relationship.
 
 ```elixir
 aggregates do
   count :linked_post_count, :linked_posts
+  count :linked_post_count_through_posts, [:posts, :linked_posts]
 
   first :first_linked_post_title, :linked_posts, :title do
     sort title: :asc_nils_last
@@ -127,6 +128,20 @@ aggregates do
   end
 end
 ```
+
+For many-to-many aggregates, a `join_filter` on the many-to-many relationship applies to the destination resource side of the aggregate. Put through-resource filtering on the relationship's configured join relationship/filter.
+
+For filters that need to test a to-many relationship without multiplying the aggregate rows, prefer `exists/2`.
+
+```elixir
+aggregates do
+  sum :liked_comment_total, :comments, :likes do
+    filter expr(exists(ratings, score > 5))
+  end
+end
+```
+
+Multi-hop aggregates use each relationship's configured read action. If an intermediate hop needs scoped rows, define the read action on that relationship rather than trying to override it per aggregate.
 
 ## SQLite Requirements
 
@@ -197,7 +212,8 @@ Full aggregate parity with [AshPostgres](https://hexdocs.pm/ash_postgres) is not
 - unrelated aggregates that reference the parent row
 - manual relationships
 - `no_attributes?` relationships
-- multi-hop paths that include many-to-many relationships
+- multi-hop paths that include many-to-many relationships before the final hop
+- non-scalar aggregates over multi-hop paths that include many-to-many relationships
 - parent-dependent relationship filters
 - parent-dependent aggregate filters
 - parent-dependent `join_filter`s
@@ -206,4 +222,4 @@ Full aggregate parity with [AshPostgres](https://hexdocs.pm/ash_postgres) is not
 - `uniq` list aggregates sorted by fields other than the listed field
 - fanout-prone `sum`, `avg`, `list`, `custom`, or field-based `count` aggregate filters over to-many relationship references
 
-A fanout-prone aggregate filter is one where filtering joins another to-many relationship and can duplicate the rows being aggregated. For example, a `sum` of comment likes filtered by `popular_ratings.id` could count the same comment once per matching rating. AshSqlite rejects these shapes instead of returning an over-counted result.
+A fanout-prone aggregate filter is one where filtering joins another to-many relationship and can duplicate the rows being aggregated. For example, a `sum` of comment likes filtered by `popular_ratings.id` could count the same comment once per matching rating. AshSqlite rejects these shapes instead of returning an over-counted result. Use `exists/2` when you only need to test that related rows exist.

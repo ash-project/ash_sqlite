@@ -390,7 +390,7 @@ Helpdesk.Support.Representative
 |> Ash.read!()
 ```
 
-AshSqlite supports related `count`, `sum`, `avg`, `min`, `max`, `exists`, `first`, `list`, and `custom` aggregates over normal relationship paths, one-hop many-to-many relationship aggregates, and parent-independent unrelated aggregates. `first` and `list` aggregates require SQLite 3.30.0 or later with JSON functions enabled.
+AshSqlite supports related `count`, `sum`, `avg`, `min`, `max`, `exists`, `first`, `list`, and `custom` aggregates over normal relationship paths, one-hop many-to-many relationship aggregates, scalar aggregates over multi-hop paths that end in a many-to-many relationship, and parent-independent unrelated aggregates. `first` and `list` aggregates require SQLite 3.30.0 or later with JSON functions enabled.
 
 
 ### Rich Configuration Options

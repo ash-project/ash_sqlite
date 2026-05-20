@@ -32,6 +32,30 @@ defmodule AshSqlite.AggregatesTest do
     |> Ash.read!()
   end
 
+  test "paginated reads can count and load scalar aggregates" do
+    create_post!("paged aggregate a")
+    page_post = create_post!("paged aggregate b")
+    create_post!("paged aggregate c")
+
+    create_comment!(page_post, "first", 1)
+    create_comment!(page_post, "second", 1)
+
+    assert %Ash.Page.Offset{
+             count: 3,
+             limit: 1,
+             offset: 1,
+             results: [
+               %Post{title: "paged aggregate b", count_of_comments: 2}
+             ]
+           } =
+             Post
+             |> Ash.Query.for_read(:paginated)
+             |> Ash.Query.load(:count_of_comments)
+             |> Ash.Query.sort(:title)
+             |> Ash.Query.page(offset: 1, limit: 1, count: true)
+             |> Ash.read!()
+  end
+
   test "related scalar aggregates can be loaded" do
     post = create_post!("loaded")
     empty_post = create_post!("empty")
@@ -270,6 +294,32 @@ defmodule AshSqlite.AggregatesTest do
              ])
   end
 
+  test "fieldless count filters over to-many refs count distinct aggregate rows" do
+    post = create_post!("distinct related aggregate filter")
+    popular_comment = create_comment!(post, "popular", 1)
+    unpopular_comment = create_comment!(post, "unpopular", 1)
+
+    create_comment_rating!(popular_comment, 10)
+    create_comment_rating!(popular_comment, 11)
+    create_comment_rating!(unpopular_comment, 1)
+
+    assert %{count_of_comments_with_popular_ratings: 1} =
+             Ash.load!(post, :count_of_comments_with_popular_ratings)
+  end
+
+  test "exists filters avoid to-many fanout for sum aggregates" do
+    post = create_post!("exists fanout aggregate filter")
+    popular_comment = create_comment!(post, "popular", 4)
+    unpopular_comment = create_comment!(post, "unpopular", 6)
+
+    create_comment_rating!(popular_comment, 10)
+    create_comment_rating!(popular_comment, 11)
+    create_comment_rating!(unpopular_comment, 1)
+
+    assert %{sum_of_comment_likes_with_popular_ratings_exists: 4} =
+             Ash.load!(post, :sum_of_comment_likes_with_popular_ratings_exists)
+  end
+
   test "fanout-prone aggregate filters return stable unsupported errors" do
     post = create_post!("fanout aggregate filter")
     comment = create_comment!(post, "popular", 1)
@@ -420,11 +470,15 @@ defmodule AshSqlite.AggregatesTest do
   test "custom aggregates can use sqlite-specific implementations" do
     post = create_post!("custom aggregate")
 
-    create_comment!(post, "aaa", 1)
-    create_comment!(post, "bbb", 1)
+    create_comment!(post, "aaa", 2)
+    create_comment!(post, "bbb", 3)
 
-    assert %{comment_titles_joined: joined} = Ash.load!(post, :comment_titles_joined)
+    assert %{comment_titles_joined: joined, total_comment_likes_custom: total} =
+             Ash.load!(post, [:comment_titles_joined, :total_comment_likes_custom])
+
     assert joined |> String.split(",") |> Enum.sort() == ["aaa", "bbb"]
+    assert total == 5.0
+    assert is_float(total)
   end
 
   test "unrelated aggregates without parent filters can be loaded" do
@@ -886,7 +940,93 @@ defmodule AshSqlite.AggregatesTest do
              Ash.load!(author, :count_of_comments_through_public_posts)
   end
 
-  test "multi-hop paths containing many_to_many relationships return a stable unsupported error" do
+  test "multi-hop scalar aggregates ending in many_to_many relationships can be loaded" do
+    author = create_author!("multi", "m2m")
+    empty_author = create_author!("empty", "m2m")
+
+    public_post = create_post_for_author!(author, "public post", %{public: true})
+    private_post = create_post_for_author!(author, "private post", %{public: false})
+
+    match = create_post!("match", %{score: 2})
+    other = create_post!("other", %{score: 6})
+    private = create_post!("private", %{score: 10})
+    archived = create_post!("archived", %{score: 20})
+
+    link_posts!(public_post, [match, other])
+    link_posts!(private_post, [private])
+    create_post_link!(private_post, archived, :archived)
+
+    loaded_author =
+      Ash.load!(author, [
+        :count_of_linked_posts_through_posts,
+        :sum_of_linked_post_scores_through_posts,
+        :avg_linked_post_score_through_posts,
+        :min_linked_post_score_through_posts,
+        :max_linked_post_score_through_posts,
+        :has_linked_post_called_match_through_posts
+      ])
+
+    assert loaded_author.count_of_linked_posts_through_posts == 3
+    assert loaded_author.sum_of_linked_post_scores_through_posts == 18
+    assert loaded_author.avg_linked_post_score_through_posts == 6.0
+    assert loaded_author.min_linked_post_score_through_posts == 2
+    assert loaded_author.max_linked_post_score_through_posts == 10
+    assert loaded_author.has_linked_post_called_match_through_posts == true
+
+    loaded_empty =
+      Ash.load!(empty_author, [
+        :count_of_linked_posts_through_posts,
+        :sum_of_linked_post_scores_through_posts,
+        :avg_linked_post_score_through_posts,
+        :has_linked_post_called_match_through_posts
+      ])
+
+    assert loaded_empty.count_of_linked_posts_through_posts == 0
+    assert loaded_empty.sum_of_linked_post_scores_through_posts == nil
+    assert loaded_empty.avg_linked_post_score_through_posts == nil
+    assert loaded_empty.has_linked_post_called_match_through_posts == false
+  end
+
+  test "multi-hop many_to_many scalar aggregates work in parent queries" do
+    one_link = create_author!("one", "m2m")
+    two_links = create_author!("two", "m2m")
+    create_author!("none", "m2m")
+
+    one_post = create_post_for_author!(one_link, "one post")
+    two_post = create_post_for_author!(two_links, "two post")
+
+    linked_a = create_post!("linked a", %{score: 4})
+    linked_b = create_post!("linked b", %{score: 5})
+
+    link_posts!(one_post, [linked_a])
+    link_posts!(two_post, [linked_a, linked_b])
+
+    assert [
+             %Author{
+               id: two_links_id,
+               count_of_linked_posts_through_posts: 2,
+               linked_post_score_through_posts_plus_one: 10
+             },
+             %Author{
+               id: one_link_id,
+               count_of_linked_posts_through_posts: 1,
+               linked_post_score_through_posts_plus_one: 5
+             }
+           ] =
+             Author
+             |> Ash.Query.load([
+               :count_of_linked_posts_through_posts,
+               :linked_post_score_through_posts_plus_one
+             ])
+             |> Ash.Query.filter(count_of_linked_posts_through_posts > 0)
+             |> Ash.Query.sort(count_of_linked_posts_through_posts: :desc)
+             |> Ash.read!()
+
+    assert two_links_id == two_links.id
+    assert one_link_id == one_link.id
+  end
+
+  test "unsupported multi-hop many_to_many aggregate shapes return stable errors" do
     author = create_author!("multi", "m2m unsupported")
     post = create_post_for_author!(author, "post")
     linked_post = create_post!("linked")
@@ -894,7 +1034,11 @@ defmodule AshSqlite.AggregatesTest do
     link_posts!(post, [linked_post])
 
     assert_raise Ash.Error.Unknown, ~r/multi-hop paths that include many_to_many/, fn ->
-      Ash.load!(author, :count_of_linked_posts_through_posts)
+      Ash.load!(post, :count_of_comments_through_linked_posts)
+    end
+
+    assert_raise Ash.Error.Unknown, ~r/multi-hop paths that include many_to_many/, fn ->
+      Ash.load!(author, :linked_post_titles_through_posts)
     end
   end
 
