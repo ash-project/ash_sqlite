@@ -6,7 +6,7 @@ defmodule AshSqlite.AggregatesTest do
   use AshSqlite.RepoCase, async: false
 
   require Ash.Query
-  alias AshSqlite.Test.{Comment, Post, Rating}
+  alias AshSqlite.Test.{Comment, Post, PostLink, Rating}
 
   test "a count with a filter returns the appropriate value" do
     Ash.Seed.seed!(%Post{title: "foo"})
@@ -323,6 +323,97 @@ defmodule AshSqlite.AggregatesTest do
     assert empty_post_id == empty_post.id
   end
 
+  test "many_to_many scalar aggregates can be loaded" do
+    source = create_post!("source", %{score: 5})
+    match = create_post!("match", %{score: 2})
+    other = create_post!("other", %{score: 6})
+    archived = create_post!("archived", %{score: 20})
+    empty = create_post!("empty", %{score: 1})
+
+    link_posts!(source, [match, other])
+    create_post_link!(source, archived, :archived)
+
+    loaded_source =
+      Ash.load!(source, [
+        :count_of_linked_posts,
+        :sum_of_linked_post_scores,
+        :avg_linked_post_score,
+        :min_linked_post_score,
+        :max_linked_post_score,
+        :has_linked_post_called_match
+      ])
+
+    assert loaded_source.count_of_linked_posts == 2
+    assert loaded_source.sum_of_linked_post_scores == 8
+    assert loaded_source.avg_linked_post_score == 4.0
+    assert loaded_source.min_linked_post_score == 2
+    assert loaded_source.max_linked_post_score == 6
+    assert loaded_source.has_linked_post_called_match == true
+
+    loaded_empty =
+      Ash.load!(empty, [
+        :count_of_linked_posts,
+        :sum_of_linked_post_scores,
+        :avg_linked_post_score,
+        :has_linked_post_called_match
+      ])
+
+    assert loaded_empty.count_of_linked_posts == 0
+    assert loaded_empty.sum_of_linked_post_scores == nil
+    assert loaded_empty.avg_linked_post_score == nil
+    assert loaded_empty.has_linked_post_called_match == false
+  end
+
+  test "many_to_many aggregates can be filtered, sorted and used in calculations" do
+    one_link = create_post!("one link", %{score: 1})
+    two_links = create_post!("two links", %{score: 2})
+    no_links = create_post!("no links", %{score: 3})
+
+    linked_a = create_post!("linked a", %{score: 4})
+    linked_b = create_post!("linked b", %{score: 5})
+
+    link_posts!(one_link, [linked_a])
+    link_posts!(two_links, [linked_a, linked_b])
+
+    assert [
+             %Post{
+               id: two_links_id,
+               count_of_linked_posts: 2,
+               linked_post_score_with_score: 11
+             },
+             %Post{
+               id: one_link_id,
+               count_of_linked_posts: 1,
+               linked_post_score_with_score: 5
+             }
+           ] =
+             Post
+             |> Ash.Query.load([
+               :count_of_linked_posts,
+               :linked_post_score_with_score
+             ])
+             |> Ash.Query.filter(count_of_linked_posts > 0)
+             |> Ash.Query.sort(count_of_linked_posts: :desc)
+             |> Ash.read!()
+
+    assert two_links_id == two_links.id
+    assert one_link_id == one_link.id
+
+    assert %{linked_post_score_with_score: 3} =
+             Ash.load!(no_links, :linked_post_score_with_score)
+  end
+
+  test "aggregate join filters are applied on many_to_many relationships" do
+    source = create_post!("m2m join filter source")
+    match = create_post!("match")
+    other = create_post!("other")
+
+    link_posts!(source, [match, other])
+
+    assert %{count_of_linked_posts_with_join_filter: 1} =
+             Ash.load!(source, :count_of_linked_posts_with_join_filter)
+  end
+
   defp create_post!(title, attrs \\ %{}) do
     Post
     |> Ash.Changeset.for_create(:create, Map.put(attrs, :title, title))
@@ -340,6 +431,22 @@ defmodule AshSqlite.AggregatesTest do
     Rating
     |> Ash.Changeset.for_create(:create, %{score: score, resource_id: comment.id})
     |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
+    |> Ash.create!()
+  end
+
+  defp link_posts!(source, destinations) do
+    source
+    |> Ash.Changeset.new()
+    |> Ash.Changeset.manage_relationship(:linked_posts, destinations, type: :append_and_remove)
+    |> Ash.update!()
+  end
+
+  defp create_post_link!(source, destination, state) do
+    PostLink
+    |> Ash.Changeset.new()
+    |> Ash.Changeset.change_attribute(:state, state)
+    |> Ash.Changeset.manage_relationship(:source_post, source, type: :append)
+    |> Ash.Changeset.manage_relationship(:destination_post, destination, type: :append)
     |> Ash.create!()
   end
 end

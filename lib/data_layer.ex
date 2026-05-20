@@ -500,7 +500,16 @@ defmodule AshSqlite.DataLayer do
 
   def can?(_, {:aggregate_relationship, %{manual: {_, _}}}), do: false
 
-  def can?(_, {:aggregate_relationship, %{type: :many_to_many}}), do: false
+  def can?(_, {:aggregate_relationship, %{type: :many_to_many} = relationship}) do
+    join_relationship =
+      Ash.Resource.Info.relationship(relationship.source, relationship.join_relationship)
+
+    not is_nil(join_relationship) &&
+      not AshSqlite.Aggregate.relationship_filter_uses_parent?(relationship) &&
+      not AshSqlite.Aggregate.relationship_filter_uses_parent?(join_relationship) &&
+      can?(relationship.source, {:join, relationship.through}) &&
+      can?(relationship.through, {:join, relationship.destination})
+  end
 
   def can?(_, {:aggregate_relationship, %{no_attributes?: true}}), do: false
 

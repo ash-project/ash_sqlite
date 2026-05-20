@@ -284,9 +284,6 @@ defmodule AshSqlite.Aggregate do
       match?(%{manual: {_, _}}, relationship) ->
         {:error, "AshSqlite does not support loading aggregates over manual relationships"}
 
-      relationship.type == :many_to_many ->
-        {:error, "AshSqlite does not support loading aggregates over many_to_many relationships"}
-
       Map.get(relationship, :no_attributes?, false) ->
         {:error,
          "AshSqlite does not support loading aggregates over no_attributes? relationships"}
@@ -294,6 +291,10 @@ defmodule AshSqlite.Aggregate do
       relationship_filter_uses_parent?(relationship) ->
         {:error,
          "AshSqlite does not support loading aggregates over relationships with parent-dependent filters"}
+
+      join_relationship_filter_uses_parent?(relationship) ->
+        {:error,
+         "AshSqlite does not support loading aggregates over many_to_many relationships with parent-dependent join filters"}
 
       true ->
         do_add_aggregate_group(query, relationship, aggregates)
@@ -320,7 +321,7 @@ defmodule AshSqlite.Aggregate do
           as: ^binding,
           on:
             field(as(^root_binding), ^relationship.source_attribute) ==
-              field(aggregate, ^relationship.destination_attribute)
+              field(aggregate, ^aggregate_join_attribute(relationship))
         )
 
       query =
@@ -340,8 +341,17 @@ defmodule AshSqlite.Aggregate do
   end
 
   defp aggregate_query(parent_query, relationship, aggregates, binding) do
-    with {:ok, query} <-
-           related_query(parent_query, relationship, hd(aggregates), binding) do
+    case relationship do
+      %{type: :many_to_many} ->
+        many_to_many_aggregate_query(parent_query, relationship, aggregates, binding)
+
+      relationship ->
+        related_aggregate_query(parent_query, relationship, aggregates, binding)
+    end
+  end
+
+  defp related_aggregate_query(parent_query, relationship, aggregates, binding) do
+    with {:ok, query} <- related_query(parent_query, relationship, hd(aggregates), binding) do
       root_binding = query.__ash_bindings__.root_binding
 
       query =
@@ -350,6 +360,40 @@ defmodule AshSqlite.Aggregate do
           select: %{
             ^relationship.destination_attribute =>
               field(as(^root_binding), ^relationship.destination_attribute)
+          }
+        )
+
+      Enum.reduce_while(aggregates, {:ok, query}, fn aggregate, {:ok, query} ->
+        case aggregate_dynamic(query, relationship, aggregate, root_binding) do
+          {:ok, query, dynamic} ->
+            {:cont, {:ok, Ecto.Query.select_merge(query, ^%{aggregate.name => dynamic})}}
+
+          {:error, error} ->
+            {:halt, {:error, error}}
+        end
+      end)
+    end
+  end
+
+  defp many_to_many_aggregate_query(parent_query, relationship, aggregates, binding) do
+    through_binding = binding + 1
+
+    with {:ok, query} <- related_query(parent_query, relationship, hd(aggregates), binding),
+         {:ok, through_query} <- through_query(parent_query, relationship, through_binding) do
+      root_binding = query.__ash_bindings__.root_binding
+      through_query = Ecto.Query.subquery(through_query)
+
+      query =
+        from(row in query,
+          join: through in ^through_query,
+          as: ^through_binding,
+          on:
+            field(through, ^relationship.destination_attribute_on_join_resource) ==
+              field(as(^root_binding), ^relationship.destination_attribute),
+          group_by: field(through, ^relationship.source_attribute_on_join_resource),
+          select: %{
+            ^relationship.source_attribute_on_join_resource =>
+              field(through, ^relationship.source_attribute_on_join_resource)
           }
         )
 
@@ -389,6 +433,47 @@ defmodule AshSqlite.Aggregate do
         {:error, error}
     end
   end
+
+  defp through_query(parent_query, relationship, binding) do
+    join_relationship =
+      Ash.Resource.Info.relationship(relationship.source, relationship.join_relationship)
+
+    relationship.through
+    |> Ash.Query.new()
+    |> Ash.Query.set_context(%{
+      data_layer: %{
+        start_bindings_at: binding,
+        parent_bindings: parent_query.__ash_bindings__
+      }
+    })
+    |> Ash.Query.set_context(join_relationship.context)
+    |> Ash.Query.do_filter(join_relationship.filter)
+    |> Ash.Query.data_layer_query(run_return_query?: false)
+    |> case do
+      {:ok, query} ->
+        {:ok,
+         query
+         |> Ecto.Query.exclude(:select)
+         |> Ecto.Query.exclude(:order_by)}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp aggregate_join_attribute(%{type: :many_to_many} = relationship) do
+    relationship.source_attribute_on_join_resource
+  end
+
+  defp aggregate_join_attribute(relationship), do: relationship.destination_attribute
+
+  defp join_relationship_filter_uses_parent?(%{type: :many_to_many} = relationship) do
+    relationship.source
+    |> Ash.Resource.Info.relationship(relationship.join_relationship)
+    |> relationship_filter_uses_parent?()
+  end
+
+  defp join_relationship_filter_uses_parent?(_relationship), do: false
 
   defp join_filter(%{join_filters: join_filters}, relationship_path)
        when is_map(join_filters) do
