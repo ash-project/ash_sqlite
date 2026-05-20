@@ -24,6 +24,52 @@ defmodule AshSqlite.SqlImplementation do
   @impl true
   def expr(
         query,
+        %Ash.Query.Operator.In{
+          right: %Ash.Query.Function.Type{arguments: [right | _]}
+        } = op,
+        bindings,
+        embedded?,
+        acc,
+        type
+      )
+      when is_list(right) or is_struct(right, MapSet) do
+    expr(query, %{op | right: right}, bindings, embedded?, acc, type)
+  end
+
+  def expr(
+        query,
+        %Ash.Query.Operator.In{left: left, right: right, embedded?: pred_embedded?},
+        bindings,
+        embedded?,
+        acc,
+        _type
+      )
+      when is_list(right) or is_struct(right, MapSet) do
+    {item_type, constraints} = in_item_type(left)
+    context_embedded? = pred_embedded? || embedded?
+    values = Enum.to_list(right)
+
+    if Enum.any?(values, &complex_in_value?/1) do
+      expand_in_to_or(query, left, values, bindings, context_embedded?, acc, item_type)
+    else
+      {left_expr, acc} =
+        AshSql.Expr.dynamic_expr(
+          query,
+          left,
+          in_left_bindings(bindings, item_type, constraints),
+          context_embedded?,
+          in_left_type(item_type, constraints),
+          acc
+        )
+
+      values = dump_in_values(query, bindings, values, item_type, constraints)
+
+      {:ok, Ecto.Query.dynamic(^left_expr in ^values), acc}
+    end
+  end
+
+  def expr(
+        query,
         %like{arguments: [arg1, arg2], embedded?: pred_embedded?},
         bindings,
         embedded?,
@@ -49,49 +95,6 @@ defmodule AshSqlite.SqlImplementation do
     else
       {:ok, Ecto.Query.dynamic(type(^inner_dyn, ^type)), acc}
     end
-  end
-
-  def expr(
-        query,
-        %Ash.Query.Operator.In{
-          right: %Ash.Query.Function.Type{arguments: [right | _]} = type
-        } = op,
-        bindings,
-        embedded?,
-        acc,
-        type
-      )
-      when is_list(right) or is_struct(right, MapSet) do
-    expr(query, %{op | right: right}, bindings, embedded?, acc, type)
-  end
-
-  def expr(
-        query,
-        %Ash.Query.Operator.In{left: left, right: right, embedded?: pred_embedded?},
-        bindings,
-        embedded?,
-        acc,
-        type
-      )
-      when is_list(right) or is_struct(right, MapSet) do
-    right
-    |> Enum.reduce(nil, fn val, acc ->
-      if is_nil(acc) do
-        %Ash.Query.Operator.Eq{left: left, right: val}
-      else
-        %Ash.Query.BooleanExpression{
-          op: :or,
-          left: acc,
-          right: %Ash.Query.Operator.Eq{left: left, right: val}
-        }
-      end
-    end)
-    |> then(fn expr ->
-      {expr, acc} =
-        AshSql.Expr.dynamic_expr(query, expr, bindings, pred_embedded? || embedded?, type, acc)
-
-      {:ok, expr, acc}
-    end)
   end
 
   def expr(
@@ -288,6 +291,120 @@ defmodule AshSqlite.SqlImplementation do
 
   defp plain_map?(value) when is_map(value) and not is_struct(value), do: true
   defp plain_map?(_), do: false
+
+  defp in_item_type(%Ash.Query.Ref{attribute: %{type: type} = attribute}) do
+    {type, Map.get(attribute, :constraints, []) || []}
+  end
+
+  defp in_item_type(_), do: {nil, []}
+
+  defp in_left_bindings(bindings, item_type, constraints) do
+    if ci_string_type?(item_type, constraints) do
+      bindings
+    else
+      Map.put(bindings, :no_cast?, true)
+    end
+  end
+
+  defp in_left_type(item_type, constraints) do
+    if ci_string_type?(item_type, constraints) do
+      if constraints == [] do
+        item_type
+      else
+        {item_type, constraints}
+      end
+    end
+  end
+
+  defp complex_in_value?(value) do
+    Ash.Expr.expr?(value) || is_list(value) || (is_map(value) && !is_struct(value))
+  end
+
+  defp expand_in_to_or(query, left, values, bindings, embedded?, acc, type) do
+    values
+    |> Enum.reduce(nil, fn value, acc ->
+      if is_nil(acc) do
+        %Ash.Query.Operator.Eq{left: left, right: value}
+      else
+        %Ash.Query.BooleanExpression{
+          op: :or,
+          left: acc,
+          right: %Ash.Query.Operator.Eq{left: left, right: value}
+        }
+      end
+    end)
+    |> then(fn expr ->
+      {expr, acc} = AshSql.Expr.dynamic_expr(query, expr, bindings, embedded?, type, acc)
+      {:ok, expr, acc}
+    end)
+  end
+
+  defp dump_in_values(_query, _bindings, values, nil, _constraints) do
+    Enum.map(values, fn
+      # Preserve the old equality fallback for untyped atom values when the LHS has no attribute.
+      value when is_atom(value) and not is_boolean(value) and not is_nil(value) ->
+        to_string(value)
+
+      value ->
+        value
+    end)
+  end
+
+  defp dump_in_values(query, bindings, values, item_type, constraints) do
+    ecto_type =
+      parameterized_type(item_type, constraints) ||
+        item_type
+        |> Ash.Type.get_type()
+        |> Ash.Type.storage_type(constraints)
+
+    adapter = sqlite_adapter!(query, bindings)
+
+    Enum.map(values, fn value ->
+      case Ecto.Type.adapter_dump(adapter, ecto_type, value) do
+        {:ok, value} -> value
+        # Some custom/already-dumped values may not accept another dump; keep the old value.
+        _ -> value
+      end
+    end)
+  end
+
+  defp sqlite_adapter!(query, bindings) do
+    repo =
+      bindings
+      |> Map.fetch!(:resource)
+      |> AshSql.dynamic_repo(__MODULE__, query)
+
+    case repo.__adapter__() do
+      Ecto.Adapters.SQLite3 ->
+        Ecto.Adapters.SQLite3
+
+      adapter ->
+        raise ArgumentError,
+              "expected #{inspect(repo)} to use sqlite adapter `Ecto.Adapters.SQLite3`, got: #{inspect(adapter)}"
+    end
+  end
+
+  defp ci_string_type?({:parameterized, {inner_type, constraints}}, []) do
+    parameterized_ci_string_type?(inner_type, constraints)
+  end
+
+  defp ci_string_type?({:parameterized, inner_type, constraints}, []) do
+    parameterized_ci_string_type?(inner_type, constraints)
+  end
+
+  defp ci_string_type?(type, constraints) when is_atom(type) do
+    type = Ash.Type.get_type(type)
+    Ash.Type.ash_type?(type) && Ash.Type.storage_type(type, constraints) == :ci_string
+  end
+
+  defp ci_string_type?(_, _), do: false
+
+  defp parameterized_ci_string_type?(inner_type, constraints)
+       when is_atom(inner_type) and is_list(constraints) do
+    function_exported?(inner_type, :type, 1) && inner_type.type(constraints) == :ci_string
+  end
+
+  defp parameterized_ci_string_type?(_, _), do: false
 
   @impl true
   def type_expr(expr, nil), do: expr
