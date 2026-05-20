@@ -223,6 +223,14 @@ defmodule AshSqlite.Test.Post do
   calculations do
     calculate(:score_after_winning, :integer, expr((score || 0) + 1))
     calculate(:negative_score, :integer, expr(-score))
+    calculate(:has_comments, :boolean, expr(count_of_comments > 0))
+
+    calculate(
+      :comment_likes_with_score,
+      :integer,
+      expr((sum_of_comment_likes || 0) + (score || 0))
+    )
+
     calculate(:category_label, :string, expr("(" <> category <> ")"))
     calculate(:score_with_score, :string, expr(score <> score))
     calculate(:foo_bar_from_stuff, :string, expr(stuff[:foo][:bar]))

@@ -474,7 +474,7 @@ defmodule AshSqlite.DataLayer do
       do: true
 
   def can?(_, :aggregate_filter), do: true
-  def can?(_, :aggregate_sort), do: false
+  def can?(_, :aggregate_sort), do: true
   def can?(_, :expression_calculation), do: true
   def can?(_, :expression_calculation_sort), do: true
   def can?(_, :create), do: true
@@ -587,7 +587,13 @@ defmodule AshSqlite.DataLayer do
     query_without_aggregates =
       Map.update!(query, :__ash_bindings__, &Map.put(&1, :load_aggregates, []))
 
-    with {:ok, query} <- AshSql.Query.return_query(query_without_aggregates, resource) do
+    with {:ok, query_without_aggregates} <-
+           AshSqlite.Aggregate.add_sort_aggregates(
+             query_without_aggregates,
+             query_without_aggregates.__ash_bindings__[:sort],
+             resource
+           ),
+         {:ok, query} <- AshSql.Query.return_query(query_without_aggregates, resource) do
       AshSqlite.Aggregate.add_aggregates(query, load_aggregates, resource)
     end
   end
@@ -608,7 +614,14 @@ defmodule AshSqlite.DataLayer do
       if query.__ash_bindings__[:sort_applied?] do
         {:ok, query}
       else
-        AshSql.Sort.apply_sort(query, query.__ash_bindings__[:sort], resource)
+        with {:ok, query} <-
+               AshSqlite.Aggregate.add_sort_aggregates(
+                 query,
+                 query.__ash_bindings__[:sort],
+                 resource
+               ) do
+          AshSql.Sort.apply_sort(query, query.__ash_bindings__[:sort], resource)
+        end
       end
 
     case with_sort_applied do
@@ -2058,9 +2071,8 @@ defmodule AshSqlite.DataLayer do
       end)
       |> Enum.uniq()
 
-    if Enum.any?(aggregates) do
-      {:error, "AshSqlite does not support calculations that reference aggregates yet"}
-    else
+    with {:ok, query} <-
+           AshSqlite.Aggregate.add_aggregates(query, aggregates, resource, select?: false) do
       AshSql.Calculation.add_calculations(query, calculations, resource, 0, true)
     end
   end

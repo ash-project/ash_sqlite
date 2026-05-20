@@ -13,6 +13,14 @@ defmodule AshSqlite.Aggregate do
     do_add_aggregates(query, aggregates, resource, select?)
   end
 
+  def add_sort_aggregates(query, sort, _resource) when sort in [nil, []], do: {:ok, query}
+
+  def add_sort_aggregates(query, sort, resource) do
+    with {:ok, aggregates} <- aggregates_from_sort(query, sort, resource) do
+      add_aggregates(query, aggregates, resource, select?: false)
+    end
+  end
+
   def relationship_filter_uses_parent?(%{filter: nil}), do: false
 
   def relationship_filter_uses_parent?(%{filter: filter}) do
@@ -126,6 +134,144 @@ defmodule AshSqlite.Aggregate do
       end)
 
     {aggregate.load, aggregate.name, loaded_aggregate_dynamic(aggregate, binding)}
+  end
+
+  defp aggregates_from_sort(query, sort, resource) do
+    sort
+    |> List.wrap()
+    |> Enum.reduce_while({:ok, []}, fn sort, {:ok, aggregates} ->
+      case sort_aggregates(query, sort, resource) do
+        {:ok, new_aggregates} ->
+          {:cont, {:ok, new_aggregates ++ aggregates}}
+
+        {:error, error} ->
+          {:halt, {:error, error}}
+      end
+    end)
+    |> case do
+      {:ok, aggregates} -> {:ok, Enum.uniq(aggregates)}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  defp sort_aggregates(query, {sort, _order}, resource) do
+    sort_key_aggregates(query, sort, resource)
+  end
+
+  defp sort_aggregates(query, sort, resource) do
+    sort_key_aggregates(query, sort, resource)
+  end
+
+  defp sort_key_aggregates(_query, %Ash.Query.Aggregate{} = aggregate, _resource) do
+    {:ok, [aggregate]}
+  end
+
+  defp sort_key_aggregates(query, %Ash.Query.Calculation{} = calculation, resource) do
+    calculation_aggregates(query, calculation, resource)
+  end
+
+  defp sort_key_aggregates(query, sort, resource) when is_atom(sort) do
+    case Ash.Resource.Info.field(resource, sort) do
+      %Ash.Resource.Aggregate{} = aggregate ->
+        query_aggregate(resource, aggregate)
+
+      %Ash.Resource.Calculation{} = calculation ->
+        calculation_aggregates(query, calculation, resource)
+
+      _ ->
+        {:ok, []}
+    end
+  end
+
+  defp sort_key_aggregates(_query, _sort, _resource), do: {:ok, []}
+
+  defp calculation_aggregates(query, %Ash.Resource.Calculation{} = calculation, resource) do
+    {module, opts} = calculation.calculation
+
+    with {:ok, calculation} <-
+           Ash.Query.Calculation.new(
+             calculation.name,
+             module,
+             opts,
+             calculation.type,
+             calculation.constraints
+           ) do
+      calculation =
+        Ash.Actions.Read.add_calc_context(
+          calculation,
+          query.__ash_bindings__.context[:private][:actor],
+          query.__ash_bindings__.context[:private][:authorize?],
+          query.__ash_bindings__.context[:private][:tenant],
+          query.__ash_bindings__.context[:private][:tracer],
+          query.__ash_bindings__.context[:private][:domain],
+          query.__ash_bindings__.context[:private][:resource],
+          parent_stack: query.__ash_bindings__[:parent_resources] || []
+        )
+
+      calculation_aggregates(query, calculation, resource)
+    end
+  end
+
+  defp calculation_aggregates(query, %Ash.Query.Calculation{} = calculation, resource) do
+    calculation.opts
+    |> calculation.module.expression(calculation.context)
+    |> Ash.Filter.hydrate_refs(%{
+      resource: resource,
+      aggregates: %{},
+      parent_stack: query.__ash_bindings__[:parent_resources] || [],
+      calculations: %{},
+      public?: false
+    })
+    |> case do
+      {:ok, expression} ->
+        {:ok, Ash.Filter.used_aggregates(expression)}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  defp query_aggregate(resource, aggregate) do
+    related = Ash.Resource.Info.related(resource, aggregate.relationship_path)
+
+    read_action =
+      aggregate.read_action ||
+        Ash.Resource.Info.primary_action!(related, :read).name
+
+    with %{valid?: true} = aggregate_query <- Ash.Query.for_read(related, read_action),
+         %{valid?: true} = aggregate_query <-
+           Ash.Query.build(aggregate_query,
+             filter: aggregate.filter,
+             sort: aggregate.sort
+           ),
+         {:ok, aggregate} <-
+           Ash.Query.Aggregate.new(
+             resource,
+             aggregate.name,
+             aggregate.kind,
+             path: aggregate.relationship_path,
+             query: aggregate_query,
+             field: aggregate.field,
+             default: aggregate.default,
+             filterable?: aggregate.filterable?,
+             type: aggregate.type,
+             sortable?: aggregate.sortable?,
+             include_nil?: aggregate.include_nil?,
+             constraints: aggregate.constraints,
+             implementation: aggregate.implementation,
+             uniq?: aggregate.uniq?,
+             read_action: read_action,
+             authorize?: aggregate.authorize?,
+             join_filters: aggregate.join_filters
+           ) do
+      {:ok, [aggregate]}
+    else
+      %{errors: errors} ->
+        {:error, errors}
+
+      {:error, error} ->
+        {:error, error}
+    end
   end
 
   defp add_aggregate_group(query, resource, [relationship_name], aggregates) do
