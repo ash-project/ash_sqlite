@@ -6,7 +6,7 @@ defmodule AshSqlite.AggregatesTest do
   use AshSqlite.RepoCase, async: false
 
   require Ash.Query
-  alias AshSqlite.Test.{Author, Comment, Post, PostLink, Rating}
+  alias AshSqlite.Test.{Author, Comment, Post, PostLink, Profile, Rating}
 
   test "a count with a filter returns the appropriate value" do
     Ash.Seed.seed!(%Post{title: "foo"})
@@ -86,6 +86,17 @@ defmodule AshSqlite.AggregatesTest do
              |> Ash.Query.load(:count_of_comments)
              |> Ash.Query.sort(:title)
              |> Ash.read!()
+  end
+
+  test "fieldless count aggregates use SQL count star" do
+    {:ok, query} =
+      Post
+      |> Ash.Query.load(:count_of_comments)
+      |> Ash.Query.data_layer_query()
+
+    {sql, _params} = Ecto.Adapters.SQL.to_sql(:all, AshSqlite.TestRepo, query)
+
+    assert sql =~ "count(*)"
   end
 
   test "relationship filters are applied to loaded aggregates" do
@@ -259,6 +270,33 @@ defmodule AshSqlite.AggregatesTest do
              ])
   end
 
+  test "fanout-prone aggregate filters return stable unsupported errors" do
+    post = create_post!("fanout aggregate filter")
+    comment = create_comment!(post, "popular", 1)
+    create_comment_rating!(comment, 10)
+    create_comment_rating!(comment, 11)
+
+    assert_raise Ash.Error.Unknown, ~r/sum, avg, list, custom, or field-based count/, fn ->
+      Ash.load!(post, :sum_of_comment_likes_with_popular_ratings)
+    end
+
+    assert_raise Ash.Error.Unknown, ~r/sum, avg, list, custom, or field-based count/, fn ->
+      Ash.load!(post, :avg_comment_likes_with_popular_ratings)
+    end
+
+    assert_raise Ash.Error.Unknown, ~r/list, custom, or field-based count aggregates/, fn ->
+      Ash.load!(post, :comment_titles_with_popular_ratings)
+    end
+
+    assert_raise Ash.Error.Unknown, ~r/list, custom, or field-based count aggregates/, fn ->
+      Ash.load!(post, :comment_titles_joined_with_popular_ratings)
+    end
+
+    assert_raise Ash.Error.Unknown, ~r/list, custom, or field-based count aggregates/, fn ->
+      Ash.load!(post, :count_comment_titles_with_popular_ratings)
+    end
+  end
+
   test "aggregate filters using parent expressions return a stable unsupported error" do
     post = create_post!("same")
     create_comment!(post, "same", 1)
@@ -293,6 +331,188 @@ defmodule AshSqlite.AggregatesTest do
 
     assert %{count_of_comment_ratings: 1} =
              Ash.load!(post, :count_of_comment_ratings)
+  end
+
+  test "first aggregates can be loaded" do
+    post = create_post!("first aggregate")
+    empty_post = create_post!("first aggregate empty")
+
+    create_comment!(post, nil, 1)
+    create_comment!(post, "bbb", 1)
+    create_comment!(post, "aaa", 1)
+    create_comment!(post, "stuff", 1)
+
+    loaded_post =
+      Ash.load!(post, [
+        :first_comment,
+        :first_comment_nils_first,
+        :first_comment_nils_first_called_stuff,
+        :first_comment_nils_first_include_nil
+      ])
+
+    assert loaded_post.first_comment == "aaa"
+    assert loaded_post.first_comment_nils_first == "aaa"
+    assert loaded_post.first_comment_nils_first_called_stuff == "stuff"
+    assert loaded_post.first_comment_nils_first_include_nil == nil
+
+    assert %{first_comment: nil} = Ash.load!(empty_post, :first_comment)
+  end
+
+  test "first aggregates can be sorted and used over belongs_to and multi-hop paths" do
+    author = create_author!("Belongs", "To")
+    author_post = create_post_for_author!(author, "belongs to first")
+
+    low = create_post!("low first")
+    high = create_post!("high first")
+
+    create_comment!(low, "aaa", 1)
+    create_comment!(high, "zzz", 1)
+
+    assert [
+             %Post{id: low_id, first_comment: "aaa"},
+             %Post{id: high_id, first_comment: "zzz"}
+           ] =
+             Post
+             |> Ash.Query.load(:first_comment)
+             |> Ash.Query.filter(count_of_comments > 0)
+             |> Ash.Query.sort(first_comment: :asc)
+             |> Ash.read!()
+
+    assert low_id == low.id
+    assert high_id == high.id
+
+    assert %{author_first_name: "Belongs"} = Ash.load!(author_post, :author_first_name)
+
+    comment = create_comment!(high, "rated", 1)
+    create_comment_rating!(comment, 3)
+    create_comment_rating!(comment, 10)
+
+    assert %{highest_rating: 10} = Ash.load!(high, :highest_rating)
+  end
+
+  test "list aggregates can be loaded" do
+    post = create_post!("list aggregate")
+    empty_post = create_post!("list aggregate empty")
+
+    first = create_comment!(post, "bbb", 1)
+    create_comment!(post, nil, 1)
+    create_comment!(post, "aaa", 7)
+    create_comment!(post, "aaa", 9)
+
+    loaded_post =
+      Ash.load!(post, [
+        :comment_titles,
+        :comment_titles_with_nils,
+        :uniq_comment_titles,
+        :comment_titles_with_5_likes,
+        :comment_ids
+      ])
+
+    assert loaded_post.comment_titles == ["aaa", "aaa", "bbb"]
+    assert loaded_post.comment_titles_with_nils == ["aaa", "aaa", "bbb", nil]
+    assert loaded_post.uniq_comment_titles == ["aaa", "bbb"]
+    assert loaded_post.comment_titles_with_5_likes == ["aaa", "aaa"]
+    assert first.id in loaded_post.comment_ids
+
+    assert %{comment_titles: []} = Ash.load!(empty_post, :comment_titles)
+  end
+
+  test "custom aggregates can use sqlite-specific implementations" do
+    post = create_post!("custom aggregate")
+
+    create_comment!(post, "aaa", 1)
+    create_comment!(post, "bbb", 1)
+
+    assert %{comment_titles_joined: joined} = Ash.load!(post, :comment_titles_joined)
+    assert joined |> String.split(",") |> Enum.sort() == ["aaa", "bbb"]
+  end
+
+  test "unrelated aggregates without parent filters can be loaded" do
+    first_author = create_author!("first", "author")
+    second_author = create_author!("second", "author")
+
+    create_profile!("bbb")
+    create_profile!("aaa")
+    create_profile!(nil)
+
+    create_post!("scored one", %{score: 2})
+    create_post!("scored two", %{score: 3})
+
+    loaded_authors =
+      [first_author, second_author]
+      |> Ash.load!([
+        :total_profiles,
+        :total_profiles_plus_one,
+        :total_post_score,
+        :avg_post_score,
+        :min_post_score,
+        :max_post_score,
+        :has_any_profile,
+        :first_profile_description,
+        :profile_descriptions,
+        :post_titles_joined
+      ])
+
+    assert [
+             %Author{
+               id: first_author_id,
+               total_profiles: 3,
+               total_profiles_plus_one: 4,
+               total_post_score: 5,
+               avg_post_score: 2.5,
+               min_post_score: 2,
+               max_post_score: 3,
+               has_any_profile: true,
+               first_profile_description: "aaa",
+               profile_descriptions: ["aaa", "bbb"]
+             } = loaded_first_author,
+             %Author{
+               id: second_author_id,
+               total_profiles: 3,
+               total_profiles_plus_one: 4,
+               total_post_score: 5,
+               avg_post_score: 2.5,
+               min_post_score: 2,
+               max_post_score: 3,
+               has_any_profile: true,
+               first_profile_description: "aaa",
+               profile_descriptions: ["aaa", "bbb"]
+             } = loaded_second_author
+           ] = loaded_authors
+
+    assert first_author_id == first_author.id
+    assert second_author_id == second_author.id
+
+    assert loaded_first_author.post_titles_joined |> String.split(",") |> Enum.sort() == [
+             "scored one",
+             "scored two"
+           ]
+
+    assert loaded_second_author.post_titles_joined |> String.split(",") |> Enum.sort() == [
+             "scored one",
+             "scored two"
+           ]
+  end
+
+  test "unsupported aggregate relationship shapes return stable errors" do
+    manual_relationship = Ash.Resource.Info.relationship(Post, :comments_containing_title)
+    no_attributes_relationship = Ash.Resource.Info.relationship(Post, :posts_with_matching_title)
+
+    parent_filter_relationship =
+      Ash.Resource.Info.relationship(Post, :comments_matching_post_title)
+
+    refute AshSqlite.DataLayer.can?(Post, {:aggregate_relationship, manual_relationship})
+    refute AshSqlite.DataLayer.can?(Post, {:aggregate_relationship, no_attributes_relationship})
+    refute AshSqlite.DataLayer.can?(Post, {:aggregate_relationship, parent_filter_relationship})
+  end
+
+  test "parent-dependent unrelated aggregate filters return a stable unsupported error" do
+    author = create_author!("parent", "unrelated")
+    create_profile!("parent")
+
+    assert_raise Ash.Error.Unknown, ~r/parent-dependent aggregate filters/, fn ->
+      Ash.load!(author, :profiles_matching_first_name)
+    end
   end
 
   test "calculations can reference related aggregates" do
@@ -362,6 +582,114 @@ defmodule AshSqlite.AggregatesTest do
     assert loaded_empty.sum_of_linked_post_scores == nil
     assert loaded_empty.avg_linked_post_score == nil
     assert loaded_empty.has_linked_post_called_match == false
+  end
+
+  test "many_to_many aggregates with filters that require joins can be loaded" do
+    source = create_post!("source")
+    author = create_author!("John", "Doe")
+    linked = create_post_for_author!(author, "linked")
+
+    link_posts!(source, [linked])
+
+    assert %{count_of_linked_posts_with_author: 1} =
+             Ash.load!(source, :count_of_linked_posts_with_author)
+  end
+
+  test "many_to_many aggregate filters that require joins work in parent queries" do
+    first_source = create_post!("first source")
+    second_source = create_post!("second source")
+    create_post!("no links")
+
+    author = create_author!("Jane", "Doe")
+    linked_with_author = create_post_for_author!(author, "linked with author")
+    linked_without_author = create_post!("linked without author")
+
+    link_posts!(first_source, [linked_with_author, linked_without_author])
+    link_posts!(second_source, [linked_with_author])
+
+    assert [
+             %Post{id: first_source_id, count_of_linked_posts_with_author: 1},
+             %Post{id: second_source_id, count_of_linked_posts_with_author: 1}
+           ] =
+             Post
+             |> Ash.Query.load(:count_of_linked_posts_with_author)
+             |> Ash.Query.filter(count_of_linked_posts_with_author > 0)
+             |> Ash.Query.sort(title: :asc)
+             |> Ash.read!()
+
+    assert first_source_id == first_source.id
+    assert second_source_id == second_source.id
+  end
+
+  test "many_to_many first and list aggregates can be loaded" do
+    source = create_post!("m2m window source")
+    empty = create_post!("m2m window empty")
+    first = create_post!("bbb")
+    second = create_post!("ccc")
+    archived = create_post!("aaa")
+
+    link_posts!(source, [second, first])
+    create_post_link!(source, archived, :archived)
+
+    assert %{
+             first_linked_post_title: "bbb",
+             linked_post_titles: ["bbb", "ccc"]
+           } =
+             Ash.load!(source, [
+               :first_linked_post_title,
+               :linked_post_titles
+             ])
+
+    assert %{
+             first_linked_post_title: nil,
+             linked_post_titles: []
+           } =
+             Ash.load!(empty, [
+               :first_linked_post_title,
+               :linked_post_titles
+             ])
+  end
+
+  test "many_to_many first and list aggregates with joined filters can be loaded" do
+    source = create_post!("m2m joined window source")
+    author = create_author!("Window", "Author")
+    without_author = create_post!("aaa")
+    with_author = create_post_for_author!(author, "bbb")
+    with_author_later = create_post_for_author!(author, "ccc")
+
+    link_posts!(source, [without_author, with_author_later, with_author])
+
+    assert %{
+             first_linked_post_title_with_author: "bbb",
+             linked_post_titles_with_author: ["bbb", "ccc"],
+             first_linked_post_title_with_author_join_filter: "bbb",
+             linked_post_titles_with_author_join_filter: ["bbb", "ccc"]
+           } =
+             Ash.load!(source, [
+               :first_linked_post_title_with_author,
+               :linked_post_titles_with_author,
+               :first_linked_post_title_with_author_join_filter,
+               :linked_post_titles_with_author_join_filter
+             ])
+  end
+
+  test "many_to_many custom aggregates can be loaded" do
+    source = create_post!("m2m custom source")
+    empty = create_post!("m2m custom empty")
+    first = create_post!("aaa")
+    second = create_post!("bbb")
+    archived = create_post!("ccc")
+
+    link_posts!(source, [second, first])
+    create_post_link!(source, archived, :archived)
+
+    assert %{linked_post_titles_joined: joined} =
+             Ash.load!(source, :linked_post_titles_joined)
+
+    assert joined |> String.split(",") |> Enum.sort() == ["aaa", "bbb"]
+
+    assert %{linked_post_titles_joined: nil} =
+             Ash.load!(empty, :linked_post_titles_joined)
   end
 
   test "many_to_many aggregates can be filtered, sorted and used in calculations" do
@@ -454,6 +782,37 @@ defmodule AshSqlite.AggregatesTest do
     assert loaded_empty.sum_of_comment_likes_through_posts == nil
     assert loaded_empty.avg_comment_likes_through_posts == nil
     assert loaded_empty.has_comment_called_match_through_posts == false
+  end
+
+  test "multi-hop list and custom aggregates can be loaded" do
+    author = create_author!("multi", "list")
+    empty_author = create_author!("multi", "list empty")
+
+    first_post = create_post_for_author!(author, "first post")
+    second_post = create_post_for_author!(author, "second post")
+
+    create_comment!(first_post, "bbb", 1)
+    create_comment!(second_post, "aaa", 1)
+
+    assert %{
+             comment_titles_through_posts: ["aaa", "bbb"],
+             comment_titles_joined_through_posts: joined
+           } =
+             Ash.load!(author, [
+               :comment_titles_through_posts,
+               :comment_titles_joined_through_posts
+             ])
+
+    assert joined |> String.split(",") |> Enum.sort() == ["aaa", "bbb"]
+
+    assert %{
+             comment_titles_through_posts: [],
+             comment_titles_joined_through_posts: nil
+           } =
+             Ash.load!(empty_author, [
+               :comment_titles_through_posts,
+               :comment_titles_joined_through_posts
+             ])
   end
 
   test "multi-hop aggregates can be filtered, sorted and used in calculations" do
@@ -558,9 +917,15 @@ defmodule AshSqlite.AggregatesTest do
     |> Ash.create!()
   end
 
-  defp create_comment!(post, title, likes) do
+  defp create_profile!(description) do
+    Profile
+    |> Ash.Changeset.for_create(:create, %{description: description})
+    |> Ash.create!()
+  end
+
+  defp create_comment!(post, title, likes, attrs \\ %{}) do
     Comment
-    |> Ash.Changeset.for_create(:create, %{title: title, likes: likes})
+    |> Ash.Changeset.for_create(:create, Map.merge(attrs, %{title: title, likes: likes}))
     |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
     |> Ash.create!()
   end

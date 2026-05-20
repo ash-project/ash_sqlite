@@ -357,7 +357,7 @@ defmodule AshSqlite.CalculationTest do
       |> Ash.create!()
     end)
 
-    assert_raise Ash.Error.Invalid, ~r/does not support using aggregates/, fn ->
+    assert_raise Ash.Error.Unknown, ~r/only supports loading related/, fn ->
       Ash.load!(author, :post_titles)
     end
   end

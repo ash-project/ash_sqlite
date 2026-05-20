@@ -36,6 +36,11 @@ defmodule AshSqlite.Test.Author do
     count(:count_of_comments_through_posts, [:posts, :comments])
     count(:count_of_comments_through_public_posts, [:public_posts, :comments])
     count(:count_of_linked_posts_through_posts, [:posts, :linked_posts])
+    count(:total_profiles, AshSqlite.Test.Profile)
+    sum(:total_post_score, AshSqlite.Test.Post, :score)
+    avg(:avg_post_score, AshSqlite.Test.Post, :score)
+    min(:min_post_score, AshSqlite.Test.Post, :score)
+    max(:max_post_score, AshSqlite.Test.Post, :score)
     sum(:sum_of_comment_likes_through_posts, [:posts, :comments], :likes)
     avg(:avg_comment_likes_through_posts, [:posts, :comments], :likes)
     min(:min_comment_likes_through_posts, [:posts, :comments], :likes)
@@ -51,6 +56,34 @@ defmodule AshSqlite.Test.Author do
 
     exists :has_comment_called_match_through_posts, [:posts, :comments] do
       filter(expr(title == "match"))
+    end
+
+    exists :has_any_profile, AshSqlite.Test.Profile do
+      filter(expr(not is_nil(description)))
+    end
+
+    count :profiles_matching_first_name, AshSqlite.Test.Profile do
+      filter(expr(description == parent(first_name)))
+    end
+
+    first :first_profile_description, AshSqlite.Test.Profile, :description do
+      sort(description: :asc_nils_last)
+    end
+
+    list :profile_descriptions, AshSqlite.Test.Profile, :description do
+      sort(description: :asc_nils_last)
+    end
+
+    list :comment_titles_through_posts, [:posts, :comments], :title do
+      sort(title: :asc_nils_last)
+    end
+
+    custom(:post_titles_joined, AshSqlite.Test.Post, :string) do
+      implementation({AshSqlite.Test.StringAgg, field: :title, delimiter: ","})
+    end
+
+    custom(:comment_titles_joined_through_posts, [:posts, :comments], :string) do
+      implementation({AshSqlite.Test.StringAgg, field: :title, delimiter: ","})
     end
   end
 
@@ -105,5 +138,7 @@ defmodule AshSqlite.Test.Author do
       :integer,
       expr((sum_of_comment_likes_through_posts || 0) + 1)
     )
+
+    calculate(:total_profiles_plus_one, :integer, expr(total_profiles + 1))
   end
 end

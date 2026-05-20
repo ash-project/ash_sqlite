@@ -184,13 +184,122 @@ defmodule AshSqlite.Test.Post do
     count(:count_of_comment_ratings, [:comments, :ratings])
     sum(:sum_of_comment_likes, :comments, :likes)
     sum(:sum_of_comment_likes_called_match, :comments, :likes, filter: expr(title == "match"))
+
+    sum(:sum_of_comment_likes_with_popular_ratings, :comments, :likes) do
+      filter(expr(not is_nil(popular_ratings.id)))
+    end
+
     sum(:sum_of_linked_post_scores, :linked_posts, :score)
     avg(:avg_comment_likes, :comments, :likes)
+
+    avg(:avg_comment_likes_with_popular_ratings, :comments, :likes) do
+      filter(expr(not is_nil(popular_ratings.id)))
+    end
+
     avg(:avg_linked_post_score, :linked_posts, :score)
     min(:min_comment_likes, :comments, :likes)
     min(:min_linked_post_score, :linked_posts, :score)
     max(:max_comment_likes, :comments, :likes)
     max(:max_linked_post_score, :linked_posts, :score)
+
+    first :first_comment, :comments, :title do
+      sort(title: :asc_nils_last)
+    end
+
+    first :first_comment_nils_first, :comments, :title do
+      sort(title: :asc_nils_first)
+    end
+
+    first :first_comment_nils_first_called_stuff, :comments, :title do
+      sort(title: :asc_nils_first)
+      filter(expr(title == "stuff"))
+    end
+
+    first :first_comment_nils_first_include_nil, :comments, :title do
+      include_nil?(true)
+      sort(title: :asc_nils_first)
+    end
+
+    first :last_comment, :comments, :title do
+      sort(title: :desc)
+    end
+
+    first :latest_comment_created_at, :comments, :created_at do
+      sort(created_at: :desc)
+    end
+
+    first :highest_rating, [:comments, :ratings], :score do
+      sort(score: :desc)
+    end
+
+    first(:author_first_name, :author, :first_name)
+
+    first :first_linked_post_title, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+    end
+
+    first :first_linked_post_title_with_author, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+      filter(expr(not is_nil(author.id)))
+    end
+
+    first :first_linked_post_title_with_author_join_filter, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+      join_filter(:linked_posts, expr(not is_nil(author.id)))
+    end
+
+    list :comment_titles, :comments, :title do
+      sort(title: :asc_nils_last)
+    end
+
+    list :comment_titles_with_nils, :comments, :title do
+      sort(title: :asc_nils_last)
+      include_nil?(true)
+    end
+
+    list :uniq_comment_titles, :comments, :title do
+      uniq?(true)
+      sort(title: :asc_nils_last)
+    end
+
+    list :comment_titles_with_5_likes, :comments, :title do
+      sort(title: :asc_nils_last)
+      filter(expr(likes >= 5))
+    end
+
+    list :comment_titles_with_popular_ratings, :comments, :title do
+      sort(title: :asc_nils_last)
+      filter(expr(not is_nil(popular_ratings.id)))
+    end
+
+    list(:comment_ids, :comments, :id)
+
+    list :linked_post_titles, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+    end
+
+    list :linked_post_titles_with_author, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+      filter(expr(not is_nil(author.id)))
+    end
+
+    list :linked_post_titles_with_author_join_filter, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+      join_filter(:linked_posts, expr(not is_nil(author.id)))
+    end
+
+    custom(:comment_titles_joined, :comments, :string) do
+      implementation({AshSqlite.Test.StringAgg, field: :title, delimiter: ","})
+    end
+
+    custom(:comment_titles_joined_with_popular_ratings, :comments, :string) do
+      filter(expr(not is_nil(popular_ratings.id)))
+      implementation({AshSqlite.Test.StringAgg, field: :title, delimiter: ","})
+    end
+
+    custom(:linked_post_titles_joined, :linked_posts, :string) do
+      implementation({AshSqlite.Test.StringAgg, field: :title, delimiter: ","})
+    end
 
     count :count_of_comments_called_match, :comments do
       filter(expr(title == "match"))
@@ -209,6 +318,11 @@ defmodule AshSqlite.Test.Post do
     end
 
     count :count_of_comments_with_popular_ratings, :comments do
+      filter(expr(not is_nil(popular_ratings.id)))
+    end
+
+    count :count_comment_titles_with_popular_ratings, :comments do
+      field(:title)
       filter(expr(not is_nil(popular_ratings.id)))
     end
 
@@ -234,6 +348,10 @@ defmodule AshSqlite.Test.Post do
 
     count :count_of_linked_posts_with_join_filter, :linked_posts do
       join_filter(:linked_posts, expr(title == "match"))
+    end
+
+    count :count_of_linked_posts_with_author, :linked_posts do
+      filter(expr(not is_nil(author.id)))
     end
   end
 
