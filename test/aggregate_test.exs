@@ -6,7 +6,7 @@ defmodule AshSqlite.AggregatesTest do
   use AshSqlite.RepoCase, async: false
 
   require Ash.Query
-  alias AshSqlite.Test.{Comment, Post, PostLink, Rating}
+  alias AshSqlite.Test.{Author, Comment, Post, PostLink, Rating}
 
   test "a count with a filter returns the appropriate value" do
     Ash.Seed.seed!(%Post{title: "foo"})
@@ -286,13 +286,13 @@ defmodule AshSqlite.AggregatesTest do
     end
   end
 
-  test "multi-hop aggregate relationships return stable unsupported errors" do
-    post = create_post!("unsupported relationships")
-    create_comment!(post, "comment", 1)
+  test "multi-hop aggregate relationships can be loaded through normal paths" do
+    post = create_post!("post multi-hop")
+    comment = create_comment!(post, "comment", 1)
+    create_comment_rating!(comment, 7)
 
-    assert_raise Ash.Error.Unknown, ~r/one relationship/, fn ->
-      Ash.load!(post, :count_of_comment_ratings)
-    end
+    assert %{count_of_comment_ratings: 1} =
+             Ash.load!(post, :count_of_comment_ratings)
   end
 
   test "calculations can reference related aggregates" do
@@ -414,9 +414,147 @@ defmodule AshSqlite.AggregatesTest do
              Ash.load!(source, :count_of_linked_posts_with_join_filter)
   end
 
+  test "multi-hop scalar aggregates can be loaded" do
+    author = create_author!("multi", "hop")
+    empty_author = create_author!("empty", "author")
+
+    first_post = create_post_for_author!(author, "first post")
+    second_post = create_post_for_author!(author, "second post")
+
+    create_comment!(first_post, "match", 1)
+    create_comment!(first_post, "other", 4)
+    create_comment!(second_post, "other", 10)
+
+    loaded_author =
+      Ash.load!(author, [
+        :count_of_comments_through_posts,
+        :sum_of_comment_likes_through_posts,
+        :avg_comment_likes_through_posts,
+        :min_comment_likes_through_posts,
+        :max_comment_likes_through_posts,
+        :has_comment_called_match_through_posts
+      ])
+
+    assert loaded_author.count_of_comments_through_posts == 3
+    assert loaded_author.sum_of_comment_likes_through_posts == 15
+    assert loaded_author.avg_comment_likes_through_posts == 5.0
+    assert loaded_author.min_comment_likes_through_posts == 1
+    assert loaded_author.max_comment_likes_through_posts == 10
+    assert loaded_author.has_comment_called_match_through_posts == true
+
+    loaded_empty =
+      Ash.load!(empty_author, [
+        :count_of_comments_through_posts,
+        :sum_of_comment_likes_through_posts,
+        :avg_comment_likes_through_posts,
+        :has_comment_called_match_through_posts
+      ])
+
+    assert loaded_empty.count_of_comments_through_posts == 0
+    assert loaded_empty.sum_of_comment_likes_through_posts == nil
+    assert loaded_empty.avg_comment_likes_through_posts == nil
+    assert loaded_empty.has_comment_called_match_through_posts == false
+  end
+
+  test "multi-hop aggregates can be filtered, sorted and used in calculations" do
+    one_comment = create_author!("one", "comment")
+    two_comments = create_author!("two", "comments")
+    no_comments = create_author!("no", "comments")
+
+    one_post = create_post_for_author!(one_comment, "one post")
+    two_post = create_post_for_author!(two_comments, "two post")
+
+    create_comment!(one_post, "only", 4)
+    create_comment!(two_post, "first", 5)
+    create_comment!(two_post, "second", 6)
+
+    assert [
+             %Author{
+               id: two_comments_id,
+               count_of_comments_through_posts: 2,
+               comment_likes_through_posts_plus_one: 12
+             },
+             %Author{
+               id: one_comment_id,
+               count_of_comments_through_posts: 1,
+               comment_likes_through_posts_plus_one: 5
+             }
+           ] =
+             Author
+             |> Ash.Query.load([
+               :count_of_comments_through_posts,
+               :comment_likes_through_posts_plus_one
+             ])
+             |> Ash.Query.filter(count_of_comments_through_posts > 0)
+             |> Ash.Query.sort(count_of_comments_through_posts: :desc)
+             |> Ash.read!()
+
+    assert two_comments_id == two_comments.id
+    assert one_comment_id == one_comment.id
+
+    assert %{comment_likes_through_posts_plus_one: 1} =
+             Ash.load!(no_comments, :comment_likes_through_posts_plus_one)
+  end
+
+  test "aggregate join filters are applied on multi-hop relationships" do
+    author = create_author!("multi", "join filter")
+    public_post = create_post_for_author!(author, "public post", %{public: true})
+    private_post = create_post_for_author!(author, "private post", %{public: false})
+
+    create_comment!(public_post, "match", 1)
+    create_comment!(public_post, "other", 1)
+    create_comment!(private_post, "match", 1)
+
+    loaded_author =
+      Ash.load!(author, [
+        :count_of_comments_on_public_posts,
+        :count_of_comments_called_match_with_join_filter
+      ])
+
+    assert loaded_author.count_of_comments_on_public_posts == 2
+    assert loaded_author.count_of_comments_called_match_with_join_filter == 2
+  end
+
+  test "intermediate read action filters are applied on multi-hop aggregates" do
+    author = create_author!("multi", "read action")
+    public_post = create_post_for_author!(author, "public action post", %{public: true})
+    private_post = create_post_for_author!(author, "private action post", %{public: false})
+
+    create_comment!(public_post, "public", 1)
+    create_comment!(private_post, "private", 1)
+
+    assert %{count_of_comments_through_public_posts: 1} =
+             Ash.load!(author, :count_of_comments_through_public_posts)
+  end
+
+  test "multi-hop paths containing many_to_many relationships return a stable unsupported error" do
+    author = create_author!("multi", "m2m unsupported")
+    post = create_post_for_author!(author, "post")
+    linked_post = create_post!("linked")
+
+    link_posts!(post, [linked_post])
+
+    assert_raise Ash.Error.Unknown, ~r/multi-hop paths that include many_to_many/, fn ->
+      Ash.load!(author, :count_of_linked_posts_through_posts)
+    end
+  end
+
   defp create_post!(title, attrs \\ %{}) do
     Post
     |> Ash.Changeset.for_create(:create, Map.put(attrs, :title, title))
+    |> Ash.create!()
+  end
+
+  defp create_author!(first_name, last_name) do
+    Author
+    |> Ash.Changeset.for_create(:create, %{first_name: first_name, last_name: last_name})
+    |> Ash.create!()
+  end
+
+  defp create_post_for_author!(author, title, attrs \\ %{}) do
+    Post
+    |> Ash.Changeset.for_create(:create, Map.put(attrs, :title, title))
+    |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
     |> Ash.create!()
   end
 

@@ -43,6 +43,10 @@ defmodule AshSqlite.Test.Post do
       pagination(offset?: true, required?: true)
     end
 
+    read :public do
+      filter(expr(public == true))
+    end
+
     create :create do
       primary?(true)
       argument(:rating, :map)

@@ -326,9 +326,11 @@ Helpdesk.Support.Ticket
 
 ### Aggregates
 
-AshSqlite supports loading, filtering, sorting, and expression calculations for related `count`, `sum`, `avg`, `min`, `max`, and `exists` aggregates over a single normal relationship, and over one-hop many-to-many relationships. Aggregate filters and aggregate `join_filter`s are supported for those same paths when they do not depend on parent row values.
+AshSqlite supports loading, filtering, sorting, and expression calculations for related `count`, `sum`, `avg`, `min`, `max`, and `exists` aggregates over normal relationship paths, and over one-hop many-to-many relationships. Aggregate filters and aggregate `join_filter`s are supported for those same paths when they do not depend on parent row values.
 
-Full aggregate parity with [ash_postgres](https://github.com/ash-project/ash_postgres) is not available yet. Unsupported cases include `first`, `list`, `custom`, unrelated aggregates, manual relationships, `no_attributes?` relationships, multi-hop relationships, parent-dependent relationship filters, parent-dependent aggregate filters, parent-dependent `join_filter`s, aggregate filters that reference other aggregates, and fanout-prone `sum`, `avg`, or field-based `count` aggregate filters over to-many relationship references.
+Full aggregate parity with [ash_postgres](https://github.com/ash-project/ash_postgres) is not available yet. Unsupported cases include `first`, `list`, `custom`, unrelated aggregates, manual relationships, `no_attributes?` relationships, multi-hop paths that include many-to-many relationships, parent-dependent relationship filters, parent-dependent aggregate filters, parent-dependent `join_filter`s, aggregate filters that reference other aggregates, and fanout-prone `sum`, `avg`, or field-based `count` aggregate filters over to-many relationship references.
+
+Aggregate queries use grouped subqueries and join them back to the parent query. For aggregate-heavy SQLite apps, add indexes for relationship keys used by those subqueries, such as child foreign keys and many-to-many join-resource key pairs.
 
 
 ### Rich Configuration Options

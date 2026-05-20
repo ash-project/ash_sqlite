@@ -35,6 +35,8 @@ defmodule AshSqlite.Test.Comment do
       filter(expr(likes > 5))
     end
 
+    read(:public)
+
     create :create do
       primary?(true)
       argument(:rating, :map)
