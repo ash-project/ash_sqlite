@@ -31,6 +31,10 @@ defmodule AshSqlite.Test.Comment do
     default_accept(:*)
     defaults([:read, :update, :destroy])
 
+    read :liked do
+      filter(expr(likes > 5))
+    end
+
     create :create do
       primary?(true)
       argument(:rating, :map)
@@ -63,5 +67,9 @@ defmodule AshSqlite.Test.Comment do
       relationship_context: %{data_layer: %{table: "comment_ratings"}},
       filter: expr(score > 5)
     )
+  end
+
+  aggregates do
+    count(:count_of_ratings, :ratings)
   end
 end

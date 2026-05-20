@@ -172,6 +172,54 @@ defmodule AshSqlite.Test.Post do
     validate(attribute_does_not_equal(:title, "not allowed"))
   end
 
+  aggregates do
+    count(:count_of_comments, :comments)
+    count(:count_of_popular_comments, :popular_comments)
+    count(:count_of_liked_comments, :comments, read_action: :liked)
+    count(:count_of_comment_ratings, [:comments, :ratings])
+    sum(:sum_of_comment_likes, :comments, :likes)
+    sum(:sum_of_comment_likes_called_match, :comments, :likes, filter: expr(title == "match"))
+    avg(:avg_comment_likes, :comments, :likes)
+    min(:min_comment_likes, :comments, :likes)
+    max(:max_comment_likes, :comments, :likes)
+
+    count :count_of_comments_called_match, :comments do
+      filter(expr(title == "match"))
+    end
+
+    count :count_of_comments_with_join_filter, :comments do
+      join_filter(:comments, expr(title == "match"))
+    end
+
+    count :count_of_comments_with_related_filter, :comments do
+      filter(expr(not is_nil(post.id)))
+    end
+
+    count :count_of_comments_with_related_exists_filter, :comments do
+      filter(expr(exists(post, not is_nil(id))))
+    end
+
+    count :count_of_comments_with_popular_ratings, :comments do
+      filter(expr(not is_nil(popular_ratings.id)))
+    end
+
+    count :count_of_comments_with_aggregate_filter, :comments do
+      filter(expr(count_of_ratings > 0))
+    end
+
+    count :count_of_comments_matching_post_title, :comments do
+      filter(expr(title == parent(title)))
+    end
+
+    count :count_of_comments_with_parent_join_filter, :comments do
+      join_filter(:comments, expr(title == parent(title)))
+    end
+
+    exists :has_comment_called_match, :comments do
+      filter(expr(title == "match"))
+    end
+  end
+
   calculations do
     calculate(:score_after_winning, :integer, expr((score || 0) + 1))
     calculate(:negative_score, :integer, expr(-score))

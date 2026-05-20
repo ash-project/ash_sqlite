@@ -469,9 +469,11 @@ defmodule AshSqlite.DataLayer do
 
   def can?(_, :boolean_filter), do: true
 
-  def can?(_, {:aggregate, _type}), do: false
+  def can?(_, {:aggregate, type})
+      when type in [:count, :sum, :avg, :max, :min, :exists],
+      do: true
 
-  def can?(_, :aggregate_filter), do: false
+  def can?(_, :aggregate_filter), do: true
   def can?(_, :aggregate_sort), do: false
   def can?(_, :expression_calculation), do: true
   def can?(_, :expression_calculation_sort), do: true
@@ -496,7 +498,21 @@ defmodule AshSqlite.DataLayer do
 
   def can?(_, {:filter_relationship, _}), do: true
 
-  def can?(_, {:aggregate_relationship, _}), do: false
+  def can?(_, {:aggregate_relationship, %{manual: {_, _}}}), do: false
+
+  def can?(_, {:aggregate_relationship, %{type: :many_to_many}}), do: false
+
+  def can?(_, {:aggregate_relationship, %{no_attributes?: true}}), do: false
+
+  def can?(_, {:aggregate_relationship, relationship})
+      when not is_nil(relationship.filter) do
+    not AshSqlite.Aggregate.relationship_filter_uses_parent?(relationship) &&
+      can?(relationship.source, {:join, relationship.destination})
+  end
+
+  def can?(resource, {:aggregate_relationship, relationship}) do
+    can?(resource, {:join, relationship.destination})
+  end
 
   def can?(_, :timeout), do: true
   def can?(_, {:filter_expr, %Ash.Query.Function.StringJoin{}}), do: false
@@ -561,6 +577,22 @@ defmodule AshSqlite.DataLayer do
   end
 
   @impl true
+  def return_query(query, resource) do
+    query =
+      query
+      |> AshSql.Bindings.default_bindings(resource, AshSqlite.SqlImplementation)
+
+    load_aggregates = query.__ash_bindings__[:load_aggregates] || []
+
+    query_without_aggregates =
+      Map.update!(query, :__ash_bindings__, &Map.put(&1, :load_aggregates, []))
+
+    with {:ok, query} <- AshSql.Query.return_query(query_without_aggregates, resource) do
+      AshSqlite.Aggregate.add_aggregates(query, load_aggregates, resource)
+    end
+  end
+
+  @impl true
   def run_aggregate_query(query, aggregates, resource) do
     AshSql.AggregateQuery.run_aggregate_query(
       query,
@@ -609,7 +641,8 @@ defmodule AshSqlite.DataLayer do
            repo.all(
              query,
              opts
-           )}
+           )
+           |> AshSql.Query.remap_mapped_fields(query)}
         end
     end
   rescue
@@ -1981,11 +2014,25 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def filter(query, filter, _resource, opts \\ []) do
+    used_aggregates = Ash.Filter.used_aggregates(filter, [])
+
     query
     |> AshSql.Join.join_all_relationships(filter, opts)
     |> case do
       {:ok, query} ->
-        {:ok, AshSql.Filter.add_filter_expression(query, filter)}
+        query
+        |> AshSqlite.Aggregate.add_aggregates(
+          used_aggregates,
+          query.__ash_bindings__.resource,
+          select?: false
+        )
+        |> case do
+          {:ok, query} ->
+            {:ok, AshSql.Filter.add_filter_expression(query, filter)}
+
+          {:error, error} ->
+            {:error, error}
+        end
 
       {:error, error} ->
         {:error, error}
@@ -1993,8 +2040,29 @@ defmodule AshSqlite.DataLayer do
   end
 
   @impl true
+  def add_aggregates(query, aggregates, _resource) do
+    {:ok,
+     Map.update!(query, :__ash_bindings__, fn bindings ->
+       Map.put(bindings, :load_aggregates, aggregates)
+     end)}
+  end
+
+  @impl true
   def add_calculations(query, calculations, resource) do
-    AshSql.Calculation.add_calculations(query, calculations, resource, 0, true)
+    aggregates =
+      calculations
+      |> Enum.flat_map(fn {calculation, expression} ->
+        expression
+        |> Ash.Filter.used_aggregates([])
+        |> Enum.map(&Map.put(&1, :context, calculation.context))
+      end)
+      |> Enum.uniq()
+
+    if Enum.any?(aggregates) do
+      {:error, "AshSqlite does not support calculations that reference aggregates yet"}
+    else
+      AshSql.Calculation.add_calculations(query, calculations, resource, 0, true)
+    end
   end
 
   @doc false
