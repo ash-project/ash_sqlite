@@ -90,10 +90,13 @@ defmodule AshSqlite.SqlImplementation do
         Ecto.Query.dynamic(like(fragment("LOWER(?)", ^arg1), fragment("LOWER(?)", ^arg2)))
       end
 
-    if type != Ash.Type.Boolean do
-      {:ok, inner_dyn, acc}
+    # `like`/`ilike` produce SQLite's 0/1 integer result, so cast back to a
+    # proper boolean when that's the expected output type. `type` typically
+    # arrives as a `{Ash.Type.Boolean, constraints}` tuple, so match both forms.
+    if boolean_type?(type) do
+      {:ok, Ecto.Query.dynamic(type(^inner_dyn, :boolean)), acc}
     else
-      {:ok, Ecto.Query.dynamic(type(^inner_dyn, ^type)), acc}
+      {:ok, inner_dyn, acc}
     end
   end
 
@@ -292,11 +295,12 @@ defmodule AshSqlite.SqlImplementation do
   defp plain_map?(value) when is_map(value) and not is_struct(value), do: true
   defp plain_map?(_), do: false
 
-  defp in_item_type(%Ash.Query.Ref{attribute: %{type: type} = attribute}) do
-    {type, Map.get(attribute, :constraints, []) || []}
+  defp in_item_type(left) do
+    case Ash.Expr.determine_type(left) do
+      {:ok, {type, constraints}} -> {type, constraints || []}
+      _ -> {nil, []}
+    end
   end
-
-  defp in_item_type(_), do: {nil, []}
 
   defp in_left_bindings(bindings, item_type, constraints) do
     if ci_string_type?(item_type, constraints) do
@@ -357,7 +361,7 @@ defmodule AshSqlite.SqlImplementation do
         |> Ash.Type.get_type()
         |> Ash.Type.storage_type(constraints)
 
-    adapter = sqlite_adapter!(query, bindings)
+    adapter = sqlite_adapter(query, bindings)
 
     Enum.map(values, fn value ->
       case Ecto.Type.adapter_dump(adapter, ecto_type, value) do
@@ -368,21 +372,20 @@ defmodule AshSqlite.SqlImplementation do
     end)
   end
 
-  defp sqlite_adapter!(query, bindings) do
-    repo =
-      bindings
-      |> Map.fetch!(:resource)
-      |> AshSql.dynamic_repo(__MODULE__, query)
-
-    case repo.__adapter__() do
-      Ecto.Adapters.SQLite3 ->
-        Ecto.Adapters.SQLite3
-
-      adapter ->
-        raise ArgumentError,
-              "expected #{inspect(repo)} to use sqlite adapter `Ecto.Adapters.SQLite3`, got: #{inspect(adapter)}"
-    end
+  # Every `AshSqlite.Repo` is compiled with `adapter: Ecto.Adapters.SQLite3`,
+  # so we can extract the adapter without asserting on it.
+  defp sqlite_adapter(query, bindings) do
+    bindings
+    |> Map.fetch!(:resource)
+    |> AshSql.dynamic_repo(__MODULE__, query)
+    |> then(& &1.__adapter__())
   end
+
+  defp boolean_type?(Ash.Type.Boolean), do: true
+  defp boolean_type?({Ash.Type.Boolean, _}), do: true
+  defp boolean_type?(:boolean), do: true
+  defp boolean_type?({:boolean, _}), do: true
+  defp boolean_type?(_), do: false
 
   defp ci_string_type?({:parameterized, {inner_type, constraints}}, []) do
     parameterized_ci_string_type?(inner_type, constraints)
