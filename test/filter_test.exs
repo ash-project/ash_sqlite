@@ -4,7 +4,7 @@
 
 defmodule AshSqlite.FilterTest do
   use AshSqlite.RepoCase, async: false
-  alias AshSqlite.Test.{Author, Comment, Post}
+  alias AshSqlite.Test.{Author, Comment, IntegerPost, Post}
 
   require Ash.Query
 
@@ -181,6 +181,134 @@ defmodule AshSqlite.FilterTest do
                Post
                |> Ash.Query.filter(title in ["title1", "title2"])
                |> Ash.Query.sort(title: :asc)
+               |> Ash.read!()
+    end
+
+    test "large pinned lists do not compile to nested OR expressions" do
+      titles = Enum.map(1..1100, &"title#{&1}")
+
+      query =
+        Post
+        |> Ash.Query.new()
+        |> Ash.Query.filter(title in ^titles)
+
+      {:ok, ecto_query} = Ash.Query.data_layer_query(query)
+      {sql, _params} = Ecto.Adapters.SQL.to_sql(:all, TestRepo, ecto_query)
+
+      assert sql =~ " IN "
+      assert sql =~ ~s(p0."title" IN)
+      refute sql =~ " OR "
+      refute sql =~ ~S|CAST(p0."title" AS TEXT) IN|
+
+      assert [] = Ash.read!(query)
+    end
+
+    test "empty pinned lists return no rows" do
+      assert [] =
+               Post
+               |> Ash.Query.filter(id in ^[])
+               |> Ash.read!()
+    end
+
+    test "complex list values keep the existing OR fallback" do
+      query =
+        Post
+        |> Ash.Query.new()
+        |> Ash.Query.filter(stuff in ^[%{"kind" => "one"}, %{"kind" => "two"}])
+
+      {:ok, ecto_query} = Ash.Query.data_layer_query(query)
+      {sql, _params} = Ecto.Adapters.SQL.to_sql(:all, TestRepo, ecto_query)
+
+      assert sql =~ " OR "
+      assert sql =~ ~S|json(p0."stuff")|
+      assert [] = Ash.read!(query)
+    end
+
+    test "it properly filters typed scalar values" do
+      post_id = Ash.UUID.generate()
+
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{
+          id: post_id,
+          title: "typed",
+          score: 7,
+          public: true,
+          category: "MiXeD",
+          status: :open,
+          status_enum: :closed
+        })
+        |> Ash.create!()
+
+      no_cast_post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "no cast", status_enum_no_cast: :open})
+        |> Ash.create!()
+
+      integer_post =
+        IntegerPost
+        |> Ash.Changeset.for_create(:create, %{title: "integer"})
+        |> Ash.create!()
+
+      no_cast_post_id = no_cast_post.id
+      integer_post_id = integer_post.id
+
+      score_query =
+        Post
+        |> Ash.Query.filter(score in ^[7])
+
+      {:ok, ecto_query} = Ash.Query.data_layer_query(score_query)
+      {sql, _params} = Ecto.Adapters.SQL.to_sql(:all, TestRepo, ecto_query)
+
+      assert sql =~ ~s(p0."score" IN)
+      refute sql =~ ~S|CAST(p0."score" AS INTEGER) IN|
+
+      assert [%Post{id: ^post_id}] =
+               Post
+               |> Ash.Query.filter(id in ^[post_id])
+               |> Ash.read!()
+
+      assert [%Post{id: ^post_id}] =
+               Ash.read!(score_query)
+
+      assert [%Post{id: ^post_id}] =
+               Post
+               |> Ash.Query.filter(public in ^[true] and title in ^["typed"])
+               |> Ash.read!()
+
+      assert [%Post{id: ^post_id}] =
+               Post
+               |> Ash.Query.filter(category in ^["mixed"])
+               |> Ash.read!()
+
+      assert [%Post{id: ^post_id}] =
+               Post
+               |> Ash.Query.filter(status in ^[:open] and title in ^["typed"])
+               |> Ash.read!()
+
+      assert [%Post{id: ^post_id}] =
+               Post
+               |> Ash.Query.filter(status_enum in ^[:closed] and title in ^["typed"])
+               |> Ash.read!()
+
+      assert [%Post{id: ^post_id}] =
+               Post
+               |> Ash.Query.filter(created_at in ^[post.created_at] and title in ^["typed"])
+               |> Ash.read!()
+
+      assert [%Post{id: ^post_id}] =
+               Post
+               |> Ash.Query.filter(decimal in ^[Decimal.new("0")] and title in ^["typed"])
+               |> Ash.read!()
+
+      assert [%Post{id: ^no_cast_post_id}] =
+               Post
+               |> Ash.Query.filter(status_enum_no_cast in ^[:open] and title in ^["no cast"])
+               |> Ash.read!()
+
+      assert [%IntegerPost{id: ^integer_post_id}] =
+               IntegerPost
+               |> Ash.Query.filter(id in ^[integer_post_id])
                |> Ash.read!()
     end
   end
