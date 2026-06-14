@@ -12,9 +12,17 @@ on:
     branches: [main]
 jobs:
   ash-ci:
+    strategy:
+      fail-fast: false
+      matrix:
+        sqlite-adapter: ["sqlite3", "libsql"]
     uses: ash-project/ash/.github/workflows/ash-ci.yml@main
     with:
       sqlite: true
+      sqlite-adapter: ${{ matrix.sqlite-adapter }}
+      publish-docs: ${{ matrix.sqlite-adapter == 'sqlite3' }}
+      release: ${{ matrix.sqlite-adapter == 'sqlite3' }}
+      igniter-upgrade: ${{ matrix.sqlite-adapter == 'sqlite3' }}
       reuse: true
     secrets:
       hex_api_key: ${{ secrets.HEX_API_KEY }}
