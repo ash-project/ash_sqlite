@@ -1036,6 +1036,57 @@ defmodule AshSqlite.DataLayer do
      end)}
   end
 
+  # libSQL error handlers (ecto_libsql uses EctoLibSql.Error instead of Exqlite.Error,
+  # but the message format is identical since both are SQLite-compatible)
+  if Code.ensure_loaded?(EctoLibSql.Error) do
+    defp handle_raised_error(
+           %EctoLibSql.Error{message: "FOREIGN KEY constraint failed"},
+           stacktrace,
+           context,
+           resource
+         ) do
+      handle_raised_error(
+        Ash.Error.Changes.InvalidChanges.exception(
+          fields: Ash.Resource.Info.primary_key(resource),
+          message: "referenced something that does not exist"
+        ),
+        stacktrace,
+        context,
+        resource
+      )
+    end
+
+    defp handle_raised_error(
+           %EctoLibSql.Error{message: "UNIQUE constraint failed: " <> fields},
+           _stacktrace,
+           _context,
+           resource
+         ) do
+      names =
+        fields
+        |> String.split(", ")
+        |> Enum.map(fn field ->
+          field |> String.split(".", trim: true) |> Enum.drop(1) |> Enum.at(0)
+        end)
+        |> Enum.map(fn field ->
+          Ash.Resource.Info.attribute(resource, field)
+        end)
+        |> Enum.reject(&is_nil/1)
+        |> Enum.map(fn %{name: name} -> name end)
+
+      message = find_constraint_message(resource, names)
+
+      {:error,
+       names
+       |> Enum.map(fn name ->
+         Ash.Error.Changes.InvalidAttribute.exception(
+           field: name,
+           message: message
+         )
+       end)}
+    end
+  end
+
   defp handle_raised_error(error, stacktrace, _ecto_changeset, _resource) do
     {:error, Ash.Error.to_ash_error(error, stacktrace)}
   end

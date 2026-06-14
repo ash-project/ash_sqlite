@@ -145,6 +145,7 @@ defmodule AshSqlite.MixProject do
     [
       {:ecto_sql, "~> 3.13"},
       {:ecto_sqlite3, "~> 0.12"},
+      {:ecto_libsql, "~> 0.9", optional: true},
       {:ecto, "~> 3.13"},
       {:jason, "~> 1.0"},
       {:ash, ash_version("~> 3.19")},
