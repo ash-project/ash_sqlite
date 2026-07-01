@@ -34,7 +34,9 @@ defmodule AshSqlite.LibSqlAdapterSupportTest do
 
     test "parses UNIQUE constraint message with single field" do
       message = "UNIQUE constraint failed: users.email"
-      fields = message
+
+      fields =
+        message
         |> String.replace_prefix("UNIQUE constraint failed: ", "")
         |> String.split(", ")
         |> Enum.map(fn field ->
@@ -46,7 +48,9 @@ defmodule AshSqlite.LibSqlAdapterSupportTest do
 
     test "parses UNIQUE constraint message with multiple fields" do
       message = "UNIQUE constraint failed: users.org_id, users.slug"
-      fields = message
+
+      fields =
+        message
         |> String.replace_prefix("UNIQUE constraint failed: ", "")
         |> String.split(", ")
         |> Enum.map(fn field ->
