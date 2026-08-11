@@ -494,7 +494,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       keys =
         case multitenancy.strategy do
           :attribute ->
-            [multitenancy.attribute | keys]
+            Enum.uniq([multitenancy.attribute | keys])
 
           _ ->
             keys
@@ -517,7 +517,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       keys =
         case multitenancy.strategy do
           :attribute ->
-            [multitenancy.attribute | keys]
+            Enum.uniq([multitenancy.attribute | keys])
 
           _ ->
             keys
@@ -585,7 +585,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       keys =
         case multitenancy.strategy do
           :attribute ->
-            [to_string(multitenancy.attribute) | Enum.map(index.fields, &to_string/1)]
+            Enum.uniq([to_string(multitenancy.attribute) | Enum.map(index.fields, &to_string/1)])
 
           _ ->
             Enum.map(index.fields, &to_string/1)
@@ -619,7 +619,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       keys =
         case multitenancy.strategy do
           :attribute ->
-            [to_string(multitenancy.attribute) | Enum.map(index.fields, &to_string/1)]
+            Enum.uniq([to_string(multitenancy.attribute) | Enum.map(index.fields, &to_string/1)])
 
           _ ->
             Enum.map(index.fields, &to_string/1)
@@ -666,7 +666,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       keys =
         case multitenancy.strategy do
           :attribute ->
-            [to_string(multitenancy.attribute) | Enum.map(index.fields, &to_string/1)]
+            Enum.uniq([to_string(multitenancy.attribute) | Enum.map(index.fields, &to_string/1)])
 
           _ ->
             Enum.map(index.fields, &to_string/1)
@@ -684,7 +684,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       keys =
         case multitenancy.strategy do
           :attribute ->
-            [to_string(multitenancy.attribute) | Enum.map(index.fields, &to_string/1)]
+            Enum.uniq([to_string(multitenancy.attribute) | Enum.map(index.fields, &to_string/1)])
 
           _ ->
             Enum.map(index.fields, &to_string/1)
@@ -762,7 +762,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       keys =
         case multitenancy.strategy do
           :attribute ->
-            [multitenancy.attribute | keys]
+            Enum.uniq([multitenancy.attribute | keys])
 
           _ ->
             keys
@@ -781,7 +781,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       keys =
         case multitenancy.strategy do
           :attribute ->
-            [multitenancy.attribute | keys]
+            Enum.uniq([multitenancy.attribute | keys])
 
           _ ->
             keys

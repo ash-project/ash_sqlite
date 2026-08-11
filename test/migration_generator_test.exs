@@ -160,6 +160,62 @@ defmodule AshSqlite.MigrationGeneratorTest do
     end
   end
 
+  describe "creating initial snapshots for resources with attribute multitenancy" do
+    setup %{snapshot_path: snapshot_path, migration_path: migration_path} do
+      defposts do
+        sqlite do
+          custom_indexes do
+            index([:organization_id, :name], name: "posts_custom_tenant_index")
+          end
+        end
+
+        multitenancy do
+          strategy(:attribute)
+          attribute(:organization_id)
+        end
+
+        identities do
+          identity(:unique_name_per_org, [:organization_id, :name])
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string)
+          attribute(:organization_id, :uuid)
+        end
+      end
+
+      defdomain([Post])
+
+      AshSqlite.MigrationGenerator.generate(Domain,
+        snapshot_path: snapshot_path,
+        migration_path: migration_path,
+        quiet: true,
+        format: false,
+        auto_name: true
+      )
+
+      :ok
+    end
+
+    test "identity keys that include the tenant attribute are not duplicated", %{
+      migration_path: migration_path
+    } do
+      assert [file] = Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs")
+
+      file_contents = File.read!(file)
+
+      assert file_contents =~
+               ~S{create unique_index(:posts, [:organization_id, :name], name: "posts_unique_name_per_org_index")}
+
+      assert file_contents =~
+               ~S{create index(:posts, ["organization_id", "name"], name: "posts_custom_tenant_index")}
+
+      refute file_contents =~ ~S{:organization_id, :organization_id}
+      refute file_contents =~ ~S{"organization_id", "organization_id"}
+    end
+  end
+
   describe "strict table" do
     setup %{snapshot_path: snapshot_path, migration_path: migration_path} do
       defposts do
