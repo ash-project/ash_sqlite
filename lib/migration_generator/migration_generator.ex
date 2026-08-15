@@ -685,6 +685,7 @@ defmodule AshSqlite.MigrationGenerator do
             merge_uniq!(references, table, :destination_attribute_generated, name),
           multitenancy: merge_uniq!(references, table, :multitenancy, name),
           primary_key?: merge_uniq!(references, table, :primary_key?, name),
+          match_tenant?: merge_uniq!(references, table, :match_tenant?, name),
           on_delete: merge_uniq!(references, table, :on_delete, name),
           on_update: merge_uniq!(references, table, :on_update, name),
           name: merge_uniq!(references, table, :name, name),
@@ -2365,6 +2366,13 @@ defmodule AshSqlite.MigrationGenerator do
           destination_attribute_source =
             destination_attribute.source || destination_attribute.name
 
+          verify_composite_tenant_reference!(
+            resource,
+            relationship,
+            configured_reference,
+            destination_attribute_source
+          )
+
           %{
             destination_attribute: destination_attribute_source,
             deferrable: configured_reference.deferrable,
@@ -2373,6 +2381,7 @@ defmodule AshSqlite.MigrationGenerator do
             on_update: configured_reference.on_update,
             name: configured_reference.name,
             primary_key?: destination_attribute.primary_key?,
+            match_tenant?: configured_reference.match_tenant?,
             table:
               relationship.context[:data_layer][:table] ||
                 AshSqlite.DataLayer.Info.table(relationship.destination)
@@ -2392,6 +2401,7 @@ defmodule AshSqlite.MigrationGenerator do
         on_update: nil,
         deferrable: false,
         name: nil,
+        match_tenant?: false,
         ignore?: false
       })
 
@@ -2403,6 +2413,123 @@ defmodule AshSqlite.MigrationGenerator do
         relationship.destination,
         relationship.destination_attribute
       ).primary_key?
+    )
+  end
+
+  # When both resources use attribute multitenancy, the generated foreign key
+  # includes the tenant attribute (always for non-primary-key destinations,
+  # opt-in via `match_tenant?: true` for primary-key destinations). SQLite only
+  # accepts such a composite foreign key if the destination table has a
+  # non-partial UNIQUE index over exactly the referenced columns — otherwise
+  # every statement touching the source table fails at prepare time with
+  # "foreign key mismatch", so we check for that index here and raise eagerly.
+  defp verify_composite_tenant_reference!(
+         resource,
+         relationship,
+         configured_reference,
+         destination_attribute_source
+       ) do
+    destination = relationship.destination
+    source_multitenancy = multitenancy(resource)
+    destination_multitenancy = multitenancy(destination)
+    match_tenant? = Map.get(configured_reference, :match_tenant?, false)
+
+    composite? =
+      source_multitenancy.strategy == :attribute &&
+        destination_multitenancy.strategy == :attribute &&
+        destination_multitenancy.attribute != destination_attribute_source &&
+        (!configured_reference.primary_key? || match_tenant?)
+
+    if composite? do
+      tenant_attribute = destination_multitenancy.attribute
+
+      referenced_columns =
+        Enum.map([destination_attribute_source, tenant_attribute], &to_string/1)
+
+      unless unique_index_on?(destination, MapSet.new(referenced_columns), tenant_attribute) do
+        remove_hint =
+          if match_tenant? do
+            """
+
+            Alternatively, remove `match_tenant?: true` from the reference to generate
+            a plain single-column foreign key that does not enforce matching tenants.
+            """
+          else
+            ""
+          end
+
+        raise """
+        Cannot generate a foreign key for the relationship `#{inspect(resource)}.#{relationship.name}`.
+
+        Because both `#{inspect(resource)}` and `#{inspect(destination)}` use attribute
+        multitenancy, this reference would include the tenant attribute, i.e:
+
+            (#{source_multitenancy.attribute}, ...) REFERENCES "#{AshSqlite.DataLayer.Info.table(destination)}" (#{Enum.join(referenced_columns, ", ")})
+
+        SQLite requires a UNIQUE index on exactly (#{Enum.join(referenced_columns, ", ")}) on the
+        destination table for this foreign key to be valid. Without it, every statement
+        touching the source table fails at prepare time with "foreign key mismatch".
+
+        To fix this, add a unique index covering those columns to `#{inspect(destination)}`, e.g:
+
+            custom_indexes do
+              index [:#{destination_attribute_source}, :#{tenant_attribute}], unique: true
+            end
+
+        or an identity on `:#{destination_attribute_source}` (unique indexes generated for
+        identities automatically include the tenant attribute).
+        #{remove_hint}\
+        """
+      end
+    end
+
+    :ok
+  end
+
+  defp unique_index_on?(destination, required_columns, tenant_attribute) do
+    primary_key =
+      destination
+      |> Ash.Resource.Info.primary_key()
+      |> Enum.map(fn key ->
+        attribute = Ash.Resource.Info.attribute(destination, key)
+        to_string(attribute.source || attribute.name)
+      end)
+      |> MapSet.new()
+
+    # identities with a base filter generate partial unique indexes, which
+    # cannot back a foreign key in SQLite
+    identity_columns =
+      if Ash.Resource.Info.base_filter(destination) do
+        []
+      else
+        skipped = AshSqlite.DataLayer.Info.skip_unique_indexes(destination)
+
+        destination
+        |> Ash.Resource.Info.identities()
+        |> Enum.reject(&(&1.name in skipped))
+        |> Enum.filter(fn identity ->
+          Enum.all?(identity.keys, &Ash.Resource.Info.attribute(destination, &1))
+        end)
+        |> Enum.map(fn identity ->
+          identity.keys
+          |> Enum.map(fn key ->
+            attribute = Ash.Resource.Info.attribute(destination, key)
+            attribute.source || attribute.name
+          end)
+          |> then(&Enum.uniq([tenant_attribute | &1]))
+          |> MapSet.new(&to_string/1)
+        end)
+      end
+
+    custom_index_columns =
+      destination
+      |> AshSqlite.DataLayer.Info.custom_indexes()
+      |> Enum.filter(&(&1.unique && is_nil(&1.where)))
+      |> Enum.map(fn index -> MapSet.new(index.fields, &to_string/1) end)
+
+    Enum.any?(
+      [primary_key | identity_columns] ++ custom_index_columns,
+      &MapSet.equal?(&1, required_columns)
     )
   end
 
@@ -2685,6 +2812,7 @@ defmodule AshSqlite.MigrationGenerator do
         end)
         |> Map.put_new(:destination_attribute_default, "nil")
         |> Map.put_new(:destination_attribute_generated, false)
+        |> Map.put_new(:match_tenant?, false)
         |> Map.put_new(:on_delete, nil)
         |> Map.put_new(:on_update, nil)
         |> Map.update!(:on_delete, &(&1 && String.to_atom(&1)))

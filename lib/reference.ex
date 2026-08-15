@@ -11,6 +11,7 @@ defmodule AshSqlite.Reference do
     :name,
     :deferrable,
     :__spark_metadata__,
+    match_tenant?: false,
     ignore?: false
   ]
 
@@ -44,6 +45,12 @@ defmodule AshSqlite.Reference do
         doc: """
         Wether or not the constraint is deferrable. This only affects the migration generator.
         """
+      ],
+      match_tenant?: [
+        type: :boolean,
+        default: false,
+        doc:
+          "If true, include the multitenancy attribute in the foreign key so tenants must match. Requires a unique index on the destination covering the referenced column and the tenant attribute."
       ],
       name: [
         type: :string,

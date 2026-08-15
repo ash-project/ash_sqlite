@@ -262,6 +262,7 @@ reference :post, on_delete: :delete, on_update: :update, name: "comments_to_post
 | [`on_delete`](#sqlite-references-reference-on_delete){: #sqlite-references-reference-on_delete } | `:delete \| :nilify \| :nothing \| :restrict` |  | What should happen to records of this resource when the referenced record of the *destination* resource is deleted. |
 | [`on_update`](#sqlite-references-reference-on_update){: #sqlite-references-reference-on_update } | `:update \| :nilify \| :nothing \| :restrict` |  | What should happen to records of this resource when the referenced destination_attribute of the *destination* record is update. |
 | [`deferrable`](#sqlite-references-reference-deferrable){: #sqlite-references-reference-deferrable } | `false \| true \| :initially` | `false` | Wether or not the constraint is deferrable. This only affects the migration generator. |
+| [`match_tenant?`](#sqlite-references-reference-match_tenant?){: #sqlite-references-reference-match_tenant? } | `boolean` | `false` | If true, include the multitenancy attribute in the foreign key so tenants must match. Requires a unique index on the destination covering the referenced column and the tenant attribute. |
 | [`name`](#sqlite-references-reference-name){: #sqlite-references-reference-name } | `String.t` |  | The name of the foreign key to generate in the database. Defaults to <table>_<source_attribute>_fkey |
 
 
