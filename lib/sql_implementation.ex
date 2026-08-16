@@ -302,6 +302,65 @@ defmodule AshSqlite.SqlImplementation do
     :error
   end
 
+  # SQLite has no `ARRAY[...]` constructor, so the `ARRAY[...]` / `array_to_json(ARRAY[...])`
+  # rendering AshSql falls back to is a syntax error here:
+  #
+  #     ** (Exqlite.Error) near "[?,?]": syntax error
+  #     UPDATE "visual_machines" AS v0 SET ..., "nodes" = ARRAY[?,?]
+  #
+  # `json_array(...)` is the equivalent, and the element treatment is chosen to match what the
+  # data layer already stores for the same column. Ecto's SQLite adapter dumps an
+  # `{:array, :map}` field by JSON-encoding each element and then JSON-encoding the list, so the
+  # column holds a JSON array of JSON STRINGS:
+  #
+  #     ["{\"id\":\"n1\"}","{\"id\":\"n2\"}"]
+  #
+  # `json_array(?, ?)` with each parameter bound to `Jason.encode!(element)` produces exactly
+  # that, byte for byte, which is what makes the value round-trip through the loader and makes
+  # the `is_distinct_from` comparison against the column meaningful (a no-op write compares
+  # equal and does not bump `updated_at`).
+  #
+  # When the expected type is a JSON value rather than an array column (`:map` / `:json` /
+  # `:jsonb`, the case AshSql renders with `array_to_json`), the elements are JSON VALUES rather
+  # than strings, so they go through `json(...)`.
+  @impl true
+  def list_expr(query, value, bindings, embedded?, acc, type) do
+    json_value? = type in [:map, :jsonb, :json]
+
+    elements =
+      value
+      |> Enum.map(&list_element(&1, json_value?))
+      |> Enum.intersperse([raw: ","])
+      |> List.flatten()
+
+    {expr, acc} =
+      AshSql.Expr.dynamic_expr(
+        query,
+        %Ash.Query.Function.Fragment{
+          embedded?: embedded?,
+          arguments: [raw: "json_array("] ++ elements ++ [raw: ")"]
+        },
+        bindings,
+        embedded?,
+        type,
+        acc
+      )
+
+    {:ok, expr, acc}
+  end
+
+  # A plain map or list is data, and it is bound as its JSON text. Anything else (an expression,
+  # a column reference, a scalar) is rendered as itself.
+  defp list_element(item, json_value?) when is_list(item), do: encoded_element(item, json_value?)
+
+  defp list_element(item, json_value?) when is_map(item) and not is_struct(item),
+    do: encoded_element(item, json_value?)
+
+  defp list_element(item, _json_value?), do: [expr: item]
+
+  defp encoded_element(item, true), do: [raw: "json(", expr: Jason.encode!(item), raw: ")"]
+  defp encoded_element(item, false), do: [expr: Jason.encode!(item)]
+
   defp handle_map_comparison(
          query,
          operator,
