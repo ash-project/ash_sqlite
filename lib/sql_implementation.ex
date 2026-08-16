@@ -232,6 +232,64 @@ defmodule AshSqlite.SqlImplementation do
     handle_map_comparison(query, :==, left, right, pred_embedded?, bindings, embedded?, acc, type)
   end
 
+  # `is_distinct_from` is the NULL-safe form of `!=`, and Ash emits it in place of `!=` whenever
+  # either side can be nil (see `Ash.Query.Function.IsDistinctFrom.new/1`). It needs the same
+  # JSON treatment as the two clauses above, and without it a map reaches the driver as a bare
+  # Elixir term and is rejected: `(Exqlite.Error) unsupported type: %{...}`. The clearest way to
+  # see it is one resource with two `:map` attributes, where only `allow_nil?` differs - the
+  # `allow_nil? false` one takes `!=` and updates, the nullable one takes `is_distinct_from` and
+  # raises. `update_timestamp` builds exactly this comparison, so any atomic update of a nullable
+  # map attribute is affected.
+  def expr(
+        query,
+        %Ash.Query.Function.IsDistinctFrom{
+          arguments: [left, right],
+          embedded?: pred_embedded?
+        },
+        bindings,
+        embedded?,
+        acc,
+        type
+      )
+      when is_non_struct_map(left) or is_non_struct_map(right) do
+    handle_map_comparison(
+      query,
+      :is_distinct_from,
+      left,
+      right,
+      pred_embedded?,
+      bindings,
+      embedded?,
+      acc,
+      type
+    )
+  end
+
+  def expr(
+        query,
+        %Ash.Query.Function.IsNotDistinctFrom{
+          arguments: [left, right],
+          embedded?: pred_embedded?
+        },
+        bindings,
+        embedded?,
+        acc,
+        type
+      )
+      when is_non_struct_map(left) or is_non_struct_map(right) do
+    handle_map_comparison(
+      query,
+      :is_not_distinct_from,
+      left,
+      right,
+      pred_embedded?,
+      bindings,
+      embedded?,
+      acc,
+      type
+    )
+  end
+
   @impl true
   def expr(
         _query,
@@ -260,8 +318,17 @@ defmodule AshSqlite.SqlImplementation do
 
     result =
       case operator do
-        :== -> Ecto.Query.dynamic(^left_expr == ^right_expr)
-        :!= -> Ecto.Query.dynamic(^left_expr != ^right_expr)
+        :== ->
+          Ecto.Query.dynamic(^left_expr == ^right_expr)
+
+        :!= ->
+          Ecto.Query.dynamic(^left_expr != ^right_expr)
+
+        :is_distinct_from ->
+          Ecto.Query.dynamic(fragment("(? IS DISTINCT FROM ?)", ^left_expr, ^right_expr))
+
+        :is_not_distinct_from ->
+          Ecto.Query.dynamic(fragment("(? IS NOT DISTINCT FROM ?)", ^left_expr, ^right_expr))
       end
 
     {:ok, result, acc}
