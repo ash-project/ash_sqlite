@@ -290,6 +290,36 @@ defmodule AshSqlite.SqlImplementation do
     )
   end
 
+  # The clauses above JSON-encode a map that is an OPERAND of a comparison, and `list_expr/6`
+  # below JSON-encodes a map that is an ELEMENT of a list. A map in any other position is still
+  # handed to the driver as a bare Elixir term, and rejected:
+  #
+  #     ** (Exqlite.Error) unsupported type: %{"k" => "v"}
+  #     SELECT ... FROM "devices" AS d0 WHERE ((json(d0."entity") = json(?)))
+  #
+  # AshSql renders a plain map specially only inside a `select` sub-expression, or inside an
+  # `update` / `aggregate` when the map CONTAINS an expression; every other position falls through
+  # to binding the map itself as a parameter. That covers a map used as a fragment argument, as a
+  # branch of an `if`, or anywhere else an expression can nest.
+  #
+  # The treatment is the one `handle_map_comparison/9` already uses for the same value: the map is
+  # data, so it is bound as its JSON text. `Jason.encode!/1` is what Ecto's SQLite adapter dumps
+  # for a `:map` column, so a map rendered here is byte-identical to the same map stored by an
+  # INSERT, and comparing one against the other is meaningful.
+  #
+  # A map that contains an expression is left alone: its values are not data, so they cannot be
+  # encoded, and AshSql's own handling of that case is unchanged.
+  def expr(query, value, bindings, embedded?, acc, type)
+      when is_non_struct_map(value) do
+    if bindings[:location] == :select or Ash.Expr.expr?(value) do
+      :error
+    else
+      {expr, acc} = as_json(query, value, false, bindings, embedded?, acc, type)
+
+      {:ok, expr, acc}
+    end
+  end
+
   @impl true
   def expr(
         _query,
