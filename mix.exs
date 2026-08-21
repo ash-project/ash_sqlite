@@ -88,6 +88,7 @@ defmodule AshSqlite.MixProject do
         "documentation/tutorials/getting-started-with-ash-sqlite.md",
         "documentation/topics/about-ash-sqlite/what-is-ash-sqlite.md",
         "documentation/topics/about-ash-sqlite/transactions.md",
+        "documentation/topics/about-ash-sqlite/multitenancy.md",
         "documentation/topics/resources/references.md",
         "documentation/topics/resources/polymorphic-resources.md",
         "documentation/topics/development/migrations-and-tasks.md",

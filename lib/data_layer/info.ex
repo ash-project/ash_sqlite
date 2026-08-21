@@ -23,6 +23,11 @@ defmodule AshSqlite.DataLayer.Info do
     Extension.get_opt(resource, [:sqlite], :write_transactions?, false, true)
   end
 
+  @doc "The configured tenant binder for a resource, if any"
+  def tenant_binder(resource) do
+    Extension.get_opt(resource, [:sqlite], :tenant_binder, nil, true)
+  end
+
   @doc "The configured table for a resource"
   def table(resource) do
     Extension.get_opt(resource, [:sqlite], :table, nil, true)
