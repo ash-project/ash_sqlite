@@ -203,6 +203,21 @@ defmodule AshSqlite.DataLayer do
         doc:
           "The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more. Can also be a function that takes a resource and a type `:read | :mutate` and returns the repo."
       ],
+      write_transactions?: [
+        type: :boolean,
+        default: false,
+        doc: """
+        Whether Ash may wrap this resource's write actions in a transaction.
+
+        Off by default. SQLite allows a single write lock at a time and a
+        contended write fails immediately rather than queueing, so transactions
+        are only safe once the repo is configured for them. See the
+        [transactions guide](/documentation/topics/about-ash-sqlite/transactions.md).
+
+        With this on, write transactions are opened as `BEGIN IMMEDIATE` so that
+        `busy_timeout` can do its job.
+        """
+      ],
       migrate?: [
         type: :boolean,
         default: true,
@@ -447,7 +462,7 @@ defmodule AshSqlite.DataLayer do
   def can?(_, :destroy_query), do: true
   def can?(_, {:lock, _}), do: false
 
-  def can?(_, :transact), do: false
+  def can?(resource, :transact), do: AshSqlite.DataLayer.Info.write_transactions?(resource)
   def can?(_, :composite_primary_key), do: true
   def can?(_, {:atomic, :update}), do: true
   def can?(_, {:atomic, :upsert}), do: true
@@ -2102,6 +2117,49 @@ defmodule AshSqlite.DataLayer do
     }
 
     %{query | __ash_bindings__: new_ash_bindings}
+  end
+
+  @impl true
+  def in_transaction?(resource) do
+    repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
+
+    # Ash asks this before opening a transaction, and the answer has to be an
+    # answer rather than an exception. `Ecto.Repo.in_transaction?/0` resolves the
+    # current dynamic repo through the registry and raises when it is not there,
+    # which happens whenever the repo was reached through
+    # `c:Ecto.Repo.put_dynamic_repo/1` and started under no name of its own. No
+    # running repo means no open transaction.
+    case repo.get_dynamic_repo() do
+      pid when is_pid(pid) -> repo.in_transaction?()
+      name when is_atom(name) -> !is_nil(GenServer.whereis(name)) and repo.in_transaction?()
+    end
+  end
+
+  # An atomic update is a single statement, so it is already atomic. Wrapping it
+  # would hold SQLite's one write lock across the surrounding work and buy nothing.
+  @impl true
+  def prefer_transaction_for_atomic_updates?(_resource), do: false
+
+  @impl true
+  def transaction(resource, func, timeout \\ nil, reason \\ %{type: :custom, metadata: %{}}) do
+    repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
+
+    # A read takes no write lock, so it stays deferred. Anything that may write
+    # takes the write lock up front, because a deferred transaction that reads and
+    # then writes has to *upgrade* its lock -- and SQLite cannot make an upgrade
+    # wait for `busy_timeout`, since the snapshot the transaction already read from
+    # may be stale by the time the lock frees. It fails immediately instead.
+    # `BEGIN IMMEDIATE` has nothing to upgrade, so `busy_timeout` applies.
+    mode = if reason[:type] == :read, do: :deferred, else: :immediate
+
+    opts =
+      case timeout do
+        nil -> [mode: mode]
+        :infinity -> [mode: mode]
+        timeout -> [mode: mode, timeout: timeout]
+      end
+
+    repo.transaction(func, opts)
   end
 
   @impl true

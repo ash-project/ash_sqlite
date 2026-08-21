@@ -39,7 +39,8 @@ spark_locals_without_parens = [
   unique_index_names: 1,
   up: 1,
   using: 1,
-  where: 1
+  where: 1,
+  write_transactions?: 1
 ]
 
 [
