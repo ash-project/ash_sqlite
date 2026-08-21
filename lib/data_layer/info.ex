@@ -18,6 +18,11 @@ defmodule AshSqlite.DataLayer.Info do
     end
   end
 
+  @doc "Whether Ash may wrap this resource's write actions in a transaction"
+  def write_transactions?(resource) do
+    Extension.get_opt(resource, [:sqlite], :write_transactions?, false, true)
+  end
+
   @doc "The configured table for a resource"
   def table(resource) do
     Extension.get_opt(resource, [:sqlite], :table, nil, true)
