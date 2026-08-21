@@ -17,6 +17,45 @@ Because of this, **AshSqlite disables transaction support by default**
 (`can?(:transact)` returns `false`). Without extra configuration, Ash will not
 wrap actions in transactions when using the SQLite data layer.
 
+## Enabling Transactions
+
+Transactions are opt in per resource, via `write_transactions?` in the `sqlite`
+block:
+
+```elixir
+sqlite do
+  table "accounts"
+  repo MyApp.Repo
+  write_transactions? true
+end
+```
+
+Turning this on is worth it wherever an action does more than one thing. Without
+a transaction, a create whose `after_action` hook fails leaves its record behind:
+the insert already committed on its own, and there is nothing to undo it. With
+one, the failure rolls the insert back.
+
+Read it as a statement about the *repo*, not just the resource — a resource only
+transacts safely once the repo underneath it is configured as below. Leaving it
+off is not a bug, and it stays the default so that existing applications are
+unaffected.
+
+> ### Transactions are opened as IMMEDIATE {: .info}
+>
+> When a write transaction is opened, AshSqlite issues `BEGIN IMMEDIATE` rather
+> than letting it default to deferred, whatever `default_transaction_mode` is set
+> to. This is what makes `busy_timeout` effective for transactions that read
+> before they write.
+>
+> A deferred transaction takes no lock until its first write, so a
+> read-then-write has to *upgrade* to the write lock partway through. SQLite
+> cannot make an upgrade wait: the snapshot the transaction already read from may
+> be stale by the time the lock frees, so it fails immediately no matter how long
+> `busy_timeout` is. `BEGIN IMMEDIATE` takes the lock up front, and has nothing to
+> upgrade.
+>
+> Read-only transactions stay deferred, since they never take the write lock.
+
 ## Enabling Reliable Concurrent Writes
 
 `ecto_sqlite3` exposes two knobs that together make concurrent writes behave more

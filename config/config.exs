@@ -39,6 +39,14 @@ if Mix.env() == :test do
     pool: Ecto.Adapters.SQL.Sandbox,
     migration_primary_key: [name: :id, type: :binary_id]
 
+  # No `database:` and no sandbox: the multitenancy tests start an instance of this
+  # per tenant, each against its own file, and bind it with `put_dynamic_repo/1`.
+  # Deliberately absent from `ecto_repos:` -- there is nothing to migrate centrally.
+  config :ash_sqlite, AshSqlite.TenantRepo,
+    pool_size: 1,
+    migration_lock: false,
+    migration_primary_key: [name: :id, type: :binary_id]
+
   config :ash_sqlite,
     ecto_repos: [AshSqlite.TestRepo, AshSqlite.DevTestRepo],
     ash_domains: [
