@@ -84,8 +84,6 @@ defmodule AshSqlite.MultitenancyTest do
   end
 
   test "a tenant given to Ash.create/3 rather than to the changeset still arrives" do
-    # The tenant is applied after global changes have run, so nothing has put it in
-    # the changeset context by the time the transaction opens.
     post =
       TenantedPost
       |> Ash.Changeset.for_create(:create, %{title: "late tenant"})
@@ -113,8 +111,6 @@ defmodule AshSqlite.MultitenancyTest do
   end
 
   test "aggregates are bound, which a caller could not have wrapped" do
-    # `Ash.count/2` never enters `Ash.Actions.Read`, so a preparation or an
-    # around_transaction hook cannot reach it. Binding in the data layer does.
     create!("acme", "acme one")
     create!("globex", "globex one")
     create!("globex", "globex two")
@@ -124,7 +120,6 @@ defmodule AshSqlite.MultitenancyTest do
   end
 
   test "atomic updates are bound", %{repos: repos} do
-    # Ash builds these as one statement with no changeset for a caller to hook.
     create!("acme", "before")
 
     TenantedPost

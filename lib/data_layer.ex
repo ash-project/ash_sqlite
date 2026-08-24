@@ -540,10 +540,8 @@ defmodule AshSqlite.DataLayer do
   @impl true
   @doc """
   A no-op on the query: with one database per tenant there is no prefix to set.
-
   The connection is chosen per statement by the resource's `tenant_binder`
-  instead. Declaring the strategy still earns its keep — it makes Ash accept the
-  resource and enforce "a tenant is required unless `global?`".
+  instead.   
   """
   def set_tenant(_resource, query, _tenant) do
     {:ok, query}
@@ -2310,7 +2308,6 @@ defmodule AshSqlite.DataLayer do
 
         binder.bind(tenant, [resource: resource, usage: usage], fn ->
           if enclosing && repo.get_dynamic_repo() != enclosing do
-            # TODO: message wording.
             raise ArgumentError, """
             #{inspect(resource)} tried to run a statement for tenant \
             #{inspect(tenant)} inside a transaction open on another tenant's \
@@ -2333,7 +2330,6 @@ defmodule AshSqlite.DataLayer do
   # this catches the paths that bypass an action.
   defp unbound(resource, fun) do
     if tenant_required?(resource) do
-      # TODO: message wording.
       raise ArgumentError, """
       #{inspect(resource)} has `strategy :context` but this statement carried no \
       tenant, so there is no connection to select. Pass a tenant, or set \
@@ -2376,10 +2372,6 @@ defmodule AshSqlite.DataLayer do
 
   defp query_tenant(_), do: nil
 
-  # A bulk operation is one statement per group, so every changeset in it has to
-  # agree on the tenant. Ash builds batches per action and per tenant, so a mixed
-  # batch is a bug elsewhere -- but this is the last place it could be caught
-  # before rows land in the wrong database.
   defp changesets_tenant(changesets) do
     changesets
     |> Enum.map(& &1.tenant)
