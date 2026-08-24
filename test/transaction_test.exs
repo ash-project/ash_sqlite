@@ -14,16 +14,14 @@ defmodule AshSqlite.TransactionTest do
 
   alias AshSqlite.Test.{Account, TransactionalAccount}
 
-  require Ash.Query
-
   test "transactions are off unless the resource asks for them" do
     refute Ash.DataLayer.data_layer_can?(Account, :transact)
     assert Ash.DataLayer.data_layer_can?(TransactionalAccount, :transact)
   end
 
   test "a mutation action reports the transaction it will actually get" do
-    # Ash derives `transaction? true` on mutations, then clears it on a resource
-    # whose data layer cannot transact, so reflection matches runtime behaviour.
+    # Ash derives `transaction? true` on mutations, then clears it again when the
+    # data layer cannot transact — neither resource says anything about it.
     refute Ash.Resource.Info.action(Account, :create).transaction?
     assert Ash.Resource.Info.action(TransactionalAccount, :create).transaction?
   end
@@ -48,8 +46,6 @@ defmodule AshSqlite.TransactionTest do
   end
 
   test "without transactions the same failure leaves the row behind" do
-    # Not an endorsement, just the contrast: this is what every AshSqlite resource
-    # does today, and it is why the option is worth having.
     assert {:error, _} =
              Account
              |> Ash.Changeset.for_create(:create, %{is_active: true})
