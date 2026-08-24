@@ -8,7 +8,7 @@ defmodule AshSqlite.TenantBinder do
 
   SQLite has no schemas, so `strategy :context` cannot be a query prefix: the SQL is
   identical for every tenant and isolation comes from which file the connection is
-  attached to.
+  attached to. Defaults to `AshSqlite.MultiTenancy.Binder`; name your own to replace it.
   """
 
   @typedoc """

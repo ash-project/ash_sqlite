@@ -328,9 +328,6 @@ defmodule AshSqlite.DataLayer do
       AshSqlite.Transformers.VerifyRepo,
       AshSqlite.Transformers.EnsureTableOrPolymorphic,
       AshSqlite.Transformers.CarryTenant
-    ],
-    verifiers: [
-      AshSqlite.Verifiers.VerifyTenantBinder
     ]
 
   def migrate(args) do
@@ -2297,7 +2294,7 @@ defmodule AshSqlite.DataLayer do
   defp bind_tenant(resource, tenant, usage, fun) do
     case AshSqlite.DataLayer.Info.tenant_binder(resource) do
       nil ->
-        without_binder(resource, tenant, fun)
+        unbound(resource, fun)
 
       binder ->
         repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
@@ -2334,27 +2331,6 @@ defmodule AshSqlite.DataLayer do
       #{inspect(resource)} has `strategy :context` but this statement carried no \
       tenant, so there is no connection to select. Pass a tenant, or set \
       `global? true` if this resource is genuinely shared.
-      """
-    end
-
-    fun.()
-  end
-
-  # `strategy :context` and no binder is a configuration error rather than a
-  # statement to run unbound: the tenant was given, and nothing can act on it. The
-  # verifier says so at compile time, but only as a warning, so this is the guard
-  # that holds.
-  defp without_binder(resource, tenant, fun) do
-    if Ash.Resource.Info.multitenancy_strategy(resource) == :context do
-      raise ArgumentError, """
-      #{inspect(resource)} has `strategy :context` and a tenant of \
-      #{inspect(tenant)}, but no `tenant_binder` to select a connection with.
-
-          sqlite do
-            tenant_binder MyApp.TenantBinder
-          end
-
-      See `AshSqlite.TenantBinder`.
       """
     end
 

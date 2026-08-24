@@ -119,7 +119,9 @@ defmodule AshSqlite.MixProject do
           AshSqlite.DataLayer
         ],
         Multitenancy: [
-          AshSqlite.TenantBinder
+          AshSqlite.MultiTenancy,
+          AshSqlite.TenantBinder,
+          AshSqlite.MultiTenancy.UnavailableError
         ],
         Utilities: [
           AshSqlite.ManualRelationship
