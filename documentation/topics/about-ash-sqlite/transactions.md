@@ -35,6 +35,13 @@ a transaction, a create whose `after_action` hook fails leaves its record behind
 the insert already committed on its own, and there is nothing to undo it. With
 one, the failure rolls the insert back.
 
+Ash derives `transaction? true` on create, update and destroy actions, and then
+clears it again on a resource whose data layer cannot transact. So on a resource
+that has not opted in, `Ash.Resource.Info.action(MyApp.Post, :create).transaction?`
+reads `false` and says what will really happen, rather than naming a transaction
+the data layer was never going to open. Turning `write_transactions?` on is what
+lets that default stand.
+
 Read it as a statement about the *repo*, not just the resource — a resource only
 transacts safely once the repo underneath it is configured as below. Leaving it
 off is not a bug, and it stays the default so that existing applications are

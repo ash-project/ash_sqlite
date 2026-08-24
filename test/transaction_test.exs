@@ -21,6 +21,13 @@ defmodule AshSqlite.TransactionTest do
     assert Ash.DataLayer.data_layer_can?(TransactionalAccount, :transact)
   end
 
+  test "a mutation action reports the transaction it will actually get" do
+    # Ash derives `transaction? true` on mutations, then clears it on a resource
+    # whose data layer cannot transact, so reflection matches runtime behaviour.
+    refute Ash.Resource.Info.action(Account, :create).transaction?
+    assert Ash.Resource.Info.action(TransactionalAccount, :create).transaction?
+  end
+
   test "a failing multi-step action rolls back" do
     assert {:error, _} =
              TransactionalAccount
