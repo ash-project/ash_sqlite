@@ -10,10 +10,6 @@ defmodule AshSqlite.Changes.CarryTenant do
 
   @impl true
   def change(changeset, _opts, _context) do
-    # Also as a before_transaction hook, because a tenant given to `Ash.create/3`
-    # rather than to `Ash.Changeset.for_create/4` is applied after global changes
-    # have run -- and those hooks run on the changeset the transaction is opened
-    # with.
     changeset
     |> put_tenant()
     |> Ash.Changeset.before_transaction(&put_tenant/1)

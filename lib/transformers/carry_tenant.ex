@@ -28,8 +28,6 @@ defmodule AshSqlite.Transformers.CarryTenant do
     end
   end
 
-  # Without this the tenant never reaches `transaction/4`: Ash calls it above the
-  # data layer, and nothing in the transaction reason names one.
   defp needs_tenant?(dsl) do
     Ash.Resource.Info.multitenancy_strategy(dsl) == :context
   end
