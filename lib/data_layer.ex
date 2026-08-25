@@ -203,21 +203,6 @@ defmodule AshSqlite.DataLayer do
         doc:
           "The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more. Can also be a function that takes a resource and a type `:read | :mutate` and returns the repo."
       ],
-      write_transactions?: [
-        type: :boolean,
-        default: false,
-        doc: """
-        Whether Ash may wrap this resource's write actions in a transaction.
-
-        Off by default. SQLite allows a single write lock at a time and a
-        contended write fails immediately rather than queueing, so transactions
-        are only safe once the repo is configured for them. See the
-        [transactions guide](/documentation/topics/about-ash-sqlite/transactions.md).
-
-        With this on, write transactions are opened as `BEGIN IMMEDIATE` so that
-        `busy_timeout` can do its job.
-        """
-      ],
       migrate?: [
         type: :boolean,
         default: true,

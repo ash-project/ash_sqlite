@@ -32,6 +32,9 @@ defmodule AshSqlite.Repo do
   """
   @callback min_pg_version() :: integer()
 
+  @doc "Whether Ash may wrap write actions on this repo's resources in a transaction"
+  @callback write_transactions?() :: boolean()
+
   @doc "The path where your migrations are stored"
   @callback migrations_path() :: String.t() | nil
   @doc "Allows overriding a given migration type for *all* fields, for example if you wanted to always use :timestamptz for :utc_datetime fields"
@@ -52,6 +55,7 @@ defmodule AshSqlite.Repo do
 
       def installed_extensions, do: []
       def migrations_path, do: nil
+      def write_transactions?, do: false
       def override_migration_type(type), do: type
       def min_pg_version, do: 10
 
@@ -167,7 +171,8 @@ defmodule AshSqlite.Repo do
       defoverridable init: 2,
                      installed_extensions: 0,
                      override_migration_type: 1,
-                     min_pg_version: 0
+                     min_pg_version: 0,
+                     write_transactions?: 0
     end
   end
 end

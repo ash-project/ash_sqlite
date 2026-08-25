@@ -4,19 +4,49 @@
 
 defmodule AshSqlite.TransactionTest do
   @moduledoc """
-  Write transactions are off by default, and roll back when turned on.
+  Write transactions are off by default, and roll back when the repo turns them on.
 
-  `AshSqlite.Test.Account` and `AshSqlite.Test.TransactionalAccount` share a table
-  and differ only in `write_transactions?`, which is what makes the pair worth
-  testing together: the contrast is the feature.
+  `AshSqlite.Test.Account` and `AshSqlite.Test.TransactionalAccount` share the
+  `accounts` table and differ only in the repo they name, which is what makes the
+  pair worth testing together: the contrast is the feature.
   """
   use AshSqlite.RepoCase, async: false
 
-  alias AshSqlite.Test.{Account, TransactionalAccount}
+  alias AshSqlite.Test.{Account, InlineFnRepoAccount, NamedFnRepoAccount, TransactionalAccount}
 
-  test "transactions are off unless the resource asks for them" do
+  setup do
+    :ok = Ecto.Adapters.SQL.Sandbox.checkout(AshSqlite.TransactionTestRepo)
+    Ecto.Adapters.SQL.Sandbox.mode(AshSqlite.TransactionTestRepo, {:shared, self()})
+    :ok
+  end
+
+  test "the flag is a repo callback, and defaults to off" do
+    refute AshSqlite.TestRepo.write_transactions?()
+    assert AshSqlite.TransactionTestRepo.write_transactions?()
+  end
+
+  test "transactions are off unless the repo asks for them" do
     refute Ash.DataLayer.data_layer_can?(Account, :transact)
     assert Ash.DataLayer.data_layer_can?(TransactionalAccount, :transact)
+  end
+
+  test "a functional repo is asked about :mutate" do
+    assert Ash.DataLayer.data_layer_can?(NamedFnRepoAccount, :transact) ==
+             AshSqlite.TestRepo.write_transactions?()
+  end
+
+  test "an inline fn repo is assumed to transact until it can be asked" do
+    # Spark hoists the `fn` onto the resource, so it cannot be called while the
+    # resource compiles, which is when `SetActionTransactions` asks. Saying `false`
+    # there would clear `transaction?` and disable transactions for good, so the
+    # compile-time answer is optimistic and the runtime one is real.
+    assert Ash.Resource.Info.action(InlineFnRepoAccount, :create).transaction?
+    refute Ash.DataLayer.data_layer_can?(InlineFnRepoAccount, :transact)
+  end
+
+  test "capturing a named function resolves at compile time instead" do
+    refute Ash.Resource.Info.action(NamedFnRepoAccount, :create).transaction?
+    refute Ash.DataLayer.data_layer_can?(NamedFnRepoAccount, :transact)
   end
 
   test "a mutation action reports the transaction it will actually get" do
@@ -63,7 +93,7 @@ defmodule AshSqlite.TransactionTest do
 
   test "reports being in a transaction from inside one" do
     assert {:ok, true} =
-             AshSqlite.TestRepo.transaction(fn ->
+             AshSqlite.TransactionTestRepo.transaction(fn ->
                AshSqlite.DataLayer.in_transaction?(TransactionalAccount)
              end)
   end

@@ -18,10 +18,38 @@ defmodule AshSqlite.DataLayer.Info do
     end
   end
 
-  @doc "Whether Ash may wrap this resource's write actions in a transaction"
+  @doc """
+  Whether Ash may wrap write actions on this resource in a transaction.
+
+  Declared on the repo, via `c:AshSqlite.Repo.write_transactions?/0`, because
+  everything that makes a transaction safe on SQLite — the pool size, the busy
+  timeout, whether the connection is read only — is repo configuration.
+  """
   def write_transactions?(resource) do
-    Extension.get_opt(resource, [:sqlite], :write_transactions?, false, true)
+    case Extension.get_opt(resource, [:sqlite], :repo, nil, true) do
+      fun when is_function(fun, 2) ->
+        if unresolvable_repo?(fun, resource) do
+          true
+        else
+          fun.(resource, :mutate).write_transactions?()
+        end
+
+      repo ->
+        repo.write_transactions?()
+    end
   end
+
+  # `false` here would disable transactions for good: runtime is `action.transaction? and can?(:transact)`.
+  defp unresolvable_repo?(fun, resource) do
+    {:module, module} = Function.info(fun, :module)
+
+    module == resource_module(resource) and not :erlang.module_loaded(module)
+  end
+
+  defp resource_module(resource) when is_atom(resource), do: resource
+
+  defp resource_module(dsl_state),
+    do: Spark.Dsl.Transformer.get_persisted(dsl_state, :module)
 
   @doc "The configured table for a resource"
   def table(resource) do
