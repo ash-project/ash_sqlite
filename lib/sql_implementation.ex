@@ -360,7 +360,7 @@ defmodule AshSqlite.SqlImplementation do
     elements =
       value
       |> Enum.map(&list_element(&1, json_value?))
-      |> Enum.intersperse([raw: ","])
+      |> Enum.intersperse(raw: ",")
       |> List.flatten()
 
     {expr, acc} =
