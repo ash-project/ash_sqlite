@@ -20,6 +20,7 @@ defmodule AshSqlite.Test.Domain do
     resource(AshSqlite.Test.TransactionalAccount)
     resource(AshSqlite.Test.TenantedPost)
     resource(AshSqlite.Test.GlobalPost)
+    resource(AshSqlite.Test.UnstartedGlobalPost)
     resource(AshSqlite.Test.ManagedPost)
     resource(AshSqlite.Test.Organization)
     resource(AshSqlite.Test.Manager)

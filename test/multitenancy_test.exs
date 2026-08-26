@@ -45,6 +45,10 @@ defmodule AshSqlite.MultitenancyTest do
 
     TenantBinder.reset_calls()
 
+    # The tenant files are made per test, but the shared database is not: it is the
+    # repo module's own, and it outlives every test that writes to it.
+    Ecto.Adapters.SQL.query!(AshSqlite.TenantRepo, "DELETE FROM global_posts", [])
+
     %{repos: repos}
   end
 
@@ -181,13 +185,42 @@ defmodule AshSqlite.MultitenancyTest do
   end
 
   describe "a global? resource" do
-    test "is bound to the tenant it is given, like any other", %{repos: repos} do
+    # One copy of the rows, as `global?` means for a schema-based data layer. The
+    # tenant is ignored rather than honoured: honouring it gave every tenant its own
+    # copy of a table that is supposed to have exactly one.
+    test "a write goes to the shared database, not the tenant's file", %{repos: repos} do
       GlobalPost
-      |> Ash.Changeset.for_create(:create, %{title: "for acme"}, tenant: "acme")
+      |> Ash.Changeset.for_create(:create, %{title: "shared"}, tenant: "acme")
       |> Ash.create!()
 
-      assert global_titles_in_file(repos["acme"].path) == ["for acme"]
+      assert shared_global_titles() == ["shared"]
+      assert global_titles_in_file(repos["acme"].path) == []
       assert global_titles_in_file(repos["globex"].path) == []
+    end
+
+    test "every tenant sees the same rows" do
+      GlobalPost
+      |> Ash.Changeset.for_create(:create, %{title: "one copy"}, tenant: "acme")
+      |> Ash.create!()
+
+      assert global_titles("acme") == ["one copy"]
+      assert global_titles("globex") == ["one copy"]
+      assert Ash.read!(GlobalPost) |> Enum.map(& &1.title) == ["one copy"]
+    end
+
+    # The footgun this replaces: the resource shares a repo module with tenanted
+    # ones, so leaving the process binding alone made it read whichever tenant was
+    # bound last. It now binds the module's own instance explicitly.
+    test "is unaffected by a tenant bound on the same repo module" do
+      GlobalPost
+      |> Ash.Changeset.for_create(:create, %{title: "shared"}, tenant: "acme")
+      |> Ash.create!()
+
+      assert bound("acme", fn -> Ash.read!(GlobalPost) |> Enum.map(& &1.title) end) ==
+               ["shared"]
+
+      assert bound("globex", fn -> Ash.read!(GlobalPost) |> Enum.map(& &1.title) end) ==
+               ["shared"]
     end
 
     test "is read without a tenant, where a tenanted resource is refused" do
@@ -195,24 +228,75 @@ defmodule AshSqlite.MultitenancyTest do
         Ash.read!(TenantedPost)
       end
 
-      bound("acme", fn -> assert Ash.read!(GlobalPost) == [] end)
+      assert Ash.read!(GlobalPost) == []
     end
 
-    test "reads whatever the process is bound to when given no tenant", %{repos: repos} do
-      # Ecto binds per repo *module*, so this is a sharp edge rather than a feature:
-      # a global resource sharing a repo with tenanted ones sees the last tenant bound.
-      insert_global(repos["acme"].pid, "acme's own")
-      insert_global(repos["globex"].pid, "globex's own")
-
-      assert bound("acme", fn -> global_titles() end) == ["acme's own"]
-      assert bound("globex", fn -> global_titles() end) == ["globex's own"]
-    end
-
-    test "is never asked of the binder when given no tenant" do
+    test "is never asked of the binder, with or without a tenant" do
       TenantBinder.reset_calls()
-      bound("acme", fn -> Ash.read!(GlobalPost) end)
+
+      GlobalPost
+      |> Ash.Changeset.for_create(:create, %{title: "shared"}, tenant: "acme")
+      |> Ash.create!()
+
+      Ash.read!(GlobalPost)
 
       assert TenantBinder.calls() == []
+    end
+
+    # The shape this is easy to arrive at: adding `global? true` to a resource on a
+    # repo module that only ever served tenants. Such a module is reached entirely
+    # through `put_dynamic_repo/1`, so it has no named process and no shared database
+    # to hold the one copy.
+    test "says so when the shared repo has no instance of its own" do
+      message =
+        try do
+          Ash.read!(AshSqlite.Test.UnstartedGlobalPost)
+        rescue
+          error -> Exception.message(error)
+        end
+
+      assert message =~ "one shared database rather than one per tenant"
+      assert message =~ "AshSqlite.ManagedTenantRepo"
+      assert message =~ ~s(database: "priv/shared.db")
+      refute message =~ "could not lookup Ecto repo"
+    end
+
+    # Started under its own name but with no database: the other way to have no
+    # shared database, and the one whose native failure is unrecognisable -- the
+    # statement waits out the pool timeout and then reports that requests are
+    # arriving faster than they can be served.
+    test "says so when the shared repo is named but has no database" do
+      {:ok, pid} = AshSqlite.ManagedTenantRepo.start_link()
+
+      # A repo with no database cannot keep a connection up, so it may already be on
+      # its way down by the time this runs.
+      on_exit(fn ->
+        try do
+          if Process.alive?(pid), do: Supervisor.stop(pid)
+        catch
+          :exit, _ -> :ok
+        end
+      end)
+
+      assert is_nil(AshSqlite.ManagedTenantRepo.config()[:database])
+
+      message =
+        try do
+          Ash.read!(AshSqlite.Test.UnstartedGlobalPost)
+        rescue
+          error -> Exception.message(error)
+        end
+
+      assert message =~ "has no `database:` set"
+      refute message =~ "connection not available"
+    end
+
+    test "restores the caller's binding afterwards" do
+      bound("acme", fn ->
+        before = AshSqlite.TenantRepo.get_dynamic_repo()
+        Ash.read!(GlobalPost)
+        assert AshSqlite.TenantRepo.get_dynamic_repo() == before
+      end)
     end
   end
 
@@ -226,16 +310,15 @@ defmodule AshSqlite.MultitenancyTest do
     end
   end
 
-  defp insert_global(pid, title) do
-    Ecto.Adapters.SQL.query!(
-      pid,
-      "INSERT INTO global_posts (id, title) VALUES (?, ?)",
-      [Ash.UUID.generate(), title]
-    )
+  defp shared_global_titles do
+    AshSqlite.TenantRepo
+    |> Ecto.Adapters.SQL.query!("SELECT title FROM global_posts ORDER BY title", [])
+    |> Map.fetch!(:rows)
+    |> List.flatten()
   end
 
-  defp global_titles do
-    GlobalPost |> Ash.read!() |> Enum.map(& &1.title) |> Enum.sort()
+  defp global_titles(tenant) do
+    GlobalPost |> Ash.read!(tenant: tenant) |> Enum.map(& &1.title) |> Enum.sort()
   end
 
   defp global_titles_in_file(path) do

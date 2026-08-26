@@ -48,6 +48,23 @@ defmodule AshSqlite.MultiTenancy.ManagedTest do
     end
   end
 
+  describe "a repo module that serves only tenants" do
+    # The shape a `global?` resource needs a database for, and the shape that needs
+    # none. `AshSqlite.ManagedTenantRepo` is configured with nothing at all -- no
+    # `database:`, no pool, no name -- because every connection it serves is a tenant
+    # reached through `Ecto.Repo.put_dynamic_repo/1`. Nothing here requires more, and
+    # the check that a shared database exists is reached only by `global? true`.
+    test "needs no database of its own, and no name", %{dir: dir} do
+      assert is_nil(Application.get_env(:ash_sqlite, ManagedTenantRepo))
+      assert is_nil(Process.whereis(ManagedTenantRepo))
+
+      create!("acme", "no shared database needed")
+
+      assert titles_in_file(dir, "acme") == ["no shared database needed"]
+      assert titles("acme") == ["no shared database needed"]
+    end
+  end
+
   describe "reads and writes" do
     test "a create lands in its own tenant's file", %{dir: dir} do
       create!("acme", "acme one")

@@ -2290,9 +2290,98 @@ defmodule AshSqlite.DataLayer do
   # this module can say -- by the time a binder sees a statement the distinction is
   # gone -- and a binder that caches, replicates, or routes reads separately from
   # writes cannot be written without it.
-  defp bind_tenant(resource, nil, _usage, fun), do: unbound(resource, fun)
-
   defp bind_tenant(resource, tenant, usage, fun) do
+    cond do
+      global?(resource) -> bind_global(resource, fun)
+      is_nil(tenant) -> unbound(resource, fun)
+      true -> bind_to_tenant(resource, tenant, usage, fun)
+    end
+  end
+
+  # A `global?` resource holds one copy of its rows, not one per tenant. No tenant
+  # selects its database, so the binder is never asked and a tenant passed to it is
+  # ignored rather than honoured -- honouring it is what gave every tenant its own
+  # copy of a table that is supposed to have exactly one.
+  #
+  # It binds the resource's repo module to its *own* named instance, explicitly. The
+  # alternative is to leave the process binding alone, which is what made this a
+  # footgun: a global resource sharing a repo module with tenanted ones read whichever
+  # tenant happened to be bound last. Which database the global rows live in follows
+  # from `repo` -- the tenanted module's own configured database if it shares one,
+  # another module's if it names one -- and in neither case from the caller.
+  defp bind_global(resource, fun) do
+    repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
+    verify_shared_repo!(resource, repo)
+    previous = repo.get_dynamic_repo()
+
+    if previous == repo do
+      fun.()
+    else
+      repo.put_dynamic_repo(repo)
+
+      try do
+        fun.()
+      after
+        repo.put_dynamic_repo(previous)
+      end
+    end
+  end
+
+  # Checked here rather than by a transformer, because it cannot be known at compile
+  # time. A repo's `database:` is very often set in `config/runtime.exs` -- that is
+  # the recommended shape for a release -- and a transformer runs long before that
+  # file is evaluated, so it would reject exactly the configuration it should accept.
+  # Ecto's own error for this names the repo but not the reason a `global?` resource
+  # wanted it, which is the part worth saying.
+  defp verify_shared_repo!(resource, repo) do
+    cond do
+      is_nil(Process.whereis(repo)) ->
+        raise ArgumentError, shared_repo_error(resource, repo, "is not running")
+
+      is_nil(repo.config()[:database]) ->
+        raise ArgumentError, shared_repo_error(resource, repo, "has no `database:` set")
+
+      true ->
+        :ok
+    end
+  end
+
+  # Both halves are checked, because neither implies the other and the failure
+  # without them is unrecognisable. A repo module serving only tenants is reached
+  # through `Ecto.Repo.put_dynamic_repo/1`, so it needs no name and no database of
+  # its own -- and it starts happily without either. A global statement on one then
+  # waits out the pool timeout and reports that requests are arriving faster than
+  # they can be served, which is not what went wrong.
+  defp shared_repo_error(resource, repo, problem) do
+    """
+    #{inspect(resource)} has `strategy :context` with `global? true`, so its rows \
+    live in one shared database rather than one per tenant -- #{inspect(repo)}'s own, \
+    under its own name. That repo #{problem}.
+
+    A repo module used only for tenants needs neither, which is what makes this easy \
+    to arrive at by adding `global? true` to a resource on one. Give it a database \
+    and start it:
+
+        config :my_app, #{inspect(repo)}, database: "priv/shared.db"
+
+        children = [
+          #{inspect(repo)},
+          {AshSqlite.MultiTenancy, repo: #{inspect(repo)}, dir: "priv/tenants"}
+        ]
+
+    Or put the shared tables on a repo module of their own and name it in this \
+    resource's `repo`. What will not work is neither: there is no tenant to fall \
+    back to, and falling back to one would put a shared table in a single tenant's \
+    database.
+    """
+  end
+
+  defp global?(resource) do
+    Ash.Resource.Info.multitenancy_strategy(resource) == :context &&
+      Ash.Resource.Info.multitenancy_global?(resource)
+  end
+
+  defp bind_to_tenant(resource, tenant, usage, fun) do
     case AshSqlite.DataLayer.Info.tenant_binder(resource) do
       nil ->
         unbound(resource, fun)

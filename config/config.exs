@@ -40,7 +40,12 @@ if Mix.env() == :test do
     pool: Ecto.Adapters.SQL.Sandbox,
     migration_primary_key: [name: :id, type: :binary_id]
 
+  # A real database, and started under its own name in `test_helper.exs`. This is the
+  # database a `global? true` resource on this module uses: one copy of its rows,
+  # reached without a tenant binding.
   config :ash_sqlite, AshSqlite.TenantRepo,
+    database: Path.join(__DIR__, "../test/tenant_shared.db"),
+    pool: DBConnection.ConnectionPool,
     pool_size: 1,
     migration_lock: false,
     migration_primary_key: [name: :id, type: :binary_id]
