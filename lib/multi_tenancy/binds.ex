@@ -20,13 +20,24 @@ defmodule AshSqlite.MultiTenancy.Binds do
   @spec name(module()) :: module()
   def name(repo), do: Module.concat(repo, TenantBinds)
 
-  @doc "Records that the calling process has bound `tenant`."
+  @doc """
+  Records that the calling process has bound `tenant`.
+
+  Increments *before* checking the closing mark, and backs the increment out if the
+  tenant turns out to be closing. The two are separate ETS objects, so no single
+  operation covers both -- but this order is still safe, because the increment is
+  published before the check. A closer can therefore never read a count of zero for
+  a bind that goes on to proceed, which is the direction that loses data. The other
+  direction only costs a closer one more pass around its grace period.
+  """
   @spec bound(module(), String.t()) :: :ok | :closing
   def bound(repo, tenant) do
+    :ets.update_counter(name(repo), {:binds, tenant}, {2, 1}, {{:binds, tenant}, 0})
+
     if closing?(repo, tenant) do
+      :ets.update_counter(name(repo), {:binds, tenant}, {2, -1, 0, 0})
       :closing
     else
-      :ets.update_counter(name(repo), {:binds, tenant}, {2, 1}, {{:binds, tenant}, 0})
       :ok
     end
   end
@@ -99,11 +110,18 @@ defmodule AshSqlite.MultiTenancy.Binds do
   @spec closing?(module(), String.t()) :: boolean()
   def closing?(repo, tenant), do: :ets.member(name(repo), {:closing, tenant})
 
-  @doc "Drops everything recorded about `tenant`."
+  @doc """
+  Drops what is recorded about how `tenant` has been used.
+
+  Deliberately not the closing mark. That is lifecycle state owned by whoever took
+  it, and `close/3` is called *inside* `rename/3` and `delete/2` while they hold one
+  across a file operation -- clearing it here would reopen the window they took it
+  to close.
+  """
   @spec forget(module(), String.t()) :: :ok
   def forget(repo, tenant) do
     table = name(repo)
-    Enum.each([:binds, :used, :closing], &:ets.delete(table, {&1, tenant}))
+    Enum.each([:binds, :used], &:ets.delete(table, {&1, tenant}))
     :ok
   end
 

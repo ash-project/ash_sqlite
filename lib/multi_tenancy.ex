@@ -46,6 +46,19 @@ defmodule AshSqlite.MultiTenancy do
   @doc "The repo instance serving `tenant`, starting it if it is not resident."
   @spec connection_for(module(), String.t()) :: {:ok, pid()} | {:error, term()}
   def connection_for(repo, tenant) do
+    do_connection_for(repo, tenant)
+  rescue
+    # `Registry.lookup/2` raises on a registry that was never started, and the
+    # message names an internal registry rather than the thing that is missing.
+    # Rescuing costs nothing on the path that works.
+    exception in ArgumentError ->
+      if started?(repo), do: reraise(exception, __STACKTRACE__), else: not_started!(repo)
+  catch
+    :exit, {:noproc, _} = reason ->
+      if started?(repo), do: exit(reason), else: not_started!(repo)
+  end
+
+  defp do_connection_for(repo, tenant) do
     case TenantRegistry.lookup(repo, tenant) do
       {:ok, _connection, repo_pid} when is_pid(repo_pid) ->
         {:ok, repo_pid}
@@ -61,6 +74,34 @@ defmodule AshSqlite.MultiTenancy do
       :error ->
         Manager.activate(repo, tenant)
     end
+  end
+
+  defp started?(repo), do: is_pid(Process.whereis(Module.concat(repo, MultiTenancy)))
+
+  # Reached when a resource has `strategy :context` but nothing is managing its
+  # tenants. Raised rather than left as `unknown registry: MyApp.Repo.TenantRegistry`,
+  # which names an implementation detail instead of the omission.
+  defp not_started!(repo) do
+    raise """
+    #{inspect(repo)} has no tenant fleet running, so there is no database to select \
+    for this tenant.
+
+    A resource with `strategy :context` gets `AshSqlite.MultiTenancy.Binder` as its \
+    tenant binder, which asks `AshSqlite.MultiTenancy` for a connection. Add it to \
+    your supervision tree, after the repo:
+
+        children = [
+          #{inspect(repo)},
+          {AshSqlite.MultiTenancy,
+           repo: #{inspect(repo)},
+           dir: "priv/tenants",
+           migrations_path: "priv/repo/tenant_migrations"}
+        ]
+
+    If this repo's tenants are managed elsewhere -- Turso, Litestream, a router of \
+    your own -- name that module as the resource's `tenant_binder` instead, and this \
+    one is not needed.
+    """
   end
 
   @doc "Runs `fun` with `tenant`'s database bound to the calling process."
@@ -96,7 +137,12 @@ defmodule AshSqlite.MultiTenancy do
     end
   end
 
-  @doc "Closes a tenant's database, leaving the file on disk."
+  @doc """
+  Closes a tenant's database, leaving the file on disk.
+
+  Waits `:grace_ms` (1000 by default) for statements in flight, and reports
+  `{:error, :busy}` rather than closing under one. `force: true` closes regardless.
+  """
   defdelegate close(repo, tenant, opts \\ []), to: Manager
 
   @doc "Closes a tenant's database and deletes it, WAL sidecars included."

@@ -57,6 +57,59 @@ defmodule AshSqlite.MultiTenancy.BindsTest do
     end
   end
 
+  describe "bound/2 against a concurrent close" do
+    # The bind and the closing check are two ETS operations, so the order matters.
+    # Incrementing first means a closer can never read a count of zero for a binder
+    # that goes on to proceed; checking first would let one slip between the check
+    # and the increment and lose its statement to the close.
+    test "a bind is visible to a closer before it is acted on" do
+      parent = self()
+
+      task =
+        Task.async(fn ->
+          assert Binds.bound(Repo, "acme") == :ok
+          send(parent, :bound)
+          receive do: (:release -> Binds.released(Repo, "acme"))
+        end)
+
+      assert_receive :bound
+      assert Binds.count(Repo, "acme") == 1
+
+      send(task.pid, :release)
+      Task.await(task)
+    end
+
+    test "a bind that loses the race leaves the count where it found it" do
+      Binds.begin_closing(Repo, "acme")
+
+      assert Binds.bound(Repo, "acme") == :closing
+      assert Binds.count(Repo, "acme") == 0
+    end
+
+    test "many binds racing a close either all hold or all back out" do
+      outcomes =
+        1..100
+        |> Task.async_stream(
+          fn i ->
+            if i == 50, do: Binds.begin_closing(Repo, "acme")
+
+            case Binds.bound(Repo, "acme") do
+              :ok -> Binds.released(Repo, "acme") && :held
+              :closing -> :backed_out
+            end
+          end,
+          max_concurrency: 20
+        )
+        |> Enum.map(fn {:ok, outcome} -> outcome end)
+
+      # Whatever the interleaving, every bind is matched by a release or a back-out,
+      # so nothing is left counted against a tenant nobody is using.
+      assert Binds.count(Repo, "acme") == 0
+      assert :backed_out in outcomes
+      assert Binds.closing?(Repo, "acme")
+    end
+  end
+
   describe "closing" do
     test "refuses new binds while it is marked" do
       Binds.begin_closing(Repo, "acme")
@@ -145,16 +198,26 @@ defmodule AshSqlite.MultiTenancy.BindsTest do
   end
 
   describe "forget/2" do
-    test "drops everything recorded about a tenant" do
+    test "drops the binds and the last-used mark" do
       Binds.bound(Repo, "acme")
       Binds.released(Repo, "acme")
-      Binds.begin_closing(Repo, "acme")
 
       Binds.forget(Repo, "acme")
 
       assert Binds.count(Repo, "acme") == 0
       refute Binds.last_used(Repo, "acme")
-      refute Binds.closing?(Repo, "acme")
+    end
+
+    # `rename/3` and `delete/2` hold a tenant closed across a file operation, and
+    # call `close/3` -- which forgets the tenant -- in the middle of it. Clearing the
+    # mark here would reopen the window they took it to close.
+    test "leaves a closing mark for whoever took it" do
+      Binds.bound(Repo, "acme")
+      Binds.begin_closing(Repo, "acme")
+
+      Binds.forget(Repo, "acme")
+
+      assert Binds.closing?(Repo, "acme")
     end
 
     test "leaves other tenants alone" do
