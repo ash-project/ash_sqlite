@@ -220,8 +220,138 @@ defmodule AshSqlite.FilterTest do
       {sql, _params} = Ecto.Adapters.SQL.to_sql(:all, TestRepo, ecto_query)
 
       assert sql =~ " OR "
-      assert sql =~ ~S|json(p0."stuff")|
+      assert sql =~ "json_type"
       assert [] = Ash.read!(query)
+    end
+
+    test "map comparisons match structurally regardless of stored key order" do
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "map post", stuff: %{"a" => 1, "b" => 2}})
+        |> Ash.create!()
+
+      # store the JSON with a different key order than the filter literal encodes to
+      TestRepo.query!(
+        ~S|UPDATE posts SET stuff = '{"b":2,"a":1}' WHERE title = 'map post'|,
+        []
+      )
+
+      assert [%Post{id: post_id}] =
+               Post
+               |> Ash.Query.filter(stuff == ^%{"a" => 1, "b" => 2})
+               |> Ash.read!()
+
+      assert post_id == post.id
+    end
+
+    test "map != does not return rows that differ only in stored key order" do
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "map post", stuff: %{"a" => 1, "b" => 2}})
+      |> Ash.create!()
+
+      TestRepo.query!(
+        ~S|UPDATE posts SET stuff = '{"b":2,"a":1}' WHERE title = 'map post'|,
+        []
+      )
+
+      assert [] =
+               Post
+               |> Ash.Query.filter(stuff != ^%{"a" => 1, "b" => 2})
+               |> Ash.read!()
+    end
+
+    test "map != returns rows whose maps genuinely differ" do
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "map post", stuff: %{"a" => 1}})
+      |> Ash.create!()
+
+      assert [%Post{title: "map post"}] =
+               Post
+               |> Ash.Query.filter(stuff != ^%{"a" => 2})
+               |> Ash.read!()
+
+      assert [%Post{title: "map post"}] =
+               Post
+               |> Ash.Query.filter(stuff != ^%{"a" => 1, "b" => 2})
+               |> Ash.read!()
+
+      assert [] =
+               Post
+               |> Ash.Query.filter(stuff != ^%{"a" => 1})
+               |> Ash.read!()
+    end
+
+    test "map comparisons are structural for nested maps and arrays" do
+      Post
+      |> Ash.Changeset.for_create(:create, %{
+        title: "nested",
+        stuff: %{"outer" => %{"x" => 1, "y" => [1, %{"deep" => true}]}}
+      })
+      |> Ash.create!()
+
+      # reorder nested keys in the stored JSON
+      TestRepo.query!(
+        ~S|UPDATE posts SET stuff = '{"outer":{"y":[1,{"deep":true}],"x":1}}' WHERE title = 'nested'|,
+        []
+      )
+
+      assert [_] =
+               Post
+               |> Ash.Query.filter(
+                 stuff == ^%{"outer" => %{"x" => 1, "y" => [1, %{"deep" => true}]}}
+               )
+               |> Ash.read!()
+
+      # array order still matters
+      assert [] =
+               Post
+               |> Ash.Query.filter(
+                 stuff == ^%{"outer" => %{"x" => 1, "y" => [%{"deep" => true}, 1]}}
+               )
+               |> Ash.read!()
+
+      assert [] =
+               Post
+               |> Ash.Query.filter(stuff == ^%{"outer" => %{"x" => 1, "y" => [1, %{}]}})
+               |> Ash.read!()
+    end
+
+    test "map comparisons do not conflate scalar types" do
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "types", stuff: %{"a" => 1}})
+      |> Ash.create!()
+
+      assert [] = Post |> Ash.Query.filter(stuff == ^%{"a" => "1"}) |> Ash.read!()
+      assert [] = Post |> Ash.Query.filter(stuff == ^%{"a" => true}) |> Ash.read!()
+      assert [_] = Post |> Ash.Query.filter(stuff == ^%{"a" => 1.0}) |> Ash.read!()
+    end
+
+    test "a nil map matches neither == nor != against a map" do
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "no stuff"})
+      |> Ash.create!()
+
+      assert [] = Post |> Ash.Query.filter(stuff == ^%{"a" => 1}) |> Ash.read!()
+      assert [] = Post |> Ash.Query.filter(stuff != ^%{"a" => 1}) |> Ash.read!()
+    end
+
+    test "map keys that require the json_each fallback still compare" do
+      Post
+      |> Ash.Changeset.for_create(:create, %{
+        title: "weird keys",
+        stuff: %{"$.x" => 1, "a\"b" => 2, "" => 3}
+      })
+      |> Ash.create!()
+
+      assert [_] =
+               Post
+               |> Ash.Query.filter(stuff == ^%{"$.x" => 1, "a\"b" => 2, "" => 3})
+               |> Ash.read!()
+
+      assert [] =
+               Post
+               |> Ash.Query.filter(stuff == ^%{"$.x" => 2, "a\"b" => 2, "" => 3})
+               |> Ash.read!()
     end
 
     test "it properly filters typed scalar values" do

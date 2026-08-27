@@ -206,8 +206,11 @@ defmodule AshSqlite.SqlImplementation do
     {:ok, expr, acc}
   end
 
-  # Handle comparisons involving map values - SQLite can't directly compare maps,
-  # so we convert both sides to JSON strings for comparison
+  # Handle comparisons involving map values - SQLite has no structural JSON
+  # equality, so we compile the literal map into a conjunction of json_type/
+  # json_extract checks. Comparing serialized JSON text is not enough: the
+  # stored key order can differ from the encoded literal's key order, which
+  # made `==` miss rows and `!=` return rows it should have excluded.
   def expr(
         query,
         %Ash.Query.Operator.NotEq{left: left, right: right, embedded?: pred_embedded?},
@@ -290,7 +293,7 @@ defmodule AshSqlite.SqlImplementation do
     )
   end
 
-  # The clauses above JSON-encode a map that is an OPERAND of a comparison, and `list_expr/6`
+  # The clauses above compile a map that is an OPERAND of a comparison, and `list_expr/6`
   # below JSON-encodes a map that is an ELEMENT of a list. A map in any other position is still
   # handed to the driver as a bare Elixir term, and rejected:
   #
@@ -302,19 +305,20 @@ defmodule AshSqlite.SqlImplementation do
   # to binding the map itself as a parameter. That covers a map used as a fragment argument, as a
   # branch of an `if`, or anywhere else an expression can nest.
   #
-  # The treatment is the one `handle_map_comparison/9` already uses for the same value: the map is
-  # data, so it is bound as its JSON text. `Jason.encode!/1` is what Ecto's SQLite adapter dumps
-  # for a `:map` column, so a map rendered here is byte-identical to the same map stored by an
-  # INSERT, and comparing one against the other is meaningful.
+  # The map is data, so it is bound as its JSON text. `Jason.encode!/1` is what Ecto's SQLite
+  # adapter dumps for a `:map` column, so a map rendered here is byte-identical to the same map
+  # stored by an INSERT. (Comparison OPERANDS don't rely on that byte-identity - they are compiled
+  # structurally by `handle_map_comparison/9` so stored key order can't affect the result.)
   #
   # A map that contains an expression is left alone: its values are not data, so they cannot be
   # encoded, and AshSql's own handling of that case is unchanged.
-  def expr(query, value, bindings, embedded?, acc, type)
+  def expr(query, value, bindings, embedded?, acc, _type)
       when is_non_struct_map(value) do
     if bindings[:location] == :select or Ash.Expr.expr?(value) do
       :error
     else
-      {expr, acc} = as_json(query, value, false, bindings, embedded?, acc, type)
+      {expr, acc} =
+        AshSql.Expr.dynamic_expr(query, Jason.encode!(value), bindings, embedded?, :string, acc)
 
       {:ok, expr, acc}
     end
@@ -360,7 +364,7 @@ defmodule AshSqlite.SqlImplementation do
     elements =
       value
       |> Enum.map(&list_element(&1, json_value?))
-      |> Enum.intersperse([raw: ","])
+      |> Enum.intersperse(raw: ",")
       |> List.flatten()
 
     {expr, acc} =
@@ -402,54 +406,193 @@ defmodule AshSqlite.SqlImplementation do
          acc,
          type
        ) do
-    {left_expr, acc} = as_json(query, left, pred_embedded?, bindings, embedded?, acc, type)
-    {right_expr, acc} = as_json(query, right, pred_embedded?, bindings, embedded?, acc, type)
+    left_literal? = literal_map?(left)
+    right_literal? = literal_map?(right)
 
+    cond do
+      left_literal? and right_literal? ->
+        equal? = normalize_json_value(left) == normalize_json_value(right)
+
+        result =
+          if operator in [:==, :is_not_distinct_from], do: equal?, else: not equal?
+
+        {:ok, Ecto.Query.dynamic(type(^result, :boolean)), acc}
+
+      left_literal? ->
+        structural_map_comparison(
+          query,
+          operator,
+          right,
+          left,
+          pred_embedded?,
+          bindings,
+          embedded?,
+          acc,
+          type
+        )
+
+      right_literal? ->
+        structural_map_comparison(
+          query,
+          operator,
+          left,
+          right,
+          pred_embedded?,
+          bindings,
+          embedded?,
+          acc,
+          type
+        )
+
+      true ->
+        :error
+    end
+  end
+
+  defp structural_map_comparison(
+         query,
+         operator,
+         value,
+         map,
+         pred_embedded?,
+         bindings,
+         embedded?,
+         acc,
+         type
+       ) do
+    {value_expr, acc} =
+      AshSql.Expr.dynamic_expr(query, value, bindings, pred_embedded? || embedded?, nil, acc)
+
+    match = structural_match(value_expr, normalize_json_value(map))
+
+    # `structural_match/2` is built from null-safe `IS` checks, so it is
+    # always true or false - a NULL value simply fails to match. That is
+    # exactly the semantics the distinct-from operators want (NULL is
+    # distinct from every map), so they use the match directly. `==`/`!=`
+    # instead preserve SQL NULL comparison semantics - a NULL value
+    # compares as NULL - like the other operator translations.
     result =
       case operator do
-        :== ->
-          Ecto.Query.dynamic(^left_expr == ^right_expr)
-
-        :!= ->
-          Ecto.Query.dynamic(^left_expr != ^right_expr)
+        :is_not_distinct_from ->
+          match
 
         :is_distinct_from ->
-          Ecto.Query.dynamic(fragment("(? IS DISTINCT FROM ?)", ^left_expr, ^right_expr))
+          Ecto.Query.dynamic(not (^match))
 
-        :is_not_distinct_from ->
-          Ecto.Query.dynamic(fragment("(? IS NOT DISTINCT FROM ?)", ^left_expr, ^right_expr))
+        :== ->
+          Ecto.Query.dynamic(
+            fragment("(CASE WHEN (?) IS NULL THEN NULL ELSE ? END)", ^value_expr, ^match)
+          )
+
+        :!= ->
+          Ecto.Query.dynamic(
+            fragment(
+              "(CASE WHEN (?) IS NULL THEN NULL ELSE ? END)",
+              ^value_expr,
+              ^Ecto.Query.dynamic(not (^match))
+            )
+          )
+      end
+
+    result =
+      if boolean_type?(type) do
+        Ecto.Query.dynamic(type(^result, :boolean))
+      else
+        result
       end
 
     {:ok, result, acc}
   end
 
-  defp as_json(query, value, pred_embedded?, bindings, embedded?, acc, type) do
-    if plain_map?(value) do
-      AshSql.Expr.dynamic_expr(
-        query,
-        Jason.encode!(value),
-        bindings,
-        pred_embedded? || embedded?,
-        :string,
-        acc
+  # Every check uses SQLite's null-safe `IS` comparison so the match is
+  # always true or false, never NULL - otherwise a missing key would make
+  # `!=` comparisons evaluate to NULL and wrongly filter rows out.
+  defp structural_match(expr, value) when is_map(value) do
+    base =
+      Ecto.Query.dynamic(
+        fragment("json_type(?) IS 'object'", ^expr) and
+          fragment("(SELECT count(*) FROM json_each(?)) IS ?", ^expr, ^map_size(value))
       )
+
+    Enum.reduce(value, base, fn {key, child_value}, match ->
+      child = access_json_key(expr, key)
+      Ecto.Query.dynamic(^match and ^structural_match(child, child_value))
+    end)
+  end
+
+  defp structural_match(expr, value) when is_list(value) do
+    base =
+      Ecto.Query.dynamic(
+        fragment("json_type(?) IS 'array'", ^expr) and
+          fragment("json_array_length(?) IS ?", ^expr, ^length(value))
+      )
+
+    value
+    |> Enum.with_index()
+    |> Enum.reduce(base, fn {child_value, index}, match ->
+      child = Ecto.Query.dynamic(fragment("(? -> ?)", ^expr, ^index))
+      Ecto.Query.dynamic(^match and ^structural_match(child, child_value))
+    end)
+  end
+
+  defp structural_match(expr, nil) do
+    Ecto.Query.dynamic(fragment("json_type(?) IS 'null'", ^expr))
+  end
+
+  defp structural_match(expr, true) do
+    Ecto.Query.dynamic(fragment("json_type(?) IS 'true'", ^expr))
+  end
+
+  defp structural_match(expr, false) do
+    Ecto.Query.dynamic(fragment("json_type(?) IS 'false'", ^expr))
+  end
+
+  defp structural_match(expr, value) when is_number(value) do
+    Ecto.Query.dynamic(
+      fragment("IFNULL(json_type(?), '') IN ('integer', 'real')", ^expr) and
+        fragment("(? ->> '$') IS ?", ^expr, ^value)
+    )
+  end
+
+  defp structural_match(expr, value) when is_binary(value) do
+    Ecto.Query.dynamic(
+      fragment("json_type(?) IS 'text'", ^expr) and
+        fragment("(? ->> '$') IS ?", ^expr, ^value)
+    )
+  end
+
+  # `->` treats a text right-hand side as an object label, which binds the
+  # key safely as a parameter. Keys that SQLite would misparse (leading `$`
+  # is read as a JSON path, quotes/backslashes break label parsing, and ''
+  # is a path error) go through json_each instead, which matches keys
+  # byte-for-byte. json_quote rebuilds scalar members as JSON text so the
+  # recursive checks see the same shape `->` produces.
+  defp access_json_key(expr, key) do
+    if key != "" and not String.starts_with?(key, "$") and
+         not String.contains?(key, ["\"", "\\"]) do
+      Ecto.Query.dynamic(fragment("(? -> ?)", ^expr, ^key))
     else
-      AshSql.Expr.dynamic_expr(
-        query,
-        %Ash.Query.Function.Fragment{
-          embedded?: pred_embedded?,
-          arguments: [raw: "json(", expr: value, raw: ")"]
-        },
-        bindings,
-        embedded?,
-        type,
-        acc
+      Ecto.Query.dynamic(
+        fragment(
+          "(SELECT CASE WHEN json_each.type IN ('object', 'array') THEN json_each.value ELSE json_quote(json_each.value) END FROM json_each(?) WHERE json_each.key IS ?)",
+          ^expr,
+          ^key
+        )
       )
     end
   end
 
-  defp plain_map?(value) when is_map(value) and not is_struct(value), do: true
-  defp plain_map?(_), do: false
+  # Round-tripping through JSON gives the same view of the value the
+  # database has: string keys, and no atoms or structs.
+  defp normalize_json_value(value) do
+    value
+    |> Jason.encode!()
+    |> Jason.decode!()
+  end
+
+  defp literal_map?(value) do
+    is_map(value) and not is_struct(value) and not Ash.Expr.expr?(value)
+  end
 
   defp in_item_type(left) do
     case Ash.Expr.determine_type(left) do
