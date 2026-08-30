@@ -18,6 +18,32 @@ defmodule AshSqlite.DataLayer.Info do
     end
   end
 
+  @doc "Whether Ash may wrap this resource's write actions in a transaction"
+  def write_transactions?(resource) do
+    Extension.get_opt(resource, [:sqlite], :write_transactions?, false, true)
+  end
+
+  @doc """
+  The tenant binder for a resource.
+
+  Defaults to `AshSqlite.MultiTenancy.Binder` for a resource with
+  `strategy :context`, so that database-per-tenant works without the application
+  supplying a runtime of its own. A resource with no context multitenancy has no
+  binder, and its statements run on whatever connection the calling process
+  already had.
+  """
+  def tenant_binder(resource) do
+    case Extension.get_opt(resource, [:sqlite], :tenant_binder, nil, true) do
+      nil ->
+        if Ash.Resource.Info.multitenancy_strategy(resource) == :context do
+          AshSqlite.MultiTenancy.Binder
+        end
+
+      binder ->
+        binder
+    end
+  end
+
   @doc "The configured table for a resource"
   def table(resource) do
     Extension.get_opt(resource, [:sqlite], :table, nil, true)

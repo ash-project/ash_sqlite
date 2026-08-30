@@ -38,4 +38,8 @@ test/test.db-wal
 test/dev_test.db
 test/dev_test.db-shm
 test/dev_test.db-wal
+
+test/tenant_shared.db
+test/tenant_shared.db-shm
+test/tenant_shared.db-wal
 notes/
