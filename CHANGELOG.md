@@ -11,6 +11,33 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.18](https://github.com/ash-project/ash_sqlite/compare/v0.2.17...v0.2.18) (2026-08-30)
+
+
+
+
+### Bug Fixes:
+
+* quote json_extract path segments to prevent JSON path traversal (CVE-2026-77846) by Zach Daniel
+
+* use recursive comparison for json objects by Zach Daniel
+
+* JSON-encode map literals wherever they appear in an expression (#222) by Alan McCann
+
+* Handle is_distinct_from / is_not_distinct_from in the map-comparison path (#220) by Alan McCann
+
+* don't match tenant attributes by default by Zach Daniel
+
+* dedup index keys in migrations by Zach Daniel
+
+### Improvements:
+
+* Implement list_expr/6: render list literals as json_array(...) (#221) by Alan McCann
+
+* Support ecto_libsql (libSQL) as an alternative adapter (#212) by Alan McCann
+
+* Use SQLite IN for large scalar list filters (#214) by Will Townsend
+
 ## [v0.2.17](https://github.com/ash-project/ash_sqlite/compare/v0.2.16...v0.2.17) (2026-04-22)
 
 
