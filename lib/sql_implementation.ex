@@ -840,7 +840,7 @@ defmodule AshSqlite.SqlImplementation do
          acc,
          type \\ nil
        ) do
-    path = "$." <> Enum.join(right, ".")
+    path = encode_json_path(right)
 
     {expr, acc} =
       AshSql.Expr.dynamic_expr(
@@ -876,6 +876,24 @@ defmodule AshSqlite.SqlImplementation do
     else
       {:ok, expr, acc}
     end
+  end
+
+  defp encode_json_path(segments) do
+    Enum.reduce(segments, "$", fn segment, path -> path <> encode_json_path_segment(segment) end)
+  end
+
+  defp encode_json_path_segment(segment) when is_integer(segment) do
+    "[" <> Integer.to_string(segment) <> "]"
+  end
+
+  defp encode_json_path_segment(segment) do
+    escaped =
+      segment
+      |> to_string()
+      |> String.replace("\\", "\\\\")
+      |> String.replace("\"", "\\\"")
+
+    ".\"" <> escaped <> "\""
   end
 
   defp determine_type_at_path(type, path) do

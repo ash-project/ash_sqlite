@@ -239,6 +239,32 @@ defmodule AshSqlite.CalculationTest do
              |> Map.get(:foo_bar_from_stuff)
   end
 
+  test "get_path does not traverse a dotted path segment (CVE-2026: json path injection)" do
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{
+        title: "match",
+        stuff: %{"a.b" => "LITERAL", "a" => %{"b" => "NESTED"}}
+      })
+      |> Ash.Changeset.deselect(:stuff)
+      |> Ash.create!()
+
+    # A single segment "a.b" must resolve the literal key, not descend a.b.
+    assert "LITERAL" =
+             post
+             |> Ash.load!(stuff_key: [key: "a.b"])
+             |> Map.get(:stuff_key)
+
+    # Ordinary keys still resolve.
+    assert "hello" =
+             Post
+             |> Ash.Changeset.for_create(:create, %{title: "t2", stuff: %{"title" => "hello"}})
+             |> Ash.Changeset.deselect(:stuff)
+             |> Ash.create!()
+             |> Ash.load!(stuff_key: [key: "title"])
+             |> Map.get(:stuff_key)
+  end
+
   test "contains uses instr" do
     Post
     |> Ash.Changeset.for_create(:create, %{

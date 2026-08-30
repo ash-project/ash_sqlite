@@ -179,6 +179,11 @@ defmodule AshSqlite.Test.Post do
     calculate(:score_with_score, :string, expr(score <> score))
     calculate(:foo_bar_from_stuff, :string, expr(stuff[:foo][:bar]))
 
+    calculate :stuff_key, :string, expr(get_path(stuff, [^arg(:key)])) do
+      public?(true)
+      argument(:key, :string, allow_nil?: false)
+    end
+
     calculate(
       :score_map,
       :map,
