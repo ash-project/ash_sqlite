@@ -77,7 +77,7 @@ if the data layer supports transactions. On a repo that has not opted in
 
 > ### Transactions are opened as IMMEDIATE {: .info}
 >
-> When AshSqlite opens a write transaction it issues `BEGIN IMMEDIATE`, regardless of what
+> When AshSqlite opens a transaction it issues `BEGIN IMMEDIATE`, regardless of what
 > `default_transaction_mode` is set to. You do not need to configure that pragma
 > for Ash's own transactions; it still applies to `Repo.transaction/2` calls you
 > make yourself.
@@ -87,8 +87,6 @@ if the data layer supports transactions. On a repo that has not opted in
 > wait: the snapshot the transaction already read from may be stale by the time the
 > lock frees, so it fails immediately no matter how long `busy_timeout` is.
 > `BEGIN IMMEDIATE` takes the lock up front, and has nothing to upgrade.
->
-> Read-only transactions stay deferred, since they never take the write lock.
 
 ## Enabling Reliable Concurrent Writes
 

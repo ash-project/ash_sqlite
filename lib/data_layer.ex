@@ -2120,22 +2120,18 @@ defmodule AshSqlite.DataLayer do
   def prefer_transaction_for_atomic_updates?(_resource), do: false
 
   @impl true
-  def transaction(resource, func, timeout \\ nil, reason \\ %{type: :custom, metadata: %{}}) do
+  def transaction(resource, func, timeout \\ nil, _reason \\ %{type: :custom, metadata: %{}}) do
     repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
 
-    # A read takes no write lock, so it stays deferred. Anything that may write
-    # takes the write lock up front, because a deferred transaction that reads and
-    # then writes has to *upgrade* its lock -- and SQLite cannot make an upgrade
-    # wait for `busy_timeout`, since the snapshot the transaction already read from
-    # may be stale by the time the lock frees. It fails immediately instead.
-    # `BEGIN IMMEDIATE` has nothing to upgrade, so `busy_timeout` applies.
-    mode = if reason[:type] == :read, do: :deferred, else: :immediate
-
+    # A deferred transaction that reads and then writes has to *upgrade* its lock --
+    # and SQLite cannot make an upgrade wait for `busy_timeout`, since the snapshot
+    # the transaction already read from may be stale by the time the lock frees. It
+    # fails immediately instead. `BEGIN IMMEDIATE` has nothing to upgrade.
     opts =
       case timeout do
-        nil -> [mode: mode]
-        :infinity -> [mode: mode]
-        timeout -> [mode: mode, timeout: timeout]
+        nil -> [mode: :immediate]
+        :infinity -> [mode: :immediate]
+        timeout -> [mode: :immediate, timeout: timeout]
       end
 
     repo.transaction(func, opts)
