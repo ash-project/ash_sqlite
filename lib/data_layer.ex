@@ -2108,12 +2108,6 @@ defmodule AshSqlite.DataLayer do
   def in_transaction?(resource) do
     repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
 
-    # Ash asks this before opening a transaction, and the answer has to be an
-    # answer rather than an exception. `Ecto.Repo.in_transaction?/0` resolves the
-    # current dynamic repo through the registry and raises when it is not there,
-    # which happens whenever the repo was reached through
-    # `c:Ecto.Repo.put_dynamic_repo/1` and started under no name of its own. No
-    # running repo means no open transaction.
     case repo.get_dynamic_repo() do
       pid when is_pid(pid) -> repo.in_transaction?()
       name when is_atom(name) -> !is_nil(GenServer.whereis(name)) and repo.in_transaction?()
