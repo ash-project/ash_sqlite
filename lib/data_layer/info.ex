@@ -11,7 +11,11 @@ defmodule AshSqlite.DataLayer.Info do
   def repo(resource, type \\ :mutate) do
     case Extension.get_opt(resource, [:sqlite], :repo, nil, true) do
       fun when is_function(fun, 2) ->
-        fun.(resource, type)
+        if inline_fn?(fun, resource) do
+          raise_inline_repo_fn!(resource)
+        else
+          fun.(resource, type)
+        end
 
       repo ->
         repo
@@ -26,24 +30,35 @@ defmodule AshSqlite.DataLayer.Info do
   timeout, whether the connection is read only — is repo configuration.
   """
   def write_transactions?(resource) do
-    case Extension.get_opt(resource, [:sqlite], :repo, nil, true) do
-      fun when is_function(fun, 2) ->
-        if unresolvable_repo?(fun, resource) do
-          true
-        else
-          fun.(resource, :mutate).write_transactions?()
-        end
-
-      repo ->
-        repo.write_transactions?()
-    end
+    repo(resource, :mutate).write_transactions?()
   end
 
-  # `false` here would disable transactions for good: runtime is `action.transaction? and can?(:transact)`.
-  defp unresolvable_repo?(fun, resource) do
+  defp inline_fn?(fun, resource) do
     {:module, module} = Function.info(fun, :module)
 
     module == resource_module(resource) and not :erlang.module_loaded(module)
+  end
+
+  defp raise_inline_repo_fn!(resource) do
+    raise Spark.Error.DslError,
+      module: resource_module(resource),
+      path: [:sqlite, :repo],
+      message: """
+      `repo` was given an inline `fn`, which cannot be resolved.
+
+      Spark compiles an inline `fn` into a function on the resource itself, and the
+      repo is asked for while that module is still compiling, so there is nothing to
+      call. Capture a named function in another module instead:
+
+          defmodule MyApp.Routing do
+            def repo(_resource, :mutate), do: MyApp.Repo
+            def repo(_resource, :read), do: MyApp.Repo.ReadOnly
+          end
+
+          sqlite do
+            repo &MyApp.Routing.repo/2
+          end
+      """
   end
 
   defp resource_module(resource) when is_atom(resource), do: resource

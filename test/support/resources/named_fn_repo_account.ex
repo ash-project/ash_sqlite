@@ -6,8 +6,9 @@ defmodule AshSqlite.Test.NamedFnRepoAccount do
   @moduledoc """
   A resource whose `repo` captures a named function, on the `accounts` table.
 
-  The counterpart to `AshSqlite.Test.InlineFnRepoAccount`: this form does resolve at
-  compile time, so its actions report the transaction they will really get.
+  The only supported form for a function repo: unlike an inline `fn`, a capture of a
+  named function in another module resolves while the resource compiles, so its
+  actions report the transaction they will really get.
   """
   use Ash.Resource, domain: AshSqlite.Test.Domain, data_layer: AshSqlite.DataLayer
 

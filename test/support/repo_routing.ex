@@ -6,9 +6,9 @@ defmodule AshSqlite.Test.RepoRouting do
   @moduledoc """
   A named function for a resource's `repo` to capture.
 
-  Unlike an inline `fn`, a capture of a function on another module can be resolved
-  while the resource is still compiling, so `write_transactions?` is read from the
-  real repo rather than assumed.
+  A capture of a function on another module can be resolved while the resource is
+  still compiling, so `write_transactions?` is read from the real repo. An inline
+  `fn` cannot, and is refused.
   """
   def repo(_resource, :mutate), do: AshSqlite.TestRepo
   def repo(_resource, :read), do: AshSqlite.TestRepo

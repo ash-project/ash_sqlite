@@ -201,7 +201,7 @@ defmodule AshSqlite.DataLayer do
         type: {:or, [{:behaviour, Ecto.Repo}, {:fun, 2}]},
         required: true,
         doc:
-          "The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more. Can also be a function that takes a resource and a type `:read | :mutate` and returns the repo."
+          "The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more. Can also be a capture of a named function in another module that takes a resource and a type `:read | :mutate` and returns the repo. An inline `fn` is not supported, because it cannot be called while the resource is compiling."
       ],
       migrate?: [
         type: :boolean,

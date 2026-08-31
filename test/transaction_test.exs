@@ -12,7 +12,7 @@ defmodule AshSqlite.TransactionTest do
   """
   use AshSqlite.RepoCase, async: false
 
-  alias AshSqlite.Test.{Account, InlineFnRepoAccount, NamedFnRepoAccount, TransactionalAccount}
+  alias AshSqlite.Test.{Account, NamedFnRepoAccount, TransactionalAccount}
 
   setup do
     :ok = Ecto.Adapters.SQL.Sandbox.checkout(AshSqlite.TransactionTestRepo)
@@ -35,13 +35,27 @@ defmodule AshSqlite.TransactionTest do
              AshSqlite.TestRepo.write_transactions?()
   end
 
-  test "an inline fn repo is assumed to transact until it can be asked" do
-    # Spark hoists the `fn` onto the resource, so it cannot be called while the
-    # resource compiles, which is when `SetActionTransactions` asks. Saying `false`
-    # there would clear `transaction?` and disable transactions for good, so the
-    # compile-time answer is optimistic and the runtime one is real.
-    assert Ash.Resource.Info.action(InlineFnRepoAccount, :create).transaction?
-    refute Ash.DataLayer.data_layer_can?(InlineFnRepoAccount, :transact)
+  test "an inline fn repo is refused, and the error names the fix" do
+    assert_raise Spark.Error.DslError, ~r/Capture a named function in another module/, fn ->
+      Code.compile_quoted(
+        quote do
+          defmodule InlineFnRepoAccount do
+            use Ash.Resource, domain: AshSqlite.Test.Domain, data_layer: AshSqlite.DataLayer
+
+            attributes do
+              uuid_primary_key(:id)
+            end
+
+            sqlite do
+              table("accounts")
+              migrate?(false)
+
+              repo(fn _resource, _type -> AshSqlite.TestRepo end)
+            end
+          end
+        end
+      )
+    end
   end
 
   test "capturing a named function resolves at compile time instead" do

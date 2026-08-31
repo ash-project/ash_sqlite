@@ -38,8 +38,8 @@ any of it, so a per-resource flag could only ever disagree with the connection i
 runs on.
 
 For a resource using a function repo, the `:mutate` repo is the one asked, so a
-read-only repo never needs to answer. Capture a named function rather than writing
-the function inline:
+read-only repo never needs to answer. The function must be a capture of a named
+function in another module:
 
 ```elixir
 defmodule MyApp.Routing do
@@ -52,18 +52,9 @@ sqlite do
 end
 ```
 
-> ### An inline fn cannot be resolved while the resource compiles {: .warning}
->
-> An inline `fn` given to `repo` is compiled into a function on the resource module
-> itself, and Ash asks whether the data layer can transact while that module is
-> still being compiled — so there is nothing to call yet.
->
-> AshSqlite assumes `true` in that case, because assuming `false` would clear
-> `transaction?` on every action and leave transactions off even once the repo could
-> be reached. The runtime check still consults the real repo, so no transaction is
-> opened against one that has not opted in — but `transaction?` reads `true` on such
-> a resource whether or not it will get one. Capturing a named function, as above,
-> resolves at compile time and keeps that introspection honest.
+An inline `fn` is refused. Spark compiles it into a function on the resource
+itself, and the repo is asked whether it takes transactions while that module is
+still compiling, so there is nothing to call yet.
 
 Turning this on is worth it wherever an action does more than one thing. Without
 a transaction, a create whose `after_action` hook fails leaves its record behind:
