@@ -41,6 +41,10 @@ if Code.ensure_loaded?(Igniter) do
       |> Igniter.Project.Formatter.import_dep(:ash_sqlite)
       |> setup_aliases()
       |> setup_repo_module(otp_app, repo)
+      |> Igniter.Project.Module.find_and_update_module!(
+        repo,
+        &configure_write_transactions_function/1
+      )
       |> configure_config(otp_app, repo)
       |> configure_dev(otp_app, repo)
       |> configure_runtime(otp_app, repo)
@@ -270,6 +274,12 @@ if Code.ensure_loaded?(Igniter) do
       default_repo_contents =
         """
         use AshSqlite.Repo, otp_app: #{inspect(otp_app)}
+
+        # Let Ash wrap write actions in a transaction, so a multi-step action
+        # rolls back as a unit. Requires a non-zero `busy_timeout`, which the
+        # driver sets by default.
+        @impl true
+        def write_transactions?, do: true
         """
 
       Igniter.Project.Module.find_and_update_or_create_module(
@@ -303,6 +313,23 @@ if Code.ensure_loaded?(Igniter) do
           end
         end
       )
+    end
+
+    defp configure_write_transactions_function(zipper) do
+      case Igniter.Code.Function.move_to_def(zipper, :write_transactions?, 0) do
+        {:ok, zipper} ->
+          {:ok, zipper}
+
+        _ ->
+          {:ok,
+           Igniter.Code.Common.add_code(zipper, """
+           # Let Ash wrap write actions in a transaction, so a multi-step action
+           # rolls back as a unit. Requires a non-zero `busy_timeout`, which the
+           # driver sets by default.
+           @impl true
+           def write_transactions?, do: true
+           """)}
+      end
     end
 
     defp use_ash_sqlite_instead_of_ecto(zipper) do
