@@ -54,18 +54,31 @@ SQLite allows one write lock at a time, and a write attempted while another
 transaction holds that lock fails rather than queueing. This is why transactions
 are opt in here and not in `ash_postgres`.
 
-In practice two settings make it a non-issue, and both are already the default:
+In practice two settings make it a non-issue:
 
 - **`busy_timeout`** — how long SQLite retries the write lock before giving up.
-  `ecto_sqlite3` sets it to `2000` unless you say otherwise, which is why the
-  generated configuration needs nothing added. It does need an upper bound as well
-  as a lower one: the driver's busy handler blocks the connection while it waits,
-  so a value at or above the caller's `:timeout` (15s by default) means the caller
-  gives up first and the waiting bought nothing.
+  `ecto_sqlite3` defaults it to `2000`, and the installer sets it explicitly
+  alongside `:timeout`:
+
+  ```elixir
+  # config/config.exs
+  config :my_app, MyApp.Repo,
+    timeout: 15_000,
+    busy_timeout: 16_000
+  ```
+
+  **Keep `busy_timeout` above `:timeout`.** A write waits `min(busy_timeout,
+  :timeout)` for the lock, so whichever is smaller decides when it gives up. With
+  `busy_timeout` on top, the caller's `:timeout` is the only deadline that matters
+  and a contended write behaves as it would on Postgres: it waits, and succeeds if
+  the lock frees in time. Put it underneath and the write abandons a lock it was
+  still willing to wait for.
 
   ```
-  longest competing lock hold  ≲  busy_timeout  <  :timeout
+  longest competing lock hold  ≲  :timeout  <  busy_timeout
   ```
+
+  Raise `busy_timeout` too if you raise `:timeout`, for the same reason.
 
 - **`default_transaction_mode`** — not needed for Ash's transactions. AshSqlite
   issues `BEGIN IMMEDIATE` itself whatever this is set to. Set it only if you want

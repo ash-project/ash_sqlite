@@ -26,6 +26,20 @@ defmodule AshSqlite.InstallTest do
     end)
   end
 
+  test "the generated config keeps busy_timeout above :timeout" do
+    test_project()
+    |> Igniter.compose_task("ash_sqlite.install", [])
+    |> then(fn igniter ->
+      content =
+        igniter.rewrite |> Rewrite.source!("config/config.exs") |> Rewrite.Source.get(:content)
+
+      assert content =~ "timeout: 15_000"
+      assert content =~ "busy_timeout: 16_000"
+
+      igniter
+    end)
+  end
+
   test "an existing repo that already answers is left alone" do
     test_project(
       files: %{

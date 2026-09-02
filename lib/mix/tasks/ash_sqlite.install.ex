@@ -55,8 +55,8 @@ if Code.ensure_loaded?(Igniter) do
     end
 
     defp configure_config(igniter, otp_app, repo) do
-      Igniter.Project.Config.configure(
-        igniter,
+      igniter
+      |> Igniter.Project.Config.configure(
         "config.exs",
         otp_app,
         [:ecto_repos],
@@ -67,6 +67,25 @@ if Code.ensure_loaded?(Igniter) do
             repo
           )
         end
+      )
+      |> configure_timeouts(otp_app, repo)
+    end
+
+    # `busy_timeout` stays above `:timeout` so the caller's timeout governs how long
+    # a write waits for the lock, as it would on Postgres.
+    defp configure_timeouts(igniter, otp_app, repo) do
+      igniter
+      |> Igniter.Project.Config.configure_new(
+        "config.exs",
+        otp_app,
+        [repo, :timeout],
+        {:code, Sourceror.parse_string!("15_000")}
+      )
+      |> Igniter.Project.Config.configure_new(
+        "config.exs",
+        otp_app,
+        [repo, :busy_timeout],
+        {:code, Sourceror.parse_string!("16_000")}
       )
     end
 
