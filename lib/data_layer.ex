@@ -201,7 +201,7 @@ defmodule AshSqlite.DataLayer do
         type: {:or, [{:behaviour, Ecto.Repo}, {:fun, 2}]},
         required: true,
         doc:
-          "The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more. Can also be a function that takes a resource and a type `:read | :mutate` and returns the repo."
+          "The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more. Can also be a capture of a named function in another module that takes a resource and a type `:read | :mutate` and returns the repo. An inline `fn` is not supported, because it cannot be called while the resource is compiling."
       ],
       migrate?: [
         type: :boolean,
@@ -447,7 +447,7 @@ defmodule AshSqlite.DataLayer do
   def can?(_, :destroy_query), do: true
   def can?(_, {:lock, _}), do: false
 
-  def can?(_, :transact), do: false
+  def can?(resource, :transact), do: AshSqlite.DataLayer.Info.write_transactions?(resource)
   def can?(_, :composite_primary_key), do: true
   def can?(_, {:atomic, :update}), do: true
   def can?(_, {:atomic, :upsert}), do: true
@@ -2102,6 +2102,39 @@ defmodule AshSqlite.DataLayer do
     }
 
     %{query | __ash_bindings__: new_ash_bindings}
+  end
+
+  @impl true
+  def in_transaction?(resource) do
+    repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
+
+    case repo.get_dynamic_repo() do
+      pid when is_pid(pid) -> repo.in_transaction?()
+      name when is_atom(name) -> !is_nil(GenServer.whereis(name)) and repo.in_transaction?()
+    end
+  end
+
+  # An atomic update is a single statement, so it is already atomic. Wrapping it
+  # would hold SQLite's one write lock across the surrounding work and buy nothing.
+  @impl true
+  def prefer_transaction_for_atomic_updates?(_resource), do: false
+
+  @impl true
+  def transaction(resource, func, timeout \\ nil, _reason \\ %{type: :custom, metadata: %{}}) do
+    repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
+
+    # A deferred transaction that reads and then writes has to *upgrade* its lock --
+    # and SQLite cannot make an upgrade wait for `busy_timeout`, since the snapshot
+    # the transaction already read from may be stale by the time the lock frees. It
+    # fails immediately instead. `BEGIN IMMEDIATE` has nothing to upgrade.
+    opts =
+      case timeout do
+        nil -> [mode: :immediate]
+        :infinity -> [mode: :immediate]
+        timeout -> [mode: :immediate, timeout: timeout]
+      end
+
+    repo.transaction(func, opts)
   end
 
   @impl true
