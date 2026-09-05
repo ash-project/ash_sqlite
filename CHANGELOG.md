@@ -11,6 +11,17 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.2.19](https://github.com/ash-project/ash_sqlite/compare/v0.2.18...v0.2.19) (2026-09-05)
+
+
+
+
+### Improvements:
+
+* support new string length functions by Zach Daniel
+
+* allow write transactions per resource via `write_transactions?` (#223) by Conor Sinclair
+
 ## [v0.2.18](https://github.com/ash-project/ash_sqlite/compare/v0.2.17...v0.2.18) (2026-08-30)
 
 
