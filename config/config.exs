@@ -24,6 +24,7 @@ end
 if Mix.env() == :test do
   config :ash, :validate_domain_resource_inclusion?, false
   config :ash, :validate_domain_config_inclusion?, false
+  config :ash, :default_string_length_count, :codepoints
 
   config :ash_sqlite, AshSqlite.TestRepo,
     database: Path.join(__DIR__, "../test/test.db"),

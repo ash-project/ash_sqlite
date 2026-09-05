@@ -337,6 +337,25 @@ defmodule AshSqlite.CalculationTest do
            |> Ash.read_one!()
   end
 
+  test "string_length can count codepoints or bytes" do
+    # "é" is one grapheme, one codepoint and two bytes
+    Post
+    |> Ash.Changeset.for_create(:create, %{title: "héllo"})
+    |> Ash.create!()
+
+    assert Post
+           |> Ash.Query.filter(string_length(title, :codepoints) == 5)
+           |> Ash.read_one!()
+
+    assert Post
+           |> Ash.Query.filter(string_length(title, :bytes) == 6)
+           |> Ash.read_one!()
+
+    refute Post
+           |> Ash.Query.filter(string_length(title, :bytes) == 5)
+           |> Ash.read_one!()
+  end
+
   test "runtime expression calcs" do
     author =
       Author

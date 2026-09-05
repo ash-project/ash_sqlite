@@ -180,7 +180,56 @@ defmodule AshSqlite.SqlImplementation do
 
   def expr(
         query,
-        %Ash.Query.Function.StringLength{arguments: [value], embedded?: pred_embedded?},
+        %Ash.Query.Function.StringLength{arguments: [value]} = string_length,
+        bindings,
+        embedded?,
+        acc,
+        type
+      ) do
+    expr(
+      query,
+      %{string_length | arguments: [value, :codepoints]},
+      bindings,
+      embedded?,
+      acc,
+      type
+    )
+  end
+
+  def expr(
+        query,
+        %Ash.Query.Function.StringLength{arguments: [value, :bytes], embedded?: pred_embedded?},
+        bindings,
+        embedded?,
+        acc,
+        type
+      ) do
+    {expr, acc} =
+      AshSql.Expr.dynamic_expr(
+        query,
+        %Ash.Query.Function.Fragment{
+          embedded?: pred_embedded?,
+          arguments: [
+            raw: "LENGTH(CAST(",
+            expr: value,
+            raw: " AS BLOB))"
+          ]
+        },
+        bindings,
+        embedded?,
+        type,
+        acc
+      )
+
+    {:ok, expr, acc}
+  end
+
+  def expr(
+        query,
+        %Ash.Query.Function.StringLength{
+          arguments: [value, :codepoints],
+          embedded?: pred_embedded?
+        },
         bindings,
         embedded?,
         acc,
