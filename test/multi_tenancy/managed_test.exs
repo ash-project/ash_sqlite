@@ -49,6 +49,20 @@ defmodule AshSqlite.MultiTenancy.ManagedTest do
     end
   end
 
+  describe "a repo module that serves only tenants" do
+    # Every connection it serves is a tenant, reached through `put_dynamic_repo/1`,
+    # so it needs no `database:`, no pool and no name of its own.
+    test "needs no database of its own, and no name", %{dir: dir} do
+      assert is_nil(Application.get_env(:ash_sqlite, ManagedTenantRepo))
+      assert is_nil(Process.whereis(ManagedTenantRepo))
+
+      create!("acme", "no shared database needed")
+
+      assert titles_in_file(dir, "acme") == ["no shared database needed"]
+      assert titles("acme") == ["no shared database needed"]
+    end
+  end
+
   describe "reads and writes" do
     test "a create lands in its own tenant's file", %{dir: dir} do
       create!("acme", "acme one")
@@ -231,8 +245,7 @@ defmodule AshSqlite.MultiTenancy.ManagedTest do
     ManagedPost |> Ash.read!(tenant: tenant) |> Enum.map(& &1.title) |> Enum.sort()
   end
 
-  # Read with Exqlite rather than through Ash, so isolation is checked against the
-  # bytes on disk and not against the thing under test.
+  # Reads the file directly, so isolation is checked against bytes on disk.
   defp titles_in_file(dir, tenant) do
     path = Path.join(dir, AshSqlite.MultiTenancy.Database.encode(tenant) <> ".db")
     {:ok, db} = Exqlite.Sqlite3.open(path)

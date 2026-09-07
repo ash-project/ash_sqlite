@@ -127,7 +127,6 @@ defmodule AshSqlite.MultiTenancy.Binds do
 
   @impl true
   def init(repo) do
-    # Public: binds happen in arbitrary caller processes, not in this one.
     :ets.new(name(repo), [
       :named_table,
       :public,

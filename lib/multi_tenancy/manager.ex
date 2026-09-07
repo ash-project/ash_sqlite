@@ -208,9 +208,8 @@ defmodule AshSqlite.MultiTenancy.Manager do
              {:ok, connection, _} <- TenantRegistry.lookup(repo, tenant) do
           version = AshSqlite.MultiTenancy.Connection.info(connection).schema_version
 
-          # `close_after?` frees residency, it is not part of migrating. A tenant
-          # serving traffic stays open rather than turning a migrated tenant into a
-          # reported failure.
+          # `close_after?` frees residency; it is not part of migrating, so a busy
+          # tenant staying open is not a failure.
           if close_after?, do: close(repo, tenant, Keyword.take(opts, [:grace_ms]))
 
           {:ok, version}
@@ -263,8 +262,8 @@ defmodule AshSqlite.MultiTenancy.Manager do
   def handle_call({:delete, tenant}, _from, state) do
     base = Database.path(state.dir, tenant)
 
-    # Closing checkpoints and may remove the sidecars itself, so existence is not
-    # stable between a check and a removal. Attempt each and report what went.
+    # Closing may remove the sidecars itself, so existence is not stable between a
+    # check and a removal.
     removed = for path <- Database.sidecars(base), File.rm(path) == :ok, do: path
 
     {:reply, {:ok, removed}, state}
@@ -368,11 +367,9 @@ defmodule AshSqlite.MultiTenancy.Manager do
     state
   end
 
-  # The candidate was chosen because nothing was bound to it, which was true when it
-  # was chosen. Marking it closing *before* re-reading the count is what makes it
-  # still true: `Binds.bound/2` publishes its increment before reading the mark, so
-  # after the mark is set a count of zero means no bind can still arrive. A bind that
-  # got in first is left alone and the limit is exceeded instead.
+  # Marked closing *before* the count is re-read: `Binds.bound/2` publishes its
+  # increment before reading the mark, so a count of zero after the mark means no
+  # bind can still arrive.
   defp evict(repo, tenant) do
     Binds.begin_closing(repo, tenant)
 
@@ -387,9 +384,8 @@ defmodule AshSqlite.MultiTenancy.Manager do
     end
   end
 
-  # The sidecars only exist between a write and a checkpoint, but when they do they
-  # hold committed data the database file does not -- so a move that left them
-  # behind would lose the most recent writes.
+  # Between a write and a checkpoint the sidecars hold committed data the database
+  # file does not, so a move must take them along.
   defp move(source, target) do
     with :ok <- File.rename(source, target) do
       for {sidecar, renamed} <- Enum.zip(Database.sidecars(source), Database.sidecars(target)),
@@ -402,9 +398,8 @@ defmodule AshSqlite.MultiTenancy.Manager do
     end
   end
 
-  # A deadline rather than a loop count: `Process.sleep(1)` sleeps *at least* a
-  # millisecond, so counting iterations made `grace_ms` mean something between one
-  # and several times what it said, depending on how loaded the scheduler was.
+  # A deadline, not a loop count: `Process.sleep(1)` sleeps *at least* a millisecond,
+  # so counting iterations made `grace_ms` mean several times what it said.
   defp quiesced?(repo, tenant, grace_ms) do
     await_quiescence(repo, tenant, System.monotonic_time(:millisecond) + grace_ms)
   end

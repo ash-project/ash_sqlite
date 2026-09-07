@@ -107,8 +107,7 @@ defmodule AshSqlite.MultiTenancy.Database do
     <<?~, hex(hi), hex(lo)>>
   end
 
-  # Lowercase, so that the encoded alphabet as a whole is lowercase and two
-  # encodings can never differ only by case. See the moduledoc.
+  # Lowercase, so two encodings can never differ only by case.
   defp hex(nibble) when nibble < 10, do: ?0 + nibble
   defp hex(nibble), do: ?a + nibble - 10
 

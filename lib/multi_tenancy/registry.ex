@@ -17,9 +17,8 @@ defmodule AshSqlite.MultiTenancy.Registry do
     Registry.start_link(
       keys: :unique,
       name: name(repo),
-      # Every tenanted statement takes a lookup, so reads are the hot path.
-      # Every tenanted statement does a lookup, so reads are the hot path and the
-      # partitions are what keep them off one ETS table.
+      # Every tenanted statement does a lookup, so partitions keep reads off one
+      # ETS table.
       partitions: System.schedulers_online()
     )
   end

@@ -27,9 +27,8 @@ defmodule AshSqlite.MultiTenancy.Migrations do
     :ok
   end
 
-  # `:persistent_term` because this is written once per directory per boot and read
-  # on every activation. Its cost is in writes, which is why residency is not stored
-  # here.
+  # `:persistent_term` costs in writes, and this is written once per boot but read
+  # on every activation -- which is why residency is not stored here.
   defp compile!(path, fingerprint) do
     loaded = path |> files() |> Enum.map(&load_file!/1) |> Enum.sort()
     :persistent_term.put(key(path), {fingerprint, loaded})

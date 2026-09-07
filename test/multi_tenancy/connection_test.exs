@@ -122,8 +122,7 @@ defmodule AshSqlite.MultiTenancy.ConnectionTest do
       assert {:error, {:missing_migrations_path, ^missing}} =
                start_connection(dir, "acme", migrations_path: missing)
 
-      # Distinct from a migration that failed: this one is true of every tenant on
-      # the node, and quarantining one tenant over it would hide that.
+      # True of every tenant on the node, so quarantining one would hide it.
       assert :error = TenantRegistry.lookup(@repo, "acme")
       refute File.exists?(Database.path(dir, "acme"))
     end
@@ -200,8 +199,7 @@ defmodule AshSqlite.MultiTenancy.ConnectionTest do
     end
   end
 
-  # `AshSqlite.TestRepo` is configured with the sandbox pool, and a tenant instance
-  # inherits the repo module's application config.
+  # A tenant instance inherits the repo module's config, which names the sandbox pool.
   defp start_connection(dir, tenant, opts \\ []) do
     Connection.start_link(
       Keyword.merge(

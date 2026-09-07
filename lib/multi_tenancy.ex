@@ -48,9 +48,8 @@ defmodule AshSqlite.MultiTenancy do
   def connection_for(repo, tenant) do
     do_connection_for(repo, tenant)
   rescue
-    # `Registry.lookup/2` raises on a registry that was never started, and the
-    # message names an internal registry rather than the thing that is missing.
-    # Rescuing costs nothing on the path that works.
+    # `Registry.lookup/2` raises on a registry never started, naming an internal
+    # registry rather than the omission.
     exception in ArgumentError ->
       if started?(repo), do: reraise(exception, __STACKTRACE__), else: not_started!(repo)
   catch
@@ -78,9 +77,8 @@ defmodule AshSqlite.MultiTenancy do
 
   defp started?(repo), do: is_pid(Process.whereis(Module.concat(repo, MultiTenancy)))
 
-  # Reached when a resource has `strategy :context` but nothing is managing its
-  # tenants. Raised rather than left as `unknown registry: MyApp.Repo.TenantRegistry`,
-  # which names an implementation detail instead of the omission.
+  # Raised rather than left as `unknown registry: ...`, which names an
+  # implementation detail instead of the omission.
   defp not_started!(repo) do
     raise """
     #{inspect(repo)} has no tenant fleet running, so there is no database to select \
@@ -111,8 +109,7 @@ defmodule AshSqlite.MultiTenancy do
       {:ok, repo_pid} ->
         bound(repo, tenant, repo_pid, fun)
 
-      # Raising, not returning: an unbound statement here would run against whichever
-      # database the process already had, which is another tenant's data.
+      # An unbound statement here would run against another tenant's data.
       {:error, reason} ->
         raise AshSqlite.MultiTenancy.UnavailableError, tenant: tenant, reason: reason
     end
@@ -179,8 +176,8 @@ defmodule AshSqlite.MultiTenancy do
   @doc "The fleet configuration."
   defdelegate config(repo), to: Manager
 
-  # Checked at boot rather than at activation: a typo would otherwise surface in
-  # production as `no such table`, at whatever hour the first tenant woke up.
+  # Checked at boot, not activation: a typo would otherwise surface as `no such
+  # table` whenever the first tenant woke up.
   defp verify_migrations_path!(nil), do: :ok
 
   defp verify_migrations_path!(path) do

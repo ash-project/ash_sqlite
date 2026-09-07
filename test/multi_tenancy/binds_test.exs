@@ -58,10 +58,8 @@ defmodule AshSqlite.MultiTenancy.BindsTest do
   end
 
   describe "bound/2 against a concurrent close" do
-    # The bind and the closing check are two ETS operations, so the order matters.
-    # Incrementing first means a closer can never read a count of zero for a bind
-    # that goes on to proceed; checking first would let one slip between the check
-    # and the increment and lose its statement to the close.
+    # Incrementing before the closing check is what stops a closer reading zero for
+    # a bind that goes on to proceed.
     test "a bind is visible to a closer before it is acted on" do
       parent = self()
 
@@ -208,9 +206,8 @@ defmodule AshSqlite.MultiTenancy.BindsTest do
       refute Binds.last_used(Repo, "acme")
     end
 
-    # `rename/3` and `delete/2` hold a tenant closed across a file operation, and
-    # call `close/3` -- which forgets the tenant -- in the middle of it. Clearing the
-    # mark here would reopen the window they took it to close.
+    # `rename/3` and `delete/2` call `close/3` mid-operation, so clearing the mark
+    # here would reopen the window they took it to close.
     test "leaves a closing mark for whoever took it" do
       Binds.bound(Repo, "acme")
       Binds.begin_closing(Repo, "acme")

@@ -40,8 +40,8 @@ defmodule AshSqlite.MultiTenancyTest do
       assert {:ok, ^first} = MultiTenancy.connection_for(@repo, "acme")
     end
 
-    # Every caller of a cold tenant races the same activation. One connection per
-    # database is the whole invariant -- two would be two writers on one file.
+    # One connection per database is the invariant: two would be two writers on one
+    # file.
     test "concurrent first requests for one cold tenant share one connection", %{dir: dir} do
       start_tenancy(dir, migrations_path: migrations(dir))
 
@@ -89,8 +89,7 @@ defmodule AshSqlite.MultiTenancyTest do
       end
     end
 
-    # A started fleet asked about a tenant it cannot serve must still report that,
-    # rather than being mistaken for a missing supervision tree.
+    # Distinct from a missing supervision tree.
     test "a real error from a started fleet is not rewritten", %{dir: dir} do
       start_tenancy(dir)
 
@@ -202,10 +201,8 @@ defmodule AshSqlite.MultiTenancyTest do
       release(holder)
     end
 
-    # Eviction picks a tenant nothing is bound to and then closes it, and the two
-    # steps are not one atomic act. A request that arrives in between must not lose
-    # its statement, so the whole cycle is driven under contention rather than in
-    # the sequential order the tests above use.
+    # Picking a tenant and closing it are not one atomic act, so the cycle is driven
+    # under contention rather than sequentially.
     test "statements survive eviction churn under contention", %{dir: dir} do
       start_tenancy(dir, max_resident: 1, migrations_path: migrations(dir))
 
@@ -318,9 +315,8 @@ defmodule AshSqlite.MultiTenancyTest do
       refute File.exists?(Database.path(dir, "acme") <> "-wal")
     end
 
-    # A deleted tenant is one that has never been seen, not one that is broken: the
-    # next request must get a fresh, migrated database rather than a quarantine or
-    # the rows that were just removed.
+    # A deleted tenant is one never seen, not a broken one: the next request gets a
+    # fresh migrated database.
     test "a tenant requested again after a delete gets a fresh migrated database",
          %{dir: dir} do
       start_tenancy(dir, migrations_path: migrations(dir))
@@ -336,10 +332,8 @@ defmodule AshSqlite.MultiTenancyTest do
   end
 
   describe "holding a tenant closed" do
-    # `rename/3` and `delete/2` both mark a tenant closing, close it, and then move
-    # or unlink its file. The mark is what stops a request arriving in between and
-    # opening the very file that is about to be moved, so `close/3` must leave a
-    # mark its caller took.
+    # The mark is what stops a request opening the file that is about to be moved,
+    # so `close/3` must leave a mark its caller took.
     test "close/3 leaves a closing mark its caller was already holding", %{dir: dir} do
       start_tenancy(dir, migrations_path: migrations(dir))
       write("acme", "held")
@@ -361,9 +355,8 @@ defmodule AshSqlite.MultiTenancyTest do
       assert Binds.bound(@repo, "acme") == :ok
     end
 
-    # The window `rename/3` opens between its own close and its file move: a bind
-    # arriving here must wait for the move rather than opening the source file. Run
-    # as `rename/3` runs it, because the bug is in the sequence and not in one call.
+    # The window between `rename/3`'s close and its file move: a bind arriving here
+    # must wait rather than open the source file.
     test "nothing can bind the source name mid-rename", %{dir: dir} do
       start_tenancy(dir, migrations_path: migrations(dir))
       write("acme", "original")
@@ -383,9 +376,8 @@ defmodule AshSqlite.MultiTenancyTest do
       Binds.end_closing(@repo, "acme-renamed")
     end
 
-    # `delete/2`'s window is worse than rename's: a bind here leaves a connection
-    # open on the inode `delete/2` is about to unlink, and it goes on serving reads
-    # and accepting writes against a database with no directory entry.
+    # Worse than rename's window: a bind here serves reads and writes against an
+    # inode with no directory entry.
     test "nothing can bind a tenant mid-delete", %{dir: dir} do
       start_tenancy(dir, migrations_path: migrations(dir))
       write("acme", "doomed")
@@ -450,8 +442,8 @@ defmodule AshSqlite.MultiTenancyTest do
       assert MultiTenancy.all_tenants(@repo) == ["acme:us"]
     end
 
-    # A statement in flight holds the old inode, so a move under it would commit
-    # into the destination's database. Refused, as the close it rests on is.
+    # A statement in flight holds the old inode, so a move under it would commit into
+    # the destination's database.
     test "refuses a tenant with a statement in flight, leaving the file alone",
          %{dir: dir} do
       start_tenancy(dir, migrations_path: migrations(dir))
@@ -625,9 +617,8 @@ defmodule AshSqlite.MultiTenancyTest do
                @repo |> MultiTenancy.migrate_all() |> Enum.sort()
     end
 
-    # `close_after?` frees residency; it is not part of migrating. A tenant serving
-    # traffic must not be reported as a migration failure, and must not be closed
-    # out from under the traffic either.
+    # `close_after?` frees residency; a busy tenant is neither closed nor reported
+    # as a migration failure.
     test "a tenant in use is migrated, left resident, and still reported ok",
          %{dir: dir} do
       start_tenancy(dir, migrations_path: migrations(dir))
@@ -721,8 +712,6 @@ defmodule AshSqlite.MultiTenancyTest do
     path
   end
 
-  # Holds a tenant bound in another process until told to stop, so that eviction
-  # has something genuinely in use to skip.
   # Holds a tenant bound in another process, so eviction has something in use to skip.
   defp hold(tenant) do
     test = self()

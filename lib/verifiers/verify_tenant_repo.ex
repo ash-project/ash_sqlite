@@ -9,14 +9,10 @@ defmodule AshSqlite.Verifiers.VerifyTenantRepo do
   alias Spark.Dsl.Verifier
   alias Spark.Error.DslError
 
-  # `put_dynamic_repo/1` binds per repo *module*, and `AshSqlite.MultiTenancy.TenantRepo`
-  # binds the mutate one. A resource whose read repo is a different module would issue
-  # its reads on a module nothing bound, against that module's own configured database,
-  # with nothing raising.
-  #
-  # Only checked for the default tenant repo. One of the application's own is told
-  # whether each statement is a `:read` or a `:mutate`, and can bind a read replica
-  # separately, which is the case this would otherwise forbid.
+  # `put_dynamic_repo/1` binds per repo *module*, and the default tenant repo binds
+  # the mutate one -- so a split read repo would serve reads from its own configured
+  # database, unbound, with nothing raising. Only checked for the default: a tenant
+  # repo of its own sees `type` and can bind a replica deliberately.
   @impl true
   def verify(dsl) do
     with true <- Ash.Resource.Info.multitenancy_strategy(dsl) == :context,

@@ -137,8 +137,7 @@ defmodule AshSqlite.MultiTenancy.Connection do
     source = AshSqlite.MultiTenancy.Migrations.load!(migrations_path)
     statuses = Ecto.Migrator.migrations(repo, source, opts)
 
-    # Only run the migrator when something is pending: the common case is an
-    # up-to-date tenant being activated.
+    # The common case is an already up-to-date tenant.
     if Enum.any?(statuses, &match?({:down, _, _}, &1)) do
       Ecto.Migrator.run(repo, source, :up, Keyword.put(opts, :all, true))
     end
@@ -154,7 +153,6 @@ defmodule AshSqlite.MultiTenancy.Connection do
       {:error, {:migration_failed, exception.__struct__}}
   end
 
-  # Every version in the directory, because anything pending has just been run.
   defp current_version([]), do: nil
   defp current_version(statuses), do: statuses |> Enum.map(&elem(&1, 1)) |> Enum.max()
 
@@ -169,7 +167,6 @@ defmodule AshSqlite.MultiTenancy.Connection do
 
     :ok
   catch
-    # The repo is already going down, which is the state we wanted.
     :exit, _ -> :ok
   end
 end
