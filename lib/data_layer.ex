@@ -2182,8 +2182,8 @@ defmodule AshSqlite.DataLayer do
   def transaction(resource, func, timeout \\ nil, reason \\ %{type: :custom, metadata: %{}}) do
     repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
 
-    # Ash calls this above the data layer, so unlike every other callback there is
-    # no changeset here to read the tenant off.
+    # Ash calls this above the data layer, so there is no changeset to read the
+    # tenant off.
     tenant = reason_tenant(reason)
 
     if is_nil(tenant) and tenant_required?(resource) do
@@ -2215,15 +2215,9 @@ defmodule AshSqlite.DataLayer do
     bind_tenant(resource, tenant, :transaction, fn -> repo.transaction(func, opts) end)
   end
 
-  # Ash forwards no tenant of its own, so this digs it out of what it does
-  # forward. The shapes differ by path and all three are load-bearing:
-  #
-  #   * the single-record paths pass `changeset.context[:data_layer]`, so a
-  #     resource that puts the tenant there arrives as `%{tenant: t}`
-  #   * the bulk paths pass the *whole* first changeset context, so the same
-  #     value arrives one level down, under `:data_layer`
-  #   * a read carries the query itself in its metadata, which already has the
-  #     tenant on it -- so reads need nothing added to their context
+  # Three shapes, because each path forwards a different thing: single-record
+  # passes `context[:data_layer]`, bulk passes the whole changeset context, and a
+  # read carries its query.
   defp reason_tenant(reason) do
     context = reason[:data_layer_context] || %{}
 
@@ -2257,16 +2251,9 @@ defmodule AshSqlite.DataLayer do
     end
   end
 
-  # Wraps a statement in the resource's tenant binder, if it has one and this
-  # statement has a tenant. Every callback that issues SQL goes through here, which
-  # is the point: a caller cannot bind around a path it never sees, and two of the
-  # paths that matter -- aggregates and atomic writes -- give it nothing to bind
-  # around.
-  #
-  # `usage` is what this callback is: `:read`, `:write`, or `:transaction`. Only
-  # this module can say -- by the time a binder sees a statement the distinction is
-  # gone -- and a binder that caches, replicates, or routes reads separately from
-  # writes cannot be written without it.
+  # Every callback that issues SQL goes through here, because a caller cannot bind
+  # around a path it never sees -- aggregates and atomic writes give it nothing to
+  # wrap. `usage` is passed on so a binder can route reads and writes differently.
   defp bind_tenant(resource, tenant, usage, fun) do
     cond do
       global?(resource) -> bind_global(resource, fun)
@@ -2275,17 +2262,9 @@ defmodule AshSqlite.DataLayer do
     end
   end
 
-  # A `global?` resource holds one copy of its rows, not one per tenant. No tenant
-  # selects its database, so the binder is never asked and a tenant passed to it is
-  # ignored rather than honoured -- honouring it is what gave every tenant its own
-  # copy of a table that is supposed to have exactly one.
-  #
-  # It binds the resource's repo module to its *own* named instance, explicitly. The
-  # alternative is to leave the process binding alone, which is what made this a
-  # footgun: a global resource sharing a repo module with tenanted ones read whichever
-  # tenant happened to be bound last. Which database the global rows live in follows
-  # from `repo` -- the tenanted module's own configured database if it shares one,
-  # another module's if it names one -- and in neither case from the caller.
+  # One copy of the rows, so the tenant is ignored and the repo module's own named
+  # instance is bound explicitly. Leaving the process binding alone instead is what
+  # made this a footgun: it read whichever tenant was bound last.
   defp bind_global(resource, fun) do
     repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
     verify_shared_repo!(resource, repo)
@@ -2304,12 +2283,8 @@ defmodule AshSqlite.DataLayer do
     end
   end
 
-  # Checked here rather than by a transformer, because it cannot be known at compile
-  # time. A repo's `database:` is very often set in `config/runtime.exs` -- that is
-  # the recommended shape for a release -- and a transformer runs long before that
-  # file is evaluated, so it would reject exactly the configuration it should accept.
-  # Ecto's own error for this names the repo but not the reason a `global?` resource
-  # wanted it, which is the part worth saying.
+  # Not a transformer: `database:` is usually set in `config/runtime.exs`, which is
+  # evaluated long after transformers run.
   defp verify_shared_repo!(resource, repo) do
     cond do
       is_nil(Process.whereis(repo)) ->
@@ -2323,12 +2298,9 @@ defmodule AshSqlite.DataLayer do
     end
   end
 
-  # Both halves are checked, because neither implies the other and the failure
-  # without them is unrecognisable. A repo module serving only tenants is reached
-  # through `Ecto.Repo.put_dynamic_repo/1`, so it needs no name and no database of
-  # its own -- and it starts happily without either. A global statement on one then
-  # waits out the pool timeout and reports that requests are arriving faster than
-  # they can be served, which is not what went wrong.
+  # Both halves are checked because neither implies the other, and a tenant-only
+  # repo module legitimately has neither -- so the native failure is a pool timeout
+  # that says nothing about the missing configuration.
   defp shared_repo_error(resource, repo, problem) do
     """
     #{inspect(resource)} has `strategy :context` with `global? true`, so its rows \
@@ -2384,11 +2356,9 @@ defmodule AshSqlite.DataLayer do
     end
   end
 
-  # A tenanted resource whose data layer chooses connections per tenant, reached
-  # with no tenant, would run against whichever connection the process happens to
-  # hold. For a database-per-tenant layout that is another tenant's data, so it
-  # fails rather than guesses. Ash enforces "tenant required unless global?" itself;
-  # this catches the paths that bypass an action.
+  # Without a tenant there is nothing to select a database, so this fails rather
+  # than run against whichever connection the process happens to hold. Ash already
+  # enforces this for actions; this catches the paths that bypass one.
   defp unbound(resource, fun) do
     if tenant_required?(resource) do
       raise ArgumentError, """

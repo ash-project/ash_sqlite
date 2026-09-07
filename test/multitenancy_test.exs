@@ -45,15 +45,14 @@ defmodule AshSqlite.MultitenancyTest do
 
     TenantBinder.reset_calls()
 
-    # The tenant files are made per test, but the shared database is not: it is the
-    # repo module's own, and it outlives every test that writes to it.
+    # The shared database is the repo module's own, so it outlives every test.
     Ecto.Adapters.SQL.query!(AshSqlite.TenantRepo, "DELETE FROM global_posts", [])
 
     %{repos: repos}
   end
 
-  # Goes to the file rather than back through Ash, so the isolation claim is checked
-  # against bytes on disk and not against the layer being tested.
+  # Reads the file directly, so isolation is checked against bytes on disk rather
+  # than the layer under test.
   defp titles_in_file(path) do
     {:ok, db} = Exqlite.Sqlite3.open(path)
     {:ok, stmt} = Exqlite.Sqlite3.prepare(db, "SELECT title FROM tenanted_posts ORDER BY title")
@@ -173,7 +172,6 @@ defmodule AshSqlite.MultitenancyTest do
   end
 
   test "a transaction refuses to reach into another tenant's database" do
-    # Wrapped by Ash, since the inner statement is a real action.
     assert_raise Ash.Error.Unknown, ~r/open on another tenant's database/, fn ->
       AshSqlite.DataLayer.transaction(
         TenantedPost,
@@ -236,9 +234,7 @@ defmodule AshSqlite.MultitenancyTest do
   end
 
   describe "a global? resource" do
-    # One copy of the rows, as `global?` means for a schema-based data layer. The
-    # tenant is ignored rather than honoured: honouring it gave every tenant its own
-    # copy of a table that is supposed to have exactly one.
+    # One copy of the rows: honouring the tenant gave every tenant its own copy.
     test "a write goes to the shared database, not the tenant's file", %{repos: repos} do
       GlobalPost
       |> Ash.Changeset.for_create(:create, %{title: "shared"}, tenant: "acme")
@@ -259,9 +255,8 @@ defmodule AshSqlite.MultitenancyTest do
       assert Ash.read!(GlobalPost) |> Enum.map(& &1.title) == ["one copy"]
     end
 
-    # The footgun this replaces: the resource shares a repo module with tenanted
-    # ones, so leaving the process binding alone made it read whichever tenant was
-    # bound last. It now binds the module's own instance explicitly.
+    # The footgun this replaces: sharing a repo module with tenanted ones, it used to
+    # read whichever tenant was bound last.
     test "is unaffected by a tenant bound on the same repo module" do
       GlobalPost
       |> Ash.Changeset.for_create(:create, %{title: "shared"}, tenant: "acme")
@@ -294,10 +289,8 @@ defmodule AshSqlite.MultitenancyTest do
       assert TenantBinder.calls() == []
     end
 
-    # The shape this is easy to arrive at: adding `global? true` to a resource on a
-    # repo module that only ever served tenants. Such a module is reached entirely
-    # through `put_dynamic_repo/1`, so it has no named process and no shared database
-    # to hold the one copy.
+    # Easy to arrive at: a tenant-only repo module is reached entirely through
+    # `put_dynamic_repo/1`, so it has no name and no shared database.
     test "says so when the shared repo has no instance of its own" do
       message =
         try do
@@ -312,10 +305,8 @@ defmodule AshSqlite.MultitenancyTest do
       refute message =~ "could not lookup Ecto repo"
     end
 
-    # Started under its own name but with no database: the other way to have no
-    # shared database, and the one whose native failure is unrecognisable -- the
-    # statement waits out the pool timeout and then reports that requests are
-    # arriving faster than they can be served.
+    # The other way to have no shared database, and the one whose native failure is
+    # an unrecognisable pool timeout.
     test "says so when the shared repo is named but has no database" do
       {:ok, pid} = AshSqlite.UnconfiguredRepo.start_link()
 
