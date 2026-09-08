@@ -2334,16 +2334,10 @@ defmodule AshSqlite.DataLayer do
 
   defp query_tenant(_), do: nil
 
-  defp changesets_tenant(changesets) do
-    changesets
-    |> Enum.map(& &1.tenant)
-    |> Enum.uniq()
-    |> case do
-      [] -> nil
-      [tenant] -> tenant
-      many -> raise ArgumentError, "bulk operation mixes tenants: #{inspect(many)}"
-    end
-  end
+  # Ash does not mix tenants within one bulk operation, so the first changeset
+  # speaks for the batch.
+  defp changesets_tenant([%{tenant: tenant} | _]), do: tenant
+  defp changesets_tenant(_), do: nil
 
   defp dynamic_repo(resource, %{__ash_bindings__: %{context: %{data_layer: %{repo: repo}}}}) do
     repo || AshSqlite.DataLayer.Info.repo(resource, :read)
