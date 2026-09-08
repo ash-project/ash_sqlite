@@ -315,6 +315,7 @@ defmodule AshSqlite.DataLayer do
       AshSqlite.Transformers.CarryTenant
     ],
     verifiers: [
+      AshSqlite.Verifiers.VerifyGlobalMultitenancy,
       AshSqlite.Verifiers.VerifyTenantBinder
     ]
 
@@ -2254,77 +2255,10 @@ defmodule AshSqlite.DataLayer do
   # Every callback that issues SQL goes through here, because a caller cannot bind
   # around a path it never sees -- aggregates and atomic writes give it nothing to
   # wrap. `usage` is passed on so a binder can route reads and writes differently.
+  defp bind_tenant(resource, nil, _usage, fun), do: unbound(resource, fun)
+
   defp bind_tenant(resource, tenant, usage, fun) do
-    cond do
-      global?(resource) -> bind_global(resource, fun)
-      is_nil(tenant) -> unbound(resource, fun)
-      true -> bind_to_tenant(resource, tenant, usage, fun)
-    end
-  end
-
-  # One copy of the rows, so the tenant is ignored and the repo module's own named
-  # instance is bound explicitly. Leaving the process binding alone instead is what
-  # made this a footgun: it read whichever tenant was bound last.
-  defp bind_global(resource, fun) do
-    repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
-    verify_shared_repo!(resource, repo)
-    previous = repo.get_dynamic_repo()
-
-    if previous == repo do
-      fun.()
-    else
-      repo.put_dynamic_repo(repo)
-
-      try do
-        fun.()
-      after
-        repo.put_dynamic_repo(previous)
-      end
-    end
-  end
-
-  # Not a transformer: `database:` is usually set in `config/runtime.exs`, which is
-  # evaluated long after transformers run.
-  defp verify_shared_repo!(resource, repo) do
-    cond do
-      is_nil(Process.whereis(repo)) ->
-        raise ArgumentError, shared_repo_error(resource, repo, "is not running")
-
-      is_nil(repo.config()[:database]) ->
-        raise ArgumentError, shared_repo_error(resource, repo, "has no `database:` set")
-
-      true ->
-        :ok
-    end
-  end
-
-  # Both halves are checked because neither implies the other, and a tenant-only
-  # repo module legitimately has neither -- so the native failure is a pool timeout
-  # that says nothing about the missing configuration.
-  defp shared_repo_error(resource, repo, problem) do
-    """
-    #{inspect(resource)} has `strategy :context` with `global? true`, so its rows \
-    live in one shared database rather than one per tenant -- #{inspect(repo)}'s own, \
-    under its own name. That repo #{problem}.
-
-    A repo module used only for tenants needs neither, which is what makes this easy \
-    to arrive at by adding `global? true` to a resource on one. Give it a database \
-    and start it:
-
-        config :my_app, #{inspect(repo)}, database: "priv/shared.db"
-
-        children = [#{inspect(repo)}]
-
-    Or put the shared tables on a repo module of their own and name it in this \
-    resource's `repo`. What will not work is neither: there is no tenant to fall \
-    back to, and falling back to one would put a shared table in a single tenant's \
-    database.
-    """
-  end
-
-  defp global?(resource) do
-    Ash.Resource.Info.multitenancy_strategy(resource) == :context &&
-      Ash.Resource.Info.multitenancy_global?(resource)
+    bind_to_tenant(resource, tenant, usage, fun)
   end
 
   defp bind_to_tenant(resource, tenant, usage, fun) do
@@ -2363,8 +2297,7 @@ defmodule AshSqlite.DataLayer do
     if tenant_required?(resource) do
       raise ArgumentError, """
       #{inspect(resource)} has `strategy :context` but this statement carried no \
-      tenant, so there is no connection to select. Pass a tenant, or set \
-      `global? true` if this resource is genuinely shared.
+      tenant, so there is no database file to select. Pass a tenant.
       """
     end
 
@@ -2372,9 +2305,8 @@ defmodule AshSqlite.DataLayer do
   end
 
   # `strategy :context` and no binder is a configuration error rather than a
-  # statement to run unbound: the tenant was given, and nothing can act on it. The
-  # verifier says so at compile time, but only as a warning, so this is the guard
-  # that holds.
+  # statement to run unbound. `VerifyTenantBinder` fails the compile, so this is
+  # reached only by a resource built at runtime.
   defp without_binder(resource, tenant, fun) do
     if Ash.Resource.Info.multitenancy_strategy(resource) == :context do
       raise ArgumentError, """
@@ -2393,8 +2325,7 @@ defmodule AshSqlite.DataLayer do
   end
 
   defp tenant_required?(resource) do
-    Ash.Resource.Info.multitenancy_strategy(resource) == :context &&
-      !Ash.Resource.Info.multitenancy_global?(resource)
+    Ash.Resource.Info.multitenancy_strategy(resource) == :context
   end
 
   defp query_tenant(%{__ash_bindings__: %{context: context}}) do
