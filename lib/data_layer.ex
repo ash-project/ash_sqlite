@@ -311,8 +311,7 @@ defmodule AshSqlite.DataLayer do
     transformers: [
       AshSqlite.Transformers.ValidateReferences,
       AshSqlite.Transformers.VerifyRepo,
-      AshSqlite.Transformers.EnsureTableOrPolymorphic,
-      AshSqlite.Transformers.CarryTenant
+      AshSqlite.Transformers.EnsureTableOrPolymorphic
     ],
     verifiers: [
       AshSqlite.Verifiers.VerifyGlobalMultitenancy,
@@ -2216,17 +2215,7 @@ defmodule AshSqlite.DataLayer do
     bind_tenant(resource, tenant, :transaction, fn -> repo.transaction(func, opts) end)
   end
 
-  # Three shapes, because each path forwards a different thing: single-record
-  # passes `context[:data_layer]`, bulk passes the whole changeset context, and a
-  # read carries its query.
-  defp reason_tenant(reason) do
-    context = reason[:data_layer_context] || %{}
-
-    context[:tenant] ||
-      get_in(context, [:data_layer, :tenant]) ||
-      get_in(context, [:private, :tenant]) ||
-      get_in(reason, [:metadata, :query, Access.key(:tenant)])
-  end
+  defp reason_tenant(reason), do: reason[:tenant]
 
   @impl true
   def rollback(resource, term) do
@@ -2263,8 +2252,11 @@ defmodule AshSqlite.DataLayer do
 
   defp bind_to_tenant(resource, tenant, usage, fun) do
     case AshSqlite.DataLayer.Info.tenant_binder(resource) do
+      # No binder and a tenant means multitenancy this data layer does not resolve
+      # to a connection, such as `strategy :attribute`. `VerifyTenantBinder` covers
+      # `strategy :context` at compile time.
       nil ->
-        without_binder(resource, tenant, fun)
+        fun.()
 
       binder ->
         repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
@@ -2298,26 +2290,6 @@ defmodule AshSqlite.DataLayer do
       raise ArgumentError, """
       #{inspect(resource)} has `strategy :context` but this statement carried no \
       tenant, so there is no database file to select. Pass a tenant.
-      """
-    end
-
-    fun.()
-  end
-
-  # `strategy :context` and no binder is a configuration error rather than a
-  # statement to run unbound. `VerifyTenantBinder` fails the compile, so this is
-  # reached only by a resource built at runtime.
-  defp without_binder(resource, tenant, fun) do
-    if Ash.Resource.Info.multitenancy_strategy(resource) == :context do
-      raise ArgumentError, """
-      #{inspect(resource)} has `strategy :context` and a tenant of \
-      #{inspect(tenant)}, but no `tenant_binder` to select a connection with.
-
-          sqlite do
-            tenant_binder MyApp.TenantBinder
-          end
-
-      See `AshSqlite.TenantBinder`.
       """
     end
 

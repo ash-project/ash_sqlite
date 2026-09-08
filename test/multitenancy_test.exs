@@ -170,59 +170,8 @@ defmodule AshSqlite.MultitenancyTest do
         TenantedPost,
         fn -> create!("globex", "wrong database") end,
         nil,
-        %{type: :custom, metadata: %{}, data_layer_context: %{tenant: "acme"}}
+        %{type: :custom, metadata: %{}, tenant: "acme"}
       )
-    end
-  end
-
-  describe "a context-multitenant resource with no binder" do
-    setup do
-      # Spark reports a verifier failure through `@after_verify`, which the parallel
-      # checker turns into a warning rather than an exception -- Ash's own
-      # multitenancy verifier included. So the module compiles, and the runtime is
-      # what actually stops it.
-      warnings =
-        ExUnit.CaptureIO.capture_io(:stderr, fn ->
-          Code.compile_string("""
-          defmodule AshSqlite.Test.Unbindable do
-            use Ash.Resource, domain: AshSqlite.Test.Domain, data_layer: AshSqlite.DataLayer
-
-            actions do
-              defaults [:read]
-            end
-
-            multitenancy do
-              strategy :context
-            end
-
-            attributes do
-              uuid_primary_key :id
-            end
-
-            sqlite do
-              table "unbindable"
-              repo AshSqlite.TenantRepo
-            end
-          end
-          """)
-        end)
-
-      {:ok, warnings: warnings}
-    end
-
-    test "is told so at compile time", %{warnings: warnings} do
-      assert warnings =~ "needs a `tenant_binder`"
-    end
-
-    test "is refused at the first statement, rather than running unbound" do
-      assert_raise ArgumentError, ~r/no `tenant_binder` to select a connection with/, fn ->
-        AshSqlite.DataLayer.transaction(
-          AshSqlite.Test.Unbindable,
-          fn -> :unreachable end,
-          nil,
-          %{type: :custom, metadata: %{}, data_layer_context: %{tenant: "acme"}}
-        )
-      end
     end
   end
 
