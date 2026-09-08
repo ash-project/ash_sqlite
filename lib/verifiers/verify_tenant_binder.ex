@@ -20,10 +20,9 @@ defmodule AshSqlite.Verifiers.VerifyTenantBinder do
          message: """
          `strategy :context` needs a `tenant_binder`.
 
-         SQLite has no schemas, so the tenant cannot be a query prefix: the SQL is \
-         identical for every tenant and isolation comes from which file the \
-         connection is attached to. Something has to choose that connection, and \
-         only the application knows how.
+         Each tenant has its own database file, so a tenanted statement has to be \
+         given the connection for its tenant. Only the application knows how to map \
+         a tenant to a connection.
 
              sqlite do
                tenant_binder MyApp.TenantBinder

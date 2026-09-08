@@ -6,9 +6,8 @@ defmodule AshSqlite.TenantBinder do
   @moduledoc """
   Chooses the connection a tenanted statement runs on.
 
-  SQLite has no schemas, so `strategy :context` cannot be a query prefix: the SQL is
-  identical for every tenant and isolation comes from which file the connection is
-  attached to.
+  Under `strategy :context` each tenant has its own database file. The SQL is the
+  same for every tenant, and the tenant is applied by choosing the connection.
   """
 
   @typedoc """

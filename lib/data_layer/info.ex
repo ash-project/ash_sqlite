@@ -69,8 +69,7 @@ defmodule AshSqlite.DataLayer.Info do
   @doc """
   The tenant binder for a resource, or nil.
 
-  A resource with no context multitenancy has none, and its statements run on
-  whatever connection the calling process already had.
+  Only set for resources with context multitenancy.
   """
   def tenant_binder(resource) do
     Extension.get_opt(resource, [:sqlite], :tenant_binder, nil, true)

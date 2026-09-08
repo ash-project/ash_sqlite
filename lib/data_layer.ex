@@ -206,7 +206,7 @@ defmodule AshSqlite.DataLayer do
       tenant_binder: [
         type: {:behaviour, AshSqlite.TenantBinder},
         doc:
-          "A module that selects the connection a tenanted statement runs on. Required for database-per-tenant layouts, where the tenant is a database file rather than a query prefix. See `AshSqlite.TenantBinder`."
+          "A module that selects the connection a tenanted statement runs on. Required for `strategy :context`, where each tenant has its own database file. See `AshSqlite.TenantBinder`."
       ],
       migrate?: [
         type: :boolean,
@@ -524,9 +524,9 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   @doc """
-  A no-op on the query: with one database per tenant there is no prefix to set.
-  The connection is chosen per statement by the resource's `tenant_binder`
-  instead.   
+  A no-op on the query. Each tenant has its own database file, so the tenant is
+  applied by choosing the connection rather than by changing the query. The
+  resource's `tenant_binder` chooses it, once per statement.
   """
   def set_tenant(_resource, query, _tenant) do
     {:ok, query}
