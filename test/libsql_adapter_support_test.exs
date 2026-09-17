@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2023 ash_sqlite contributors <https://github.com/ash-project/ash_sqlite/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 # Tests for libSQL adapter support changes.
 #
 # These tests verify the three changes that enable ecto_libsql:
