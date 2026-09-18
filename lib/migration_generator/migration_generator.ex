@@ -2203,6 +2203,7 @@ defmodule AshSqlite.MigrationGenerator do
                     AshSqlite.DataLayer.Info.repo(relationship.destination)
                   ),
                 deferrable: false,
+                match_tenant?: false,
                 destination_attribute_generated: source_attribute.generated?,
                 multitenancy: multitenancy(relationship.source),
                 table: AshSqlite.DataLayer.Info.table(relationship.source),
