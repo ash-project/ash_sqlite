@@ -151,7 +151,7 @@ defmodule AshSqlite.MixProject do
       {:ecto_libsql, "~> 0.9", optional: true},
       {:ecto, "~> 3.13"},
       {:jason, "~> 1.0"},
-      {:ash, ash_version("~> 3.33")},
+      {:ash, ash_version("~> 3.33 and >= 3.33.2")},
       {:ash_sql, ash_sql_version("~> 0.2 and >= 0.6.9")},
       {:igniter, "~> 0.6 and >= 0.6.14", optional: true},
       {:simple_sat, ">= 0.0.0", only: [:dev, :test]},
