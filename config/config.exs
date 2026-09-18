@@ -25,6 +25,7 @@ if Mix.env() == :test do
   config :ash, :validate_domain_resource_inclusion?, false
   config :ash, :validate_domain_config_inclusion?, false
   config :ash, :default_string_length_count, :codepoints
+  config :ash, :warn_on_transaction_hooks?, false
 
   config :ash_sqlite, AshSqlite.TestRepo,
     database: Path.join(__DIR__, "../test/test.db"),
@@ -45,6 +46,14 @@ if Mix.env() == :test do
     pool_size: 1,
     migration_lock: false,
     pool: Ecto.Adapters.SQL.Sandbox,
+    migration_primary_key: [name: :id, type: :binary_id]
+
+  # A real database, and started under its own name in `test_helper.exs`. This is the
+  # database a `global? true` resource on this module uses: one copy of its rows,
+  # reached without a tenant binding.
+  config :ash_sqlite, AshSqlite.TenantRepo,
+    pool_size: 1,
+    migration_lock: false,
     migration_primary_key: [name: :id, type: :binary_id]
 
   config :ash_sqlite,
