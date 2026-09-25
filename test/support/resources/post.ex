@@ -43,6 +43,10 @@ defmodule AshSqlite.Test.Post do
       pagination(offset?: true, required?: true)
     end
 
+    read :public do
+      filter(expr(public == true))
+    end
+
     create :create do
       primary?(true)
       argument(:rating, :map)
@@ -123,6 +127,25 @@ defmodule AshSqlite.Test.Post do
 
     has_many(:comments, AshSqlite.Test.Comment, destination_attribute: :post_id, public?: true)
 
+    has_many :top_comments, AshSqlite.Test.Comment do
+      destination_attribute(:post_id)
+      sort(likes: :desc)
+      limit(2)
+    end
+
+    has_many :middle_comments, AshSqlite.Test.Comment do
+      destination_attribute(:post_id)
+      sort(likes: :desc)
+      offset(1)
+      limit(2)
+    end
+
+    has_many :comments_after_top, AshSqlite.Test.Comment do
+      destination_attribute(:post_id)
+      sort(likes: :desc)
+      offset(2)
+    end
+
     has_many :comments_matching_post_title, AshSqlite.Test.Comment do
       public?(true)
       filter(expr(title == parent_expr(title)))
@@ -172,9 +195,246 @@ defmodule AshSqlite.Test.Post do
     validate(attribute_does_not_equal(:title, "not allowed"))
   end
 
+  aggregates do
+    count(:count_of_comments, :comments)
+    count(:count_of_top_comments, :top_comments)
+    count(:count_of_middle_comments, :middle_comments)
+    count(:count_of_comments_after_top, :comments_after_top)
+    count(:count_of_popular_comments, :popular_comments)
+    count(:count_of_linked_posts, :linked_posts)
+    count(:count_of_comments_through_linked_posts, [:linked_posts, :comments])
+    count(:count_of_liked_comments, :comments, read_action: :liked)
+    count(:count_of_comment_ratings, [:comments, :ratings])
+    sum(:sum_of_comment_likes, :comments, :likes)
+    sum(:sum_of_comment_double_likes, :comments, :double_likes)
+    sum(:sum_of_comment_rating_counts, :comments, :count_of_ratings)
+    sum(:sum_of_comment_likes_called_match, :comments, :likes, filter: expr(title == "match"))
+
+    sum(:sum_of_comment_likes_with_popular_ratings, :comments, :likes) do
+      filter(expr(not is_nil(popular_ratings.id)))
+    end
+
+    sum(:sum_of_comment_likes_with_popular_ratings_exists, :comments, :likes) do
+      filter(expr(exists(popular_ratings, score > 5)))
+    end
+
+    sum(:sum_of_linked_post_scores, :linked_posts, :score)
+    avg(:avg_comment_likes, :comments, :likes)
+
+    avg(:avg_comment_likes_with_popular_ratings, :comments, :likes) do
+      filter(expr(not is_nil(popular_ratings.id)))
+    end
+
+    avg(:avg_linked_post_score, :linked_posts, :score)
+    min(:min_comment_likes, :comments, :likes)
+    min(:min_linked_post_score, :linked_posts, :score)
+    max(:max_comment_likes, :comments, :likes)
+    max(:max_linked_post_score, :linked_posts, :score)
+
+    first :first_comment, :comments, :title do
+      sort(title: :asc_nils_last)
+    end
+
+    first :highest_comment_double_likes, :comments, :double_likes do
+      sort(double_likes: :desc)
+    end
+
+    first :first_comment_nils_first, :comments, :title do
+      sort(title: :asc_nils_first)
+    end
+
+    first :first_comment_nils_first_called_stuff, :comments, :title do
+      sort(title: :asc_nils_first)
+      filter(expr(title == "stuff"))
+    end
+
+    first :first_comment_nils_first_include_nil, :comments, :title do
+      include_nil?(true)
+      sort(title: :asc_nils_first)
+    end
+
+    first :last_comment, :comments, :title do
+      sort(title: :desc)
+    end
+
+    first :latest_comment_created_at, :comments, :created_at do
+      sort(created_at: :desc)
+    end
+
+    first :highest_rating, [:comments, :ratings], :score do
+      sort(score: :desc)
+    end
+
+    first(:author_first_name, :author, :first_name)
+
+    first :first_linked_post_title, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+    end
+
+    first :first_linked_post_title_with_author, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+      filter(expr(not is_nil(author.id)))
+    end
+
+    first :first_linked_post_title_with_author_join_filter, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+      join_filter(:linked_posts, expr(not is_nil(author.id)))
+    end
+
+    list :comment_titles, :comments, :title do
+      sort(title: :asc_nils_last)
+    end
+
+    list(:top_comment_likes, :top_comments, :likes)
+    list(:middle_comment_likes, :middle_comments, :likes)
+    list(:comment_likes_after_top, :comments_after_top, :likes)
+
+    list :comment_double_likes, :comments, :double_likes do
+      sort(double_likes: :asc)
+    end
+
+    list :comment_titles_with_empty_default, :comments, :title do
+      default([])
+      sort(title: :asc_nils_last)
+    end
+
+    list :comment_titles_with_string_default, :comments, :title do
+      default(["fallback"])
+      sort(title: :asc_nils_last)
+    end
+
+    list :comment_titles_with_nils, :comments, :title do
+      sort(title: :asc_nils_last)
+      include_nil?(true)
+    end
+
+    list :uniq_comment_titles, :comments, :title do
+      uniq?(true)
+      sort(title: :asc_nils_last)
+    end
+
+    list :comment_titles_with_5_likes, :comments, :title do
+      sort(title: :asc_nils_last)
+      filter(expr(likes >= 5))
+    end
+
+    list :comment_titles_with_popular_ratings, :comments, :title do
+      sort(title: :asc_nils_last)
+      filter(expr(not is_nil(popular_ratings.id)))
+    end
+
+    list(:comment_ids, :comments, :id)
+
+    list :comment_ids_with_default, :comments, :id do
+      default(["11111111-1111-1111-1111-111111111111"])
+    end
+
+    list :comment_likes_with_integer_default, :comments, :likes do
+      default([42])
+    end
+
+    list :linked_post_titles, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+    end
+
+    list :linked_post_titles_with_author, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+      filter(expr(not is_nil(author.id)))
+    end
+
+    list :linked_post_titles_with_author_join_filter, :linked_posts, :title do
+      sort(title: :asc_nils_last)
+      join_filter(:linked_posts, expr(not is_nil(author.id)))
+    end
+
+    custom(:comment_titles_joined, :comments, :string) do
+      implementation({AshSqlite.Test.StringAgg, field: :title, delimiter: ","})
+    end
+
+    custom(:total_comment_likes_custom, :comments, :float) do
+      implementation({AshSqlite.Test.TotalAgg, field: :likes})
+    end
+
+    custom(:comment_titles_joined_with_popular_ratings, :comments, :string) do
+      filter(expr(not is_nil(popular_ratings.id)))
+      implementation({AshSqlite.Test.StringAgg, field: :title, delimiter: ","})
+    end
+
+    custom(:linked_post_titles_joined, :linked_posts, :string) do
+      implementation({AshSqlite.Test.StringAgg, field: :title, delimiter: ","})
+    end
+
+    count :count_of_comments_called_match, :comments do
+      filter(expr(title == "match"))
+    end
+
+    count :count_of_comments_with_join_filter, :comments do
+      join_filter(:comments, expr(title == "match"))
+    end
+
+    count :count_of_comments_with_related_filter, :comments do
+      filter(expr(not is_nil(post.id)))
+    end
+
+    count :count_of_comments_with_related_exists_filter, :comments do
+      filter(expr(exists(post, not is_nil(id))))
+    end
+
+    count :count_of_comments_with_popular_ratings, :comments do
+      filter(expr(not is_nil(popular_ratings.id)))
+    end
+
+    count :count_comment_titles_with_popular_ratings, :comments do
+      field(:title)
+      filter(expr(not is_nil(popular_ratings.id)))
+    end
+
+    count :count_of_comments_with_aggregate_filter, :comments do
+      filter(expr(count_of_ratings > 0))
+    end
+
+    count :count_of_comments_matching_post_title, :comments do
+      filter(expr(title == parent(title)))
+    end
+
+    count :count_of_comments_with_parent_join_filter, :comments do
+      join_filter(:comments, expr(title == parent(title)))
+    end
+
+    exists :has_comment_called_match, :comments do
+      filter(expr(title == "match"))
+    end
+
+    exists :has_linked_post_called_match, :linked_posts do
+      filter(expr(title == "match"))
+    end
+
+    count :count_of_linked_posts_with_join_filter, :linked_posts do
+      join_filter(:linked_posts, expr(title == "match"))
+    end
+
+    count :count_of_linked_posts_with_author, :linked_posts do
+      filter(expr(not is_nil(author.id)))
+    end
+  end
+
   calculations do
     calculate(:score_after_winning, :integer, expr((score || 0) + 1))
     calculate(:negative_score, :integer, expr(-score))
+    calculate(:has_comments, :boolean, expr(count_of_comments > 0))
+
+    calculate(
+      :comment_likes_with_score,
+      :integer,
+      expr((sum_of_comment_likes || 0) + (score || 0))
+    )
+
+    calculate(
+      :linked_post_score_with_score,
+      :integer,
+      expr((sum_of_linked_post_scores || 0) + (score || 0))
+    )
+
     calculate(:category_label, :string, expr("(" <> category <> ")"))
     calculate(:score_with_score, :string, expr(score <> score))
     calculate(:foo_bar_from_stuff, :string, expr(stuff[:foo][:bar]))

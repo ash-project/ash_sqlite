@@ -326,11 +326,71 @@ Helpdesk.Support.Ticket
 
 ### Aggregates
 
-As stated in [what-is-ash-sqlite](https://hexdocs.pm/ash_sqlite/getting-started-with-ash-sqlite.html#steps),
-**The main feature missing is Aggregate support.**.
+Aggregates include grouped data about relationships. You can read more about them in the [Ash aggregates guide](https://hexdocs.pm/ash/aggregates.html) and the [AshSqlite aggregates guide](../topics/resources/aggregates.md).
 
-In order to use these consider using [ash_postgres](https://github.com/ash-project/ash_postgres) or
-provide a patch.
+Let's add aggregates to the representative resource so we can query how many tickets are assigned to a representative, how many are open, and the first ticket subject.
+
+```elixir
+# in lib/helpdesk/support/resources/representative.ex
+
+  aggregates do
+    count :total_tickets, :tickets
+
+    count :open_tickets, :tickets do
+      filter expr(status == :open)
+    end
+
+    exists :has_closed_tickets, :tickets do
+      filter expr(status == :closed)
+    end
+
+    first :first_ticket_subject, :tickets, :subject do
+      sort subject: :asc_nils_last
+    end
+  end
+```
+
+Aggregates are translated to SQL and can be used in filters and sorts.
+
+```elixir
+require Ash.Query
+
+Helpdesk.Support.Representative
+|> Ash.Query.filter(open_tickets > 0)
+|> Ash.Query.sort(total_tickets: :desc)
+|> Ash.Query.load([:total_tickets, :open_tickets, :first_ticket_subject])
+|> Ash.read!()
+```
+
+You can also load individual aggregates after records have already been read.
+
+```elixir
+representatives = Helpdesk.Support.read!(Helpdesk.Support.Representative)
+
+Ash.load!(representatives, [:open_tickets, :has_closed_tickets])
+```
+
+Calculations can refer to aggregates, and those calculations can also be filtered, sorted, and loaded.
+
+```elixir
+# in lib/helpdesk/support/resources/representative.ex
+
+  calculations do
+    calculate :percent_open, :float, expr(open_tickets / total_tickets)
+  end
+```
+
+```elixir
+require Ash.Query
+
+Helpdesk.Support.Representative
+|> Ash.Query.filter(percent_open > 0.25)
+|> Ash.Query.sort(:percent_open)
+|> Ash.Query.load(:percent_open)
+|> Ash.read!()
+```
+
+AshSqlite supports related `count`, `sum`, `avg`, `min`, `max`, `exists`, `first`, `list`, and `custom` aggregates over normal relationship paths, one-hop many-to-many relationship aggregates, scalar aggregates over multi-hop paths that end in a many-to-many relationship, and parent-independent unrelated aggregates. `first` and `list` aggregates require SQLite 3.30.0 or later with JSON functions enabled.
 
 
 ### Rich Configuration Options

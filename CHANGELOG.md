@@ -11,6 +11,18 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## Unreleased
+
+### Improvements:
+
+* support SQLite aggregates for loading, filtering, sorting, calculations, and root query aggregates
+* add grouped aggregate regression coverage for list defaults and root query aggregate kinds
+
+### Bug Fixes:
+
+* preserve aggregate relationship preparations, configured arguments, and attribute tenant scope
+* respect relationship limits when filtering first and list aggregates
+
 ## [v0.2.19](https://github.com/ash-project/ash_sqlite/compare/v0.2.18...v0.2.19) (2026-09-05)
 
 

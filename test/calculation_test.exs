@@ -399,11 +399,10 @@ defmodule AshSqlite.CalculationTest do
     |> Enum.map(fn title ->
       Post
       |> Ash.Changeset.for_create(:create, %{title: title})
+      |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
       |> Ash.create!()
     end)
 
-    assert_raise Ash.Error.Invalid, ~r/does not support using aggregates/, fn ->
-      Ash.load!(author, :post_titles)
-    end
+    assert Enum.sort(Ash.load!(author, :post_titles).post_titles) == Enum.sort(post_titles)
   end
 end
