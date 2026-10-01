@@ -221,18 +221,15 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
   defmodule AlterDeferrability do
     @moduledoc false
+    # TODO: support once 3.54.0 lands. https://sqlite.org/src/info/4b0882cdb5b7947b
+    # Emulate this by dropping the constraint and create a new one.
+
     defstruct [:table, :references, :direction, no_phase: true]
 
-    def up(%{direction: :up, table: table, references: %{name: name, deferrable: true}}) do
-      "execute(\"ALTER TABLE #{table} alter CONSTRAINT #{name} DEFERRABLE INITIALLY IMMEDIATE\");"
-    end
-
-    def up(%{direction: :up, table: table, references: %{name: name, deferrable: :initially}}) do
-      "execute(\"ALTER TABLE #{table} alter CONSTRAINT #{name} DEFERRABLE INITIALLY DEFERRED\");"
-    end
-
     def up(%{direction: :up, table: table, references: %{name: name}}) do
-      "execute(\"ALTER TABLE #{table} alter CONSTRAINT #{name} NOT DEFERRABLE\");"
+      ~s[raise "SQLite does not support altering foreign key constraints. " <>
+          "You will need to manually recreate the `#{table}` with the `#{name}` constraint. " <>
+          "See https://www.techonthenet.com/sqlite/foreign_keys/drop.php for guidance."]
     end
 
     def up(_), do: ""
@@ -375,6 +372,8 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
   defmodule DropForeignKey do
     @moduledoc false
+    # TODO: support once 3.54.0 lands. https://sqlite.org/src/info/4b0882cdb5b7947b
+
     # We only run this migration in one direction, based on the input
     # This is because the creation of a foreign key is handled by `references/3`
     # We only need to drop it before altering an attribute with `references/3`
@@ -733,26 +732,43 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       no_phase: true
     ]
 
-    def up(%{
-          old_identity: %{index_name: old_index_name, name: old_name},
-          new_identity: %{index_name: new_index_name},
-          table: table
-        }) do
-      old_index_name = old_index_name || "#{table}_#{old_name}_index"
+    alias AshSqlite.MigrationGenerator.Operation.AddUniqueIndex
+    alias AshSqlite.MigrationGenerator.Operation.RemoveUniqueIndex
 
-      "execute(\"ALTER INDEX #{old_index_name} " <>
-        "RENAME TO #{new_index_name}\")\n"
+    def up(%{
+          old_identity: old_identity,
+          new_identity: new_identity,
+          table: table,
+          multitenancy: multitenancy,
+          old_multitenancy: old_multitenancy
+        }) do
+      RemoveUniqueIndex.up(%{
+        identity: old_identity,
+        table: table,
+        old_multitenancy: old_multitenancy
+      }) <>
+        "\n" <>
+        AddUniqueIndex.up(%{identity: new_identity, table: table, multitenancy: multitenancy})
     end
 
     def down(%{
-          old_identity: %{index_name: old_index_name, name: old_name},
-          new_identity: %{index_name: new_index_name},
-          table: table
+          old_identity: old_identity,
+          new_identity: new_identity,
+          table: table,
+          multitenancy: multitenancy,
+          old_multitenancy: old_multitenancy
         }) do
-      old_index_name = old_index_name || "#{table}_#{old_name}_index"
-
-      "execute(\"ALTER INDEX #{new_index_name} " <>
-        "RENAME TO #{old_index_name}\")\n"
+      RemoveUniqueIndex.up(%{
+        identity: new_identity,
+        table: table,
+        old_multitenancy: multitenancy
+      }) <>
+        "\n" <>
+        AddUniqueIndex.up(%{
+          identity: old_identity,
+          table: table,
+          multitenancy: old_multitenancy
+        })
     end
   end
 
