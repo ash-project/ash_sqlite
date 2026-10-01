@@ -66,6 +66,15 @@ defmodule AshSqlite.DataLayer.Info do
   defp resource_module(dsl_state),
     do: Spark.Dsl.Transformer.get_persisted(dsl_state, :module)
 
+  @doc """
+  The tenant binder for a resource, or nil.
+
+  Only set for resources with context multitenancy.
+  """
+  def tenant_binder(resource) do
+    Extension.get_opt(resource, [:sqlite], :tenant_binder, nil, true)
+  end
+
   @doc "The configured table for a resource"
   def table(resource) do
     Extension.get_opt(resource, [:sqlite], :table, nil, true)
