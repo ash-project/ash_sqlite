@@ -310,7 +310,7 @@ defmodule AshSqlite.DataLayer do
     ]
 
   def migrate(args) do
-    # TODO: take args that we care about
+    Mix.Task.reenable("ash_sqlite.migrate")
     Mix.Task.run("ash_sqlite.migrate", args)
   end
 
