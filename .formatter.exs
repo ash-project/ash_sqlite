@@ -35,6 +35,7 @@ spark_locals_without_parens = [
   statement: 2,
   strict?: 1,
   table: 1,
+  tenant_binder: 1,
   unique: 1,
   unique_index_names: 1,
   up: 1,
