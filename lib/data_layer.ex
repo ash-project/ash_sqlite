@@ -303,10 +303,10 @@ defmodule AshSqlite.DataLayer do
 
   use Spark.Dsl.Extension,
     sections: @sections,
-    transformers: [
-      AshSqlite.Transformers.ValidateReferences,
-      AshSqlite.Transformers.VerifyRepo,
-      AshSqlite.Transformers.EnsureTableOrPolymorphic
+    verifiers: [
+      AshSqlite.Verifiers.ValidateReferences,
+      AshSqlite.Verifiers.VerifyRepo,
+      AshSqlite.Verifiers.EnsureTableOrPolymorphic
     ]
 
   def migrate(args) do
