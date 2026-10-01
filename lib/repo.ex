@@ -27,10 +27,8 @@ defmodule AshSqlite.Repo do
 
   @doc """
   Use this to inform the data layer about the oldest potential sqlite version it will be run on.
-
-  Must be an integer greater than or equal to 13.
   """
-  @callback min_pg_version() :: integer()
+  @callback min_sqlite_version() :: Version.t()
 
   @doc "Whether Ash may wrap write actions on this repo's resources in a transaction"
   @callback write_transactions?() :: boolean()
@@ -50,6 +48,7 @@ defmodule AshSqlite.Repo do
         otp_app: otp_app
 
       @behaviour AshSqlite.Repo
+      @before_compile AshSqlite.Repo.BeforeCompile
 
       defoverridable insert: 2, insert: 1, insert!: 2, insert!: 1
 
@@ -57,7 +56,6 @@ defmodule AshSqlite.Repo do
       def migrations_path, do: nil
       def write_transactions?, do: false
       def override_migration_type(type), do: type
-      def min_pg_version, do: 10
 
       def init(_, config) do
         new_config =
@@ -171,7 +169,6 @@ defmodule AshSqlite.Repo do
       defoverridable init: 2,
                      installed_extensions: 0,
                      override_migration_type: 1,
-                     min_pg_version: 0,
                      write_transactions?: 0
     end
   end
