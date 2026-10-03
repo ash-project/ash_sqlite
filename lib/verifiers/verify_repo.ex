@@ -2,19 +2,17 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshSqlite.Transformers.VerifyRepo do
+defmodule AshSqlite.Verifiers.VerifyRepo do
   @moduledoc false
-  use Spark.Dsl.Transformer
-  alias Spark.Dsl.Transformer
+  use Spark.Dsl.Verifier
+  alias Spark.Dsl.Verifier
 
-  def after_compile?, do: true
-
-  def transform(dsl) do
-    repo = Transformer.get_option(dsl, [:sqlite], :repo)
+  def verify(dsl) do
+    repo = Verifier.get_option(dsl, [:sqlite], :repo)
 
     cond do
       is_function(repo) ->
-        {:ok, dsl}
+        :ok
 
       match?({:error, _}, Code.ensure_compiled(repo)) ->
         {:error, "Could not find repo module #{repo}"}
@@ -23,7 +21,7 @@ defmodule AshSqlite.Transformers.VerifyRepo do
         {:error, "Expected a repo using `Ecto.Adapters.SQLite3` or `Ecto.Adapters.LibSql`"}
 
       true ->
-        {:ok, dsl}
+        :ok
     end
   end
 end

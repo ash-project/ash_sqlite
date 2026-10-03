@@ -303,14 +303,14 @@ defmodule AshSqlite.DataLayer do
 
   use Spark.Dsl.Extension,
     sections: @sections,
-    transformers: [
-      AshSqlite.Transformers.ValidateReferences,
-      AshSqlite.Transformers.VerifyRepo,
-      AshSqlite.Transformers.EnsureTableOrPolymorphic
+    verifiers: [
+      AshSqlite.Verifiers.ValidateReferences,
+      AshSqlite.Verifiers.VerifyRepo,
+      AshSqlite.Verifiers.EnsureTableOrPolymorphic
     ]
 
   def migrate(args) do
-    # TODO: take args that we care about
+    Mix.Task.reenable("ash_sqlite.migrate")
     Mix.Task.run("ash_sqlite.migrate", args)
   end
 
