@@ -392,6 +392,31 @@ defmodule AshSqlite.SqlImplementation do
     end
   end
 
+  def expr(
+        query,
+        %Ash.Query.UpsertConflict{attribute: attribute},
+        _bindings,
+        _embedded?,
+        acc,
+        _type
+      ) do
+    {:ok,
+     Ecto.Query.dynamic(
+       [],
+       fragment(
+         "EXCLUDED.?",
+         identifier(
+           ^to_string(
+             AshSqlite.DataLayer.get_source_for_upsert_field(
+               attribute,
+               query.__ash_bindings__.resource
+             )
+           )
+         )
+       )
+     ), acc}
+  end
+
   @impl true
   def expr(
         _query,
