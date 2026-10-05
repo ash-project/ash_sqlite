@@ -120,7 +120,7 @@ defmodule AshSqlite.DataLayer.Info do
 
   @doc "The configured polymorphic_reference_name for a resource"
   def polymorphic_name(resource) do
-    Extension.get_opt(resource, [:sqlite, :references], :polymorphic_on_delete, nil, true)
+    Extension.get_opt(resource, [:sqlite, :references], :polymorphic_name, nil, true)
   end
 
   @doc "The configured polymorphic? for a resource"
