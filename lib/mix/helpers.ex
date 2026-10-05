@@ -62,7 +62,9 @@ defmodule AshSqlite.Mix.Helpers do
         end
 
       resources
-      |> Enum.map(&AshSqlite.DataLayer.Info.repo/1)
+      |> Enum.flat_map(
+        &[AshSqlite.DataLayer.Info.repo(&1, :read), AshSqlite.DataLayer.Info.repo(&1, :mutate)]
+      )
       |> Enum.uniq()
       |> case do
         [] ->
