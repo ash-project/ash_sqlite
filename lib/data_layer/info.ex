@@ -66,6 +66,28 @@ defmodule AshSqlite.DataLayer.Info do
   defp resource_module(dsl_state),
     do: Spark.Dsl.Transformer.get_persisted(dsl_state, :module)
 
+  @doc "Checks a version requirement against the resource's repo's sqlite version"
+  def sqlite_version_matches?(resource, requirement) do
+    resource
+    |> min_sqlite_version()
+    |> Version.match?(requirement)
+  end
+
+  @doc "Gets the resource's repo's sqlite version"
+  def min_sqlite_version(resource) do
+    case repo(resource, :read).min_sqlite_version() do
+      %Version{} = version ->
+        version
+
+      string when is_binary(string) ->
+        IO.warn(
+          "Got a `string` for min_sqlite_version, expected a `Version` struct. Got: #{inspect(string)}. Please call `Version.parse!` before returning the value."
+        )
+
+        Version.parse!(string)
+    end
+  end
+
   @doc "The configured table for a resource"
   def table(resource) do
     Extension.get_opt(resource, [:sqlite], :table, nil, true)
