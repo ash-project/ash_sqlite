@@ -2,17 +2,17 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshSqlite.Transformers.EnsureTableOrPolymorphic do
+defmodule AshSqlite.Verifiers.EnsureTableOrPolymorphic do
   @moduledoc false
-  use Spark.Dsl.Transformer
-  alias Spark.Dsl.Transformer
+  use Spark.Dsl.Verifier
+  alias Spark.Dsl.Verifier
 
-  def transform(dsl) do
-    if Transformer.get_option(dsl, [:sqlite], :polymorphic?) ||
-         Transformer.get_option(dsl, [:sqlite], :table) do
-      {:ok, dsl}
+  def verify(dsl) do
+    if Verifier.get_option(dsl, [:sqlite], :polymorphic?) ||
+         Verifier.get_option(dsl, [:sqlite], :table) do
+      :ok
     else
-      resource = Transformer.get_persisted(dsl, :module)
+      resource = Verifier.get_persisted(dsl, :module)
 
       raise Spark.Error.DslError,
         module: resource,

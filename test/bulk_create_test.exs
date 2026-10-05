@@ -6,6 +6,8 @@ defmodule AshSqlite.BulkCreateTest do
   use AshSqlite.RepoCase, async: false
   alias AshSqlite.Test.Post
 
+  import Ash.Expr
+
   describe "bulk creates" do
     test "bulk creates insert each input" do
       Ash.bulk_create!([%{title: "fred"}, %{title: "george"}], Post, :create)
@@ -66,6 +68,39 @@ defmodule AshSqlite.BulkCreateTest do
                  _ ->
                    nil
                end)
+    end
+
+    test "bulk upsert skips rows that do not satisfy the upsert_condition" do
+      Ash.bulk_create!(
+        [
+          %{title: "fred", uniq_one: "one", uniq_two: "two", price: 10},
+          %{title: "george", uniq_one: "three", uniq_two: "four", price: 20}
+        ],
+        Post,
+        :create
+      )
+
+      # "fred" is unchanged (skipped), "george" changes price (updated), "herbert" is new (inserted)
+      assert [
+               {:ok, %{title: "george", uniq_one: "three", uniq_two: "four", price: 20_000}},
+               {:ok, %{title: "herbert", uniq_one: "five", uniq_two: "six", price: 30}}
+             ] =
+               Ash.bulk_create!(
+                 [
+                   %{title: "something", uniq_one: "one", uniq_two: "two", price: 10},
+                   %{title: "else", uniq_one: "three", uniq_two: "four", price: 20_000},
+                   %{title: "herbert", uniq_one: "five", uniq_two: "six", price: 30}
+                 ],
+                 Post,
+                 :create,
+                 upsert?: true,
+                 upsert_identity: :uniq_one_and_two,
+                 upsert_fields: [:price],
+                 upsert_condition: expr(price != upsert_conflict(:price)),
+                 return_stream?: true,
+                 return_records?: true
+               )
+               |> Enum.sort_by(fn {:ok, result} -> result.title end)
     end
 
     test "bulk creates with upsert updates update_timestamp" do

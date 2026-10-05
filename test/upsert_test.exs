@@ -6,6 +6,7 @@ defmodule AshSqlite.Test.UpsertTest do
   use AshSqlite.RepoCase, async: false
   alias AshSqlite.Test.Post
 
+  import Ash.Expr
   require Ash.Query
 
   test "upserting results in the same created_at timestamp, but a new updated_at timestamp" do
@@ -114,5 +115,79 @@ defmodule AshSqlite.Test.UpsertTest do
       |> Ash.create!(upsert?: true, upsert_fields: [])
 
     assert DateTime.compare(upserted.updated_at, DateTime.from_iso8601(past) |> elem(1)) == :eq
+  end
+
+  describe "upsert_conflict/1 in an upsert_condition" do
+    defp upsert_post(attrs, condition) do
+      Post
+      |> Ash.Changeset.for_create(:create, attrs,
+        upsert?: true,
+        upsert_fields: [:title, :score, :status_enum_no_cast],
+        upsert_condition: condition
+      )
+      |> Ash.create!(return_skipped_upsert?: true)
+    end
+
+    defp create_post(attrs) do
+      Post
+      |> Ash.Changeset.for_create(:create, attrs)
+      |> Ash.create!()
+    end
+
+    test "updates the existing row when the condition holds" do
+      id = Ash.UUID.generate()
+      create_post(%{id: id, title: "title", score: 1})
+
+      upserted =
+        upsert_post(%{id: id, title: "title", score: 2}, expr(score < upsert_conflict(:score)))
+
+      assert upserted.score == 2
+    end
+
+    test "skips the upsert when the condition does not hold" do
+      id = Ash.UUID.generate()
+      create_post(%{id: id, title: "title", score: 5})
+
+      # `return_skipped_upsert?` returns the existing row, which was not written to
+      skipped =
+        upsert_post(%{id: id, title: "other", score: 2}, expr(score < upsert_conflict(:score)))
+
+      assert skipped.id == id
+      assert skipped.score == 5
+      assert skipped.title == "title"
+    end
+
+    test "handles nil on either side of the comparison" do
+      id = Ash.UUID.generate()
+      create_post(%{id: id, title: "title"})
+
+      condition =
+        expr(
+          score == upsert_conflict(:score) or
+            (is_nil(score) and is_nil(upsert_conflict(:score)))
+        )
+
+      assert upsert_post(%{id: id, title: "other", score: 1}, condition).title == "title"
+      assert upsert_post(%{id: id, title: "other"}, condition).title == "other"
+    end
+
+    test "resolves a field with a custom source column name" do
+      id = Ash.UUID.generate()
+
+      # `status_enum_no_cast` is stored in the `status_enum` column, so this only works if
+      # `upsert_conflict/1` renders `EXCLUDED.status_enum` rather than `EXCLUDED.status_enum_no_cast`
+      create_post(%{id: id, title: "title", status_enum_no_cast: :open})
+
+      condition = expr(upsert_conflict(:status_enum_no_cast) == :closed)
+
+      assert %{title: "title", status_enum_no_cast: :open} =
+               upsert_post(%{id: id, title: "still open", status_enum_no_cast: :open}, condition)
+
+      assert %{title: "now closed", status_enum_no_cast: :closed} =
+               upsert_post(
+                 %{id: id, title: "now closed", status_enum_no_cast: :closed},
+                 condition
+               )
+    end
   end
 end

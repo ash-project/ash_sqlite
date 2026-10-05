@@ -31,6 +31,12 @@ defmodule AshSqlite.Test.Comment do
     default_accept(:*)
     defaults([:read, :update, :destroy])
 
+    read :liked do
+      filter(expr(likes > 5))
+    end
+
+    read(:public)
+
     create :create do
       primary?(true)
       argument(:rating, :map)
@@ -49,6 +55,14 @@ defmodule AshSqlite.Test.Comment do
 
   relationships do
     belongs_to(:post, AshSqlite.Test.Post, public?: true)
+
+    belongs_to :sorted_post, AshSqlite.Test.Post do
+      public?(true)
+      define_attribute?(false)
+      source_attribute(:post_id)
+      read_action(:sorted_by_title)
+    end
+
     belongs_to(:author, AshSqlite.Test.Author, public?: true)
 
     has_many(:ratings, AshSqlite.Test.Rating,
@@ -63,5 +77,13 @@ defmodule AshSqlite.Test.Comment do
       relationship_context: %{data_layer: %{table: "comment_ratings"}},
       filter: expr(score > 5)
     )
+  end
+
+  aggregates do
+    count(:count_of_ratings, :ratings)
+  end
+
+  calculations do
+    calculate(:double_likes, :integer, expr(likes * 2))
   end
 end

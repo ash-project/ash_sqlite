@@ -8,6 +8,7 @@ defmodule AshSqlite.Test.Domain do
 
   resources do
     resource(AshSqlite.Test.Post)
+    resource(AshSqlite.Test.PostWithNamedPrimaryKey)
     resource(AshSqlite.Test.Comment)
     resource(AshSqlite.Test.IntegerPost)
     resource(AshSqlite.Test.Rating)

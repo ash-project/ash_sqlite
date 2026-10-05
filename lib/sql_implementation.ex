@@ -10,6 +10,25 @@ defmodule AshSqlite.SqlImplementation do
   require Ash.Expr
 
   @impl true
+  def aggregate_strategy(_resource), do: :grouped
+
+  @impl true
+  def grouped_list_aggregate(field, true) do
+    Ecto.Query.dynamic(
+      over(fragment("json_group_array(?)", ^field), :ash_sql_grouped_aggregate_window)
+    )
+  end
+
+  def grouped_list_aggregate(field, false) do
+    Ecto.Query.dynamic(
+      over(
+        fragment("json_group_array(?) FILTER (WHERE ? IS NOT NULL)", ^field, ^field),
+        :ash_sql_grouped_aggregate_window
+      )
+    )
+  end
+
+  @impl true
   def manual_relationship_function, do: :ash_sqlite_join
 
   @impl true
@@ -371,6 +390,31 @@ defmodule AshSqlite.SqlImplementation do
 
       {:ok, expr, acc}
     end
+  end
+
+  def expr(
+        query,
+        %Ash.Query.UpsertConflict{attribute: attribute},
+        _bindings,
+        _embedded?,
+        acc,
+        _type
+      ) do
+    {:ok,
+     Ecto.Query.dynamic(
+       [],
+       fragment(
+         "EXCLUDED.?",
+         identifier(
+           ^to_string(
+             AshSqlite.DataLayer.get_source_for_upsert_field(
+               attribute,
+               query.__ash_bindings__.resource
+             )
+           )
+         )
+       )
+     ), acc}
   end
 
   @impl true
