@@ -460,7 +460,8 @@ defmodule AshSqlite.DataLayer do
     other_data_layer = Ash.DataLayer.data_layer(other_resource)
 
     data_layer == other_data_layer and
-      AshSqlite.DataLayer.Info.repo(resource) == AshSqlite.DataLayer.Info.repo(other_resource)
+      AshSqlite.DataLayer.Info.repo(resource, :read) ==
+        AshSqlite.DataLayer.Info.repo(other_resource, :read)
   end
 
   def can?(_resource, {:lateral_join, _}) do
