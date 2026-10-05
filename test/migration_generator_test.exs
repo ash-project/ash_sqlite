@@ -424,8 +424,13 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert [_file1, file2] =
                Enum.sort(Path.wildcard("#{migration_path}/**/*_migrate_resources*.exs"))
 
-      assert File.read!(file2) =~
-               ~S[ALTER INDEX posts_title_index RENAME TO titles_r_unique_dawg]
+      contents = File.read!(file2)
+
+      assert contents =~
+               ~S|drop_if_exists unique_index(:posts, [:title], name: "posts_title_index")|
+
+      assert contents =~
+               ~S|create unique_index(:posts, [:title], name: "titles_r_unique_dawg")|
     end
 
     test "when adding a field, it adds the field", %{

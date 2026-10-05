@@ -47,6 +47,10 @@ defmodule AshSqlite.Test.Post do
       filter(expr(public == true))
     end
 
+    read :sorted_by_title do
+      prepare(build(sort: [title: :asc]))
+    end
+
     create :create do
       primary?(true)
       argument(:rating, :map)
@@ -138,6 +142,12 @@ defmodule AshSqlite.Test.Post do
       sort(likes: :desc)
       offset(1)
       limit(2)
+    end
+
+    has_many :comments_sorted_by_likes, AshSqlite.Test.Comment do
+      public?(true)
+      destination_attribute(:post_id)
+      sort(likes: :desc)
     end
 
     has_many :comments_after_top, AshSqlite.Test.Comment do
@@ -311,6 +321,21 @@ defmodule AshSqlite.Test.Post do
     list :uniq_comment_titles, :comments, :title do
       uniq?(true)
       sort(title: :asc_nils_last)
+    end
+
+    list :uniq_comment_titles_sorted_by_likes, :comments, :title do
+      uniq?(true)
+      sort(likes: :desc)
+    end
+
+    list :uniq_titles_of_comments_sorted_by_likes, :comments_sorted_by_likes, :title do
+      uniq?(true)
+    end
+
+    list :uniq_popular_comment_titles_sorted_by_likes, :comments, :title do
+      uniq?(true)
+      sort(likes: :desc)
+      filter(expr(likes > 2 and likes < 9))
     end
 
     list :comment_titles_with_5_likes, :comments, :title do

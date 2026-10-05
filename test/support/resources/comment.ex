@@ -55,6 +55,14 @@ defmodule AshSqlite.Test.Comment do
 
   relationships do
     belongs_to(:post, AshSqlite.Test.Post, public?: true)
+
+    belongs_to :sorted_post, AshSqlite.Test.Post do
+      public?(true)
+      define_attribute?(false)
+      source_attribute(:post_id)
+      read_action(:sorted_by_title)
+    end
+
     belongs_to(:author, AshSqlite.Test.Author, public?: true)
 
     has_many(:ratings, AshSqlite.Test.Rating,
