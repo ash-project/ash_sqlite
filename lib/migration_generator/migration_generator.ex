@@ -94,7 +94,7 @@ defmodule AshSqlite.MigrationGenerator do
     all_resources
     |> Enum.filter(fn resource ->
       Ash.DataLayer.data_layer(resource) == AshSqlite.DataLayer &&
-        AshSqlite.DataLayer.Info.repo(resource) == repo &&
+        AshSqlite.DataLayer.Info.repo(resource, :mutate) == repo &&
         (is_nil(only_resources) || resource in only_resources)
     end)
     |> Enum.flat_map(&get_snapshots(&1, all_resources))
@@ -2159,7 +2159,7 @@ defmodule AshSqlite.MigrationGenerator do
   defp pad(i), do: to_string(i)
 
   def get_snapshots(resource, all_resources) do
-    Code.ensure_compiled!(AshSqlite.DataLayer.Info.repo(resource))
+    Code.ensure_compiled!(AshSqlite.DataLayer.Info.repo(resource, :mutate))
 
     if AshSqlite.DataLayer.Info.polymorphic?(resource) do
       all_resources
@@ -2200,7 +2200,7 @@ defmodule AshSqlite.MigrationGenerator do
                   default(
                     source_attribute,
                     relationship.destination,
-                    AshSqlite.DataLayer.Info.repo(relationship.destination)
+                    AshSqlite.DataLayer.Info.repo(relationship.destination, :mutate)
                   ),
                 deferrable: false,
                 match_tenant?: false,
@@ -2232,7 +2232,7 @@ defmodule AshSqlite.MigrationGenerator do
       table: table || AshSqlite.DataLayer.Info.table(resource),
       custom_indexes: custom_indexes(resource),
       custom_statements: custom_statements(resource),
-      repo: AshSqlite.DataLayer.Info.repo(resource),
+      repo: AshSqlite.DataLayer.Info.repo(resource, :mutate),
       multitenancy: multitenancy(resource),
       base_filter: AshSqlite.DataLayer.Info.base_filter_sql(resource),
       has_create_action: has_create_action?(resource),
@@ -2282,7 +2282,7 @@ defmodule AshSqlite.MigrationGenerator do
   end
 
   defp attributes(resource, table) do
-    repo = AshSqlite.DataLayer.Info.repo(resource)
+    repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
     ignored = AshSqlite.DataLayer.Info.migration_ignore_attributes(resource) || []
 
     resource
@@ -2555,8 +2555,8 @@ defmodule AshSqlite.MigrationGenerator do
 
   defp foreign_key?(relationship) do
     Ash.DataLayer.data_layer(relationship.source) == AshSqlite.DataLayer &&
-      AshSqlite.DataLayer.Info.repo(relationship.source) ==
-        AshSqlite.DataLayer.Info.repo(relationship.destination)
+      AshSqlite.DataLayer.Info.repo(relationship.source, :mutate) ==
+        AshSqlite.DataLayer.Info.repo(relationship.destination, :mutate)
   end
 
   defp identities(resource) do

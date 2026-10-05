@@ -133,9 +133,9 @@ defmodule AshSqlite.DataLayer do
           "For polymorphic resources, configures the on_update behavior of the automatically generated foreign keys to source tables."
       ],
       polymorphic_name: [
-        type: {:one_of, [:update, :nilify, :nothing, :restrict]},
+        type: :string,
         doc:
-          "For polymorphic resources, configures the on_update behavior of the automatically generated foreign keys to source tables."
+          "For polymorphic resources, then index name to use for the foreign key to the source table."
       ]
     ]
   }
@@ -460,7 +460,8 @@ defmodule AshSqlite.DataLayer do
     other_data_layer = Ash.DataLayer.data_layer(other_resource)
 
     data_layer == other_data_layer and
-      AshSqlite.DataLayer.Info.repo(resource) == AshSqlite.DataLayer.Info.repo(other_resource)
+      AshSqlite.DataLayer.Info.repo(resource, :read) ==
+        AshSqlite.DataLayer.Info.repo(other_resource, :read)
   end
 
   def can?(_resource, {:lateral_join, _}) do
