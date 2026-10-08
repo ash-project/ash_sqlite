@@ -15,4 +15,8 @@ defmodule AshSqlite.TransactionTestRepo do
     otp_app: :ash_sqlite
 
   def write_transactions?, do: true
+
+  def min_sqlite_version do
+    %Version{major: 3, minor: 38, patch: 0}
+  end
 end
