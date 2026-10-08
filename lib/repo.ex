@@ -22,6 +22,7 @@ defmodule AshSqlite.Repo do
   - `:snapshots_path` - The path where the resource snapshots for the migration generator are stored.
   - `:rebuild_tables` - Set to `true` to rebuild tables SQLite cannot change in place, as if
     `--rebuild-tables` were passed to every run (`--no-rebuild-tables` turns it off for one run).
+    Prefer it to the flag: the defaults it applies are kept in the snapshots, so every run has to agree.
   """
 
   @doc "Use this to inform the data layer about what extensions are installed"

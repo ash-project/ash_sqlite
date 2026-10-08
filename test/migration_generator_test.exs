@@ -8,7 +8,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
   @moduletag :tmp_dir
 
   import ExUnit.CaptureLog
-  import AshSqlite.RebuildHelper, only: [generate: 2, generate: 3, last_migration: 1]
+
+  import AshSqlite.RebuildHelper,
+    only: [generate: 2, generate: 3, last_migration: 1, migrations: 1]
 
   setup %{tmp_dir: tmp_dir} do
     current_shell = Mix.shell()
@@ -1997,6 +1999,69 @@ defmodule AshSqlite.MigrationGeneratorTest do
                        ["SQLite cannot make these changes to `items`" <> _ = hint]}
 
       assert hint =~ "  - modify :subject, :text, null: false  (not in the migration)"
+    end
+
+    test "an attribute's default is not a column default when rebuilding is off", ctx do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:count, :integer, default: 0)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx, rebuild_tables: nil)
+
+      refute last_migration(ctx) =~ "default:"
+    end
+
+    test "a value that cannot be a column default is nil, with a warning", ctx do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:tags, {:array, :string}, default: ["a"])
+        end
+      end
+
+      defdomain([Item])
+      log = capture_log(fn -> generate(Domain, ctx) end)
+
+      assert log =~ "cannot be explicitly converted to a column default"
+      assert log =~ ~S|["a"]|
+      assert last_migration(ctx) =~ "add :tags, {:array, :text}"
+    end
+
+    test "a migration_defaults entry still wins over an attribute's default", ctx do
+      defitem do
+        sqlite do
+          migration_defaults(title: "\"from migration_defaults\"")
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string, default: "from the attribute")
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ ~S|default: "from migration_defaults"|
+    end
+
+    test "generating again after the defaults were applied finds nothing to do", ctx do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:count, :integer, default: 3)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ "default: 3"
+
+      generate(Domain, ctx)
+      assert length(migrations(ctx)) == 1
     end
   end
 end

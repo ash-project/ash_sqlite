@@ -57,6 +57,10 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
   `--rebuild-tables` it writes a `rebuild_table` instead, which creates the table
   again in its new shape and copies the rows. See the "Migrations" guide.
 
+  The `default:` of an attribute that is a plain value (a number, string, boolean, atom, decimal,
+  date or time) then also becomes the default of its column. Set `rebuild_tables: true` in the
+  repo's config rather than passing the flag, so that every run agrees. See the "Migrations" guide.
+
   #### Conflicts/Multiple Resources
 
   It will raise on conflicts that it can't resolve, like the same field with different

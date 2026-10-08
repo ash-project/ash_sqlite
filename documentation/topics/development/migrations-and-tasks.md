@@ -126,6 +126,10 @@ def up do
 end
 ```
 
+The `default:` of an attribute (a number, string, boolean, atom, decimal, date or time) is then also the default of its column. SQLite cannot change a default in place either, so the first run rebuilds the tables whose attributes have one: `--dry-run` shows which.
+
+Snapshots keep the defaults, so a run without the option after one with it sees them as removed. If you use rebuilds, set `rebuild_tables: true` in the repo's config instead of passing the flag, so that every run agrees, `mix ash.codegen --check` in CI included.
+
 ### Regenerating Migrations
 
 Often, you will run into a situation where you want to make a slight change to a resource after you've already generated and run migrations. If you are using git and would like to undo those changes, then regenerate the migrations, this script may prove useful:
