@@ -863,6 +863,35 @@ defmodule AshSqlite.TableRebuildTest do
     end
   end
 
+  describe "dev migrations" do
+    test "dev migrations that rebuild can be replaced by the real migration", %{ctx: ctx} do
+      items_v1()
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("INSERT INTO items (id, name) VALUES ('a', 'x')")
+
+      items_v2()
+      generate(Domain, ctx, dev: true)
+      migrate(ctx)
+      assert [_, dev] = migrations_with_dev(ctx)
+      assert dev =~ "_dev.exs"
+
+      # `ash.codegen name` rolls the dev migrations back and writes the real one
+      generate(Domain, ctx, name: "make_name_optional")
+
+      assert [_, real] = migrations_with_dev(ctx)
+      refute real =~ "_dev.exs"
+      assert File.read!(real) =~ "use AshSqlite.Migration"
+      # the dev migration was rolled back: the column is required again until the real one runs
+      assert [%{notnull: true}] = Enum.filter(columns("items"), &(&1.name == "name"))
+      migrate(ctx)
+      assert [%{notnull: false}] = Enum.filter(columns("items"), &(&1.name == "name"))
+      assert sql("SELECT id, name FROM items") == [["a", "x"]]
+    end
+  end
+
+  defp migrations_with_dev(ctx), do: Enum.sort(Path.wildcard("#{ctx.migration_path}/**/*.exs"))
+
   describe "dropping columns" do
     test "--drop-columns drops the column instead of keeping it", %{ctx: ctx} do
       defitem do
