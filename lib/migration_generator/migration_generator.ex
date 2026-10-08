@@ -1697,6 +1697,8 @@ defmodule AshSqlite.MigrationGenerator do
   defp rebuild_if_needed(operations, snapshot, old_snapshot, opts) do
     if !old_snapshot[:empty?] and
          Enum.any?(operations, &Operation.RebuildTable.requires_rebuild?/1) do
+      {omitted, operations} = Enum.split_with(operations, &match?(%Operation.Omitted{}, &1))
+
       if rebuild_tables?(opts, snapshot.repo) do
         [
           %Operation.RebuildTable{
@@ -1707,7 +1709,13 @@ defmodule AshSqlite.MigrationGenerator do
           }
         ]
       else
-        hint_rebuild(operations, snapshot, opts)
+        hint_rebuild(
+          operations,
+          Enum.map(omitted, &Operation.Omitted.reason(&1, snapshot.multitenancy)),
+          snapshot,
+          opts
+        )
+
         operations
       end
     else
@@ -1715,18 +1723,17 @@ defmodule AshSqlite.MigrationGenerator do
     end
   end
 
-  defp hint_rebuild(operations, snapshot, opts) do
+  defp hint_rebuild(operations, omitted_reasons, snapshot, opts) do
     unless opts.quiet do
-      bullets =
-        Enum.map_join(
-          Operation.RebuildTable.blocking_reasons(operations),
-          "\n",
-          fn {reason, blocks} -> "  - #{reason}  (#{blocked_when(blocks)})" end
-        )
+      fails =
+        for {reason, blocks} <- Operation.RebuildTable.blocking_reasons(operations),
+            do: "  - #{reason}  (#{blocked_when(blocks)})"
+
+      omitted_lines = for reason <- omitted_reasons, do: "  - #{reason}  (not in the migration)"
 
       warn("""
       SQLite cannot make these changes to `#{snapshot.table}` in place:
-      #{bullets}
+      #{Enum.join(fails ++ omitted_lines, "\n")}
       To rebuild the table instead, #{rebuild_advice(opts)}
       """)
     end
@@ -1829,17 +1836,47 @@ defmodule AshSqlite.MigrationGenerator do
     {attributes_to_add, attributes_to_remove, attributes_to_rename} =
       resolve_renames(snapshot.table, attributes_to_add, attributes_to_remove, opts)
 
+    old_names = Map.new(attributes_to_rename, fn {new, old} -> {new.source, old.source} end)
+
     attributes_to_alter =
       snapshot.attributes
       |> Enum.map(fn attribute ->
-        {attribute,
-         Enum.find(
-           old_snapshot.attributes,
-           &(&1.source == attribute.source &&
-               attributes_unequal?(&1, attribute, snapshot.repo, old_snapshot, snapshot))
-         )}
+        old_name = Map.get(old_names, attribute.source, attribute.source)
+        old_attribute = Enum.find(old_snapshot.attributes, &(&1.source == old_name))
+
+        changed? =
+          old_attribute &&
+            attributes_unequal?(
+              old_attribute,
+              attribute,
+              snapshot.repo,
+              old_snapshot,
+              snapshot,
+              old_name != attribute.source
+            )
+
+        {attribute, changed? && old_attribute}
       end)
       |> Enum.filter(&elem(&1, 1))
+
+    # Only a rebuild can make the change of a renamed attribute, SQLite refuses the statement.
+    {renamed_and_changed, attributes_to_alter} =
+      if rebuild_tables?(opts, snapshot.repo) do
+        {[], attributes_to_alter}
+      else
+        Enum.split_with(attributes_to_alter, fn {new, old} -> new.source != old.source end)
+      end
+
+    omitted =
+      for {new, old} <- renamed_and_changed,
+          do: %Operation.Omitted{
+            table: snapshot.table,
+            operation: %Operation.AlterAttribute{
+              table: snapshot.table,
+              new_attribute: new,
+              old_attribute: old
+            }
+          }
 
     rename_attribute_events =
       Enum.map(attributes_to_rename, fn {new, old} ->
@@ -1962,7 +1999,7 @@ defmodule AshSqlite.MigrationGenerator do
       end)
 
     add_attribute_events ++
-      alter_attribute_events ++ remove_attribute_events ++ rename_attribute_events
+      alter_attribute_events ++ remove_attribute_events ++ rename_attribute_events ++ omitted
   end
 
   defp differently_deferrable?(%{references: %{deferrable: left}}, %{
@@ -1987,15 +2024,18 @@ defmodule AshSqlite.MigrationGenerator do
 
   # This exists to handle the fact that the remapping of the key name -> source caused attributes
   # to be considered unequal. We ignore things that only differ in that way using this function.
-  defp attributes_unequal?(left, right, repo, _old_snapshot, _new_snapshot) do
-    left = clean_for_equality(left, repo)
-
-    right = clean_for_equality(right, repo)
-
-    left != right
+  defp attributes_unequal?(
+         left,
+         right,
+         _repo,
+         _old_snapshot,
+         _new_snapshot,
+         renaming?
+       ) do
+    clean_for_equality(left, renaming?) != clean_for_equality(right, renaming?)
   end
 
-  defp clean_for_equality(attribute, _repo) do
+  defp clean_for_equality(attribute, ignore_names?) do
     cond do
       attribute[:source] ->
         Map.put(attribute, :name, attribute[:source])
@@ -2023,6 +2063,21 @@ defmodule AshSqlite.MigrationGenerator do
       attribute ->
         attribute
     end)
+    |> without_names(ignore_names?)
+  end
+
+  defp without_names(attribute, false), do: attribute
+
+  defp without_names(attribute, true) do
+    attribute = Map.drop(attribute, [:source, :name])
+
+    case attribute do
+      %{references: %{} = references} ->
+        %{attribute | references: Map.delete(references, :name)}
+
+      attribute ->
+        attribute
+    end
   end
 
   defp add_ignore(%{references: references} = attribute) when is_map(references) do

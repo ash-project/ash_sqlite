@@ -821,6 +821,19 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     end
   end
 
+  defmodule Omitted do
+    @moduledoc false
+    # A change SQLite cannot make in place, when tables are not rebuilt: only the hint knows of it.
+    defstruct [:operation, :table, :multitenancy, :old_multitenancy]
+
+    def reason(%{operation: operation}, multitenancy) do
+      operation
+      |> Map.put(:multitenancy, multitenancy)
+      |> operation.__struct__.up()
+      |> String.trim()
+    end
+  end
+
   defmodule RebuildTable do
     @moduledoc false
     # The operations of a table when one of them cannot be done in place (`requires_rebuild?/1`):
@@ -835,6 +848,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     def requires_rebuild?(%Operation.DropForeignKey{}), do: true
     def requires_rebuild?(%Operation.AlterDeferrability{}), do: true
     def requires_rebuild?(%Operation.RemovePrimaryKey{}), do: true
+    def requires_rebuild?(%Operation.Omitted{}), do: true
 
     def requires_rebuild?(%Operation.AddAttribute{attribute: attribute}),
       do: attribute.allow_nil? == false and attribute.default == "nil"

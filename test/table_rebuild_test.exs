@@ -591,6 +591,37 @@ defmodule AshSqlite.TableRebuildTest do
   end
 
   describe "the generator" do
+    test "a rename together with a change is both a rename and a change", %{ctx: ctx} do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string)
+        end
+      end
+
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("INSERT INTO items (id, title) VALUES ('a', 'x')")
+
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:subject, :string, allow_nil?: false)
+        end
+      end
+
+      send(self(), {:mix_shell_input, :yes?, true})
+      send(self(), {:mix_shell_input, :prompt, "subject"})
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ "use AshSqlite.Migration"
+      migrate(ctx)
+
+      assert sql("SELECT id, subject FROM items") == [["a", "x"]]
+
+      assert [%{name: "subject", notnull: true}] =
+               Enum.filter(columns("items"), &(&1.name == "subject"))
+    end
+
     test "generating again after a rebuild migration finds nothing to do (codegen --check)", %{
       ctx: ctx
     } do
@@ -1072,6 +1103,40 @@ defmodule AshSqlite.TableRebuildTest do
 
       migrate(ctx)
       assert sql("SELECT id, code FROM items") == [["a", "none"]]
+    end
+
+    test "a renamed column that becomes required: the remedy replaces the rename", %{ctx: ctx} do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string)
+        end
+      end
+
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("INSERT INTO items (id, title) VALUES ('a', NULL)")
+
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:subject, :string, allow_nil?: false)
+        end
+      end
+
+      send(self(), {:mix_shell_input, :yes?, true})
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ ~S|copy: [subject: "COALESCE(title, 'your value')"]|
+      assert last_migration(ctx) =~ "in place of its `subject: :title`"
+
+      edit_last_migration(
+        ctx,
+        "copy: [subject: :title]",
+        ~S|copy: [subject: "COALESCE(title, 'untitled')"]|
+      )
+
+      migrate(ctx)
+      assert sql("SELECT id, subject FROM items") == [["a", "untitled"]]
     end
   end
 end

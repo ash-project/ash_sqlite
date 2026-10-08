@@ -41,7 +41,7 @@ For more information on generating migrations, run `mix help ash_sqlite.generate
 
 SQLite can mostly add, rename and drop a column in place. Changing a column's type or default, adding or dropping a foreign key, changing a primary key and, as the adapters write it, making a column required or optional all need the table to be created again in its new shape, with the rows copied over.
 
-By default the generator writes a statement that fails when the migration runs. With `--rebuild-tables`, or `rebuild_tables: true` in the repo's config, it writes a `rebuild_table` instead, which shows the table's new shape and what triggered it:
+By default the generator writes a statement that fails when the migration runs, or leaves the change out (a renamed attribute that also changes). With `--rebuild-tables`, or `rebuild_tables: true` in the repo's config, it writes a `rebuild_table` instead, which shows the table's new shape and what triggered it:
 
 ```elixir
 def up do
