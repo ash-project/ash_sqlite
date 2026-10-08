@@ -1927,5 +1927,76 @@ defmodule AshSqlite.MigrationGeneratorTest do
       assert up =~ "# - modify :parent_id, references(:parents"
       refute up =~ "dropping the foreign key"
     end
+
+    test "a plain rename of a foreign key column stays a plain rename", ctx do
+      defresource Parent, "parents" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defresource Child, "children" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+
+        relationships do
+          belongs_to(:parent, Parent, source_attribute: :owner_id)
+        end
+      end
+
+      defdomain([Parent, Child])
+      generate(Domain, ctx)
+
+      defresource Child, "children" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+
+        relationships do
+          belongs_to(:parent, Parent, source_attribute: :guardian_id)
+        end
+      end
+
+      send(self(), {:mix_shell_input, :yes?, true})
+      send(self(), {:mix_shell_input, :prompt, "guardian_id"})
+      generate(Domain, ctx)
+      migration = last_migration(ctx)
+      refute migration =~ "use AshSqlite.Migration"
+      assert migration =~ "rename table(:children), :owner_id, to: :guardian_id"
+    end
+
+    test "without the option, a rename together with a change is only a rename", ctx do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx, rebuild_tables: nil)
+
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:subject, :string, allow_nil?: false)
+        end
+      end
+
+      send(self(), {:mix_shell_input, :yes?, true})
+      generate(Domain, ctx, rebuild_tables: nil, quiet: false)
+      migration = last_migration(ctx)
+
+      assert migration =~ "rename table(:items), :title, to: :subject"
+      refute migration =~ "rebuild_table"
+      refute migration =~ "modify"
+
+      # the change that is left out is in the hint
+      assert_received {:mix_shell, :info,
+                       ["SQLite cannot make these changes to `items`" <> _ = hint]}
+
+      assert hint =~ "  - modify :subject, :text, null: false  (not in the migration)"
+    end
   end
 end
