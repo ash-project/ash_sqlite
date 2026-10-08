@@ -8,6 +8,8 @@ defmodule AshSqlite.TenantRepo do
   """
   use AshSqlite.Repo, otp_app: :ash_sqlite
 
+  def min_sqlite_version, do: %Version{major: 3, minor: 38, patch: 0}
+
   # Transactions are a repo decision rather than a resource one, so the tenanted
   # tests get them by asking here.
   def write_transactions?, do: true

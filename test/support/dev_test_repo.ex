@@ -7,6 +7,8 @@ defmodule AshSqlite.DevTestRepo do
   use AshSqlite.Repo,
     otp_app: :ash_sqlite
 
+  def min_sqlite_version, do: %Version{major: 3, minor: 38, patch: 0}
+
   def on_transaction_begin(data) do
     send(self(), data)
   end

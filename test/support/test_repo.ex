@@ -6,4 +6,6 @@ defmodule AshSqlite.TestRepo do
   @moduledoc false
   use AshSqlite.Repo,
     otp_app: :ash_sqlite
+
+  def min_sqlite_version, do: %Version{major: 3, minor: 38, patch: 0}
 end
