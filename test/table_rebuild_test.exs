@@ -278,6 +278,43 @@ defmodule AshSqlite.TableRebuildTest do
     end
   end
 
+  describe "things in the database that refer to the rebuilt table" do
+    test "a view and a trigger on another table that mention it survive", %{ctx: ctx} do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string, allow_nil?: false)
+        end
+      end
+
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("CREATE TABLE audit (msg TEXT)")
+      sql("CREATE TABLE other (id TEXT)")
+      sql("CREATE VIEW item_names AS SELECT name FROM items")
+
+      sql(
+        "CREATE TRIGGER other_audit AFTER INSERT ON other BEGIN INSERT INTO audit SELECT name FROM items; END"
+      )
+
+      sql("INSERT INTO items (id, name) VALUES ('a', 'x')")
+
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string)
+        end
+      end
+
+      generate(Domain, ctx)
+      migrate(ctx)
+
+      assert sql("SELECT name FROM item_names") == [["x"]]
+      sql("INSERT INTO other (id) VALUES ('o')")
+      assert sql("SELECT msg FROM audit") == [["x"]]
+    end
+  end
+
   describe "foreign key topology" do
     test "a self-referencing table", %{ctx: ctx} do
       defres Node, "nodes" do
