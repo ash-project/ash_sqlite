@@ -1687,12 +1687,27 @@ defmodule AshSqlite.MigrationGenerator do
     |> Enum.concat()
     |> Enum.map(&Map.put(&1, :multitenancy, snapshot.multitenancy))
     |> Enum.map(&Map.put(&1, :old_multitenancy, old_snapshot.multitenancy))
+    |> add_strict_change(snapshot, old_snapshot, opts)
     |> rebuild_if_needed(snapshot, old_snapshot, opts)
   end
 
   # `--rebuild-tables` (or `--no-rebuild-tables`) for this run, else the repo's `rebuild_tables`.
   defp rebuild_tables?(%{rebuild_tables: nil}, repo), do: repo.config()[:rebuild_tables] == true
   defp rebuild_tables?(%{rebuild_tables: rebuild_tables}, _repo), do: rebuild_tables
+
+  defp add_strict_change(operations, snapshot, old_snapshot, opts) do
+    from = !!old_snapshot[:strict?]
+
+    if !old_snapshot[:empty?] and from != snapshot.strict? do
+      change = %Operation.AlterStrict{table: snapshot.table, from: from, to: snapshot.strict?}
+
+      if rebuild_tables?(opts, snapshot.repo),
+        do: [change | operations],
+        else: [%Operation.Omitted{operation: change, table: snapshot.table} | operations]
+    else
+      operations
+    end
+  end
 
   defp rebuild_if_needed(operations, snapshot, old_snapshot, opts) do
     if !old_snapshot[:empty?] and

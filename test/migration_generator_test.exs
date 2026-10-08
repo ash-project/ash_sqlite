@@ -2063,5 +2063,63 @@ defmodule AshSqlite.MigrationGeneratorTest do
       generate(Domain, ctx)
       assert length(migrations(ctx)) == 1
     end
+
+    test "a snapshot from before there was strict? is a table that is not", ctx do
+      defitem do
+        sqlite do
+          strict?(false)
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx)
+
+      for file <- Path.wildcard(Path.join(ctx.snapshot_path, "**/*.json")) do
+        snapshot = file |> File.read!() |> Jason.decode!() |> Map.delete("strict?")
+        File.write!(file, Jason.encode!(snapshot))
+      end
+
+      generate(Domain, ctx)
+      assert length(migrations(ctx)) == 1
+    end
+
+    test "without the option, a table that becomes STRICT is only in the hint", ctx do
+      defitem do
+        sqlite do
+          strict?(false)
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx, rebuild_tables: nil)
+
+      defitem do
+        sqlite do
+          strict?(true)
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      generate(Domain, ctx, rebuild_tables: nil, quiet: false)
+
+      assert length(migrations(ctx)) == 1
+
+      assert_received {:mix_shell, :info,
+                       ["SQLite cannot make these changes to `items`" <> _ = hint]}
+
+      assert hint =~ "making `items` a STRICT table"
+      assert hint =~ "(not in the migration)"
+    end
   end
 end

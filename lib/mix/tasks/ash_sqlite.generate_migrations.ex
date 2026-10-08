@@ -53,8 +53,8 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
 
   SQLite and its Ecto adapters cannot change a column's type, default or nullability, or a foreign key,
   in place. By default the generator writes a statement that fails when the migration runs, or leaves
-  the change out (a renamed attribute that also changes), and prints a hint saying so. With
-  `--rebuild-tables` it writes a `rebuild_table` instead, which creates the table
+  the change out (a renamed attribute that also changes, a table that becomes `STRICT`), and prints a
+  hint saying so. With `--rebuild-tables` it writes a `rebuild_table` instead, which creates the table
   again in its new shape and copies the rows. See the "Migrations" guide.
 
   The `default:` of an attribute that is a plain value (a number, string, boolean, atom, decimal,
