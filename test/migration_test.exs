@@ -207,6 +207,36 @@ defmodule AshSqlite.MigrationTest do
     assert sql("SELECT id FROM comments") == [["c"]]
   end
 
+  test "a table that stops being AUTOINCREMENT and becomes one again has one row", %{ctx: ctx} do
+    write_migration(ctx, 1, "create_things", """
+    def up do
+      execute "CREATE TABLE things (id INTEGER PRIMARY KEY AUTOINCREMENT)"
+      execute "INSERT INTO things DEFAULT VALUES"
+      execute "INSERT INTO things DEFAULT VALUES"
+    end
+
+    def down, do: :ok
+    """)
+
+    write_migration(ctx, 2, "there_and_back", """
+    def up do
+      rebuild_table :things do
+        add :id, :integer, primary_key: true
+      end
+
+      rebuild_table :things do
+        add :id, :bigserial, primary_key: true
+      end
+    end
+
+    def down, do: :ok
+    """)
+
+    migrate(ctx)
+
+    assert [["things", 2]] = sql("SELECT name, seq FROM sqlite_sequence")
+  end
+
   describe "with ecto_libsql" do
     @describetag repo: AshSqlite.RebuildLibSqlRepo
 
@@ -232,6 +262,33 @@ defmodule AshSqlite.MigrationTest do
 
       assert sql("SELECT id FROM comments") == [["c"]]
       assert sql("PRAGMA foreign_keys") == [[1]]
+    end
+
+    @tag repo_config: [pool_size: 1]
+    test "a rebuild works when the database has an AUTOINCREMENT table", %{ctx: ctx} do
+      write_migration(ctx, 1, "create_tables", """
+      def up do
+        execute "CREATE TABLE counters (id INTEGER PRIMARY KEY AUTOINCREMENT)"
+        execute "CREATE TABLE plain (id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
+      end
+
+      def down, do: :ok
+      """)
+
+      write_migration(ctx, 2, "name_optional", """
+      def up do
+        rebuild_table :plain do
+          add :id, :integer, primary_key: true
+          add :name, :text
+        end
+      end
+
+      def down, do: :ok
+      """)
+
+      migrate(ctx)
+
+      assert versions() == [1, 2]
     end
   end
 end

@@ -98,12 +98,12 @@ defmodule AshSqlite.Migration do
   defmacro rebuild_table(table, opts \\ [], do: block) do
     quote do
       table = unquote(table)
-      {copy, options} = Keyword.pop(unquote(opts), :copy, [])
+      {copy, opts} = Keyword.pop(unquote(opts), :copy, [])
       temporary = "#{table}_rebuild"
 
       execute(fn -> AshSqlite.Migration.__check_foreign_keys_off__(repo(), table) end)
 
-      create table(temporary, [primary_key: false] ++ options) do
+      create table(temporary, [primary_key: false] ++ opts) do
         unquote(block)
       end
 
@@ -122,6 +122,8 @@ defmodule AshSqlite.Migration do
 
   @doc false
   def __copy_rows__(repo, table, temporary, copy) do
+    copy_sequence(repo, table, temporary)
+
     old_columns = column_names(repo, table)
     new_columns = column_names(repo, temporary)
 
@@ -154,6 +156,25 @@ defmodule AshSqlite.Migration do
     )
   end
 
+  # An AUTOINCREMENT table keeps the highest id it ever handed out in `sqlite_sequence`, which
+  # dropping the table deletes: ids that were used and deleted would be handed out again.
+  defp copy_sequence(repo, table, temporary) do
+    %{rows: [[autoincrement]]} =
+      quiet!(
+        repo,
+        "SELECT count(*) FROM sqlite_master WHERE name = ? AND sql GLOB '*PRIMARY KEY AUTOINCREMENT*'",
+        [temporary]
+      )
+
+    if autoincrement > 0 do
+      query!(
+        repo,
+        "INSERT INTO sqlite_sequence (name, seq) SELECT ?, seq FROM sqlite_sequence WHERE name = ?",
+        [temporary, to_string(table)]
+      )
+    end
+  end
+
   defp copy_expression(copy, name, old_columns) do
     case Enum.find(copy, fn {new, _} -> to_string(new) == name end) do
       {_, from} when is_atom(from) -> quote_name(from)
@@ -171,10 +192,12 @@ defmodule AshSqlite.Migration do
 
   # not `repo.query!/1`: ecto_libsql's repo has none
   # sobelow_skip ["SQL.Query"]
-  defp query!(repo, statement), do: Ecto.Adapters.SQL.query!(repo, statement)
+  defp query!(repo, statement, params \\ []),
+    do: Ecto.Adapters.SQL.query!(repo, statement, params)
 
   # sobelow_skip ["SQL.Query"]
-  defp quiet!(repo, statement), do: Ecto.Adapters.SQL.query!(repo, statement, [], log: false)
+  defp quiet!(repo, statement, params \\ []),
+    do: Ecto.Adapters.SQL.query!(repo, statement, params, log: false)
 
   defp pragma(repo, name) do
     %{rows: [[value]]} = quiet!(repo, "PRAGMA #{name}")
