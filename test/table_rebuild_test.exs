@@ -315,6 +315,35 @@ defmodule AshSqlite.TableRebuildTest do
     end
   end
 
+  describe "integer primary keys with AUTOINCREMENT" do
+    test "ids that were used and deleted are not handed out again", %{ctx: ctx} do
+      defitem do
+        attributes do
+          integer_primary_key(:id)
+          attribute(:name, :string, allow_nil?: false)
+        end
+      end
+
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("INSERT INTO items (name) VALUES ('a'), ('b'), ('c')")
+      sql("DELETE FROM items WHERE id = 3")
+
+      defitem do
+        attributes do
+          integer_primary_key(:id)
+          attribute(:name, :string)
+        end
+      end
+
+      generate(Domain, ctx)
+      migrate(ctx)
+
+      sql("INSERT INTO items (name) VALUES ('d')")
+      assert sql("SELECT id, name FROM items ORDER BY id") == [[1, "a"], [2, "b"], [4, "d"]]
+    end
+  end
+
   describe "foreign key topology" do
     test "a self-referencing table", %{ctx: ctx} do
       defres Node, "nodes" do
