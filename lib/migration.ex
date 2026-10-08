@@ -41,18 +41,23 @@ defmodule AshSqlite.Migration do
   end
 
   # `PRAGMA foreign_keys` does nothing inside a transaction, so it is set before Ecto opens one,
-  # on the connection it will use. The previous value is kept to put it back afterwards.
+  # on the connection it will use. The previous values are kept to put them back afterwards.
   @doc false
   def __before_transaction__(repo) do
-    Process.put(@pragmas_key, pragma(repo, "foreign_keys"))
+    Process.put(@pragmas_key, {pragma(repo, "foreign_keys"), pragma(repo, "legacy_alter_table")})
     quiet!(repo, "PRAGMA foreign_keys = OFF")
   end
 
+  # `legacy_alter_table` is put back too: a rebuild that fails does not turn it off itself.
   @doc false
   def __after_transaction__(repo) do
     case Process.delete(@pragmas_key) do
-      nil -> :ok
-      foreign_keys -> quiet!(repo, "PRAGMA foreign_keys = #{foreign_keys}")
+      nil ->
+        :ok
+
+      {foreign_keys, legacy_alter_table} ->
+        quiet!(repo, "PRAGMA legacy_alter_table = #{legacy_alter_table}")
+        quiet!(repo, "PRAGMA foreign_keys = #{foreign_keys}")
     end
   end
 
@@ -69,6 +74,10 @@ defmodule AshSqlite.Migration do
               "`@disable_ddl_transaction true`."
     end
   end
+
+  @doc false
+  def __legacy_alter_table__(repo, value),
+    do: quiet!(repo, "PRAGMA legacy_alter_table = #{value}")
 
   @doc """
   Rebuilds `table` with the shape `block` describes, as the block of a `create table`.
@@ -101,8 +110,13 @@ defmodule AshSqlite.Migration do
       # the columns of both tables are only known once the new one exists
       execute(fn -> AshSqlite.Migration.__copy_rows__(repo(), table, temporary, copy) end)
 
+      # While the old table is dropped, a view or trigger that mentions it points at nothing, and
+      # the rename that follows refuses. The legacy behaviour leaves them alone. It is not on for
+      # the rest of the migration, so that a `rename table` in it still updates what mentions it.
+      execute(fn -> AshSqlite.Migration.__legacy_alter_table__(repo(), 1) end)
       drop(table(table))
       rename(table(temporary), to: table(table))
+      execute(fn -> AshSqlite.Migration.__legacy_alter_table__(repo(), 0) end)
     end
   end
 
