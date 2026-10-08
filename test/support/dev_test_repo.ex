@@ -14,4 +14,8 @@ defmodule AshSqlite.DevTestRepo do
   def prefer_transaction?, do: false
 
   def prefer_transaction_for_atomic_updates?, do: false
+
+  def min_sqlite_version do
+    %Version{major: 3, minor: 38, patch: 0}
+  end
 end
