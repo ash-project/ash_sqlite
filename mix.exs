@@ -148,10 +148,10 @@ defmodule AshSqlite.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ecto_sql, "~> 3.13"},
+      {:ecto_sql, github: "elixir-ecto/ecto_sql", ref: "bf126d6b", override: true},
       {:ecto_sqlite3, "~> 0.12"},
       {:ecto_libsql, "~> 0.9", optional: true},
-      {:ecto, "~> 3.13"},
+      {:ecto, "~> 3.13", override: true},
       {:jason, "~> 1.0"},
       {:ash, ash_version("~> 3.33")},
       {:ash_sql, ash_sql_version("~> 0.2 and >= 0.6.9")},
