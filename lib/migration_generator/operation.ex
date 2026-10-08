@@ -821,10 +821,25 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     end
   end
 
+  defmodule AlterStrict do
+    @moduledoc false
+    # The table became STRICT, or stopped being. There is no statement for that: it takes a
+    # rebuild.
+    defstruct [:table, :from, :to]
+
+    def reason(%{table: table, to: true}), do: "making `#{table}` a STRICT table"
+    def reason(%{table: table, to: false}), do: "`#{table}` is no longer a STRICT table"
+  end
+
   defmodule Omitted do
     @moduledoc false
     # A change SQLite cannot make in place, when tables are not rebuilt: only the hint knows of it.
     defstruct [:operation, :table, :multitenancy, :old_multitenancy]
+
+    alias AshSqlite.MigrationGenerator.Operation
+
+    def reason(%{operation: %Operation.AlterStrict{} = operation}, _multitenancy),
+      do: Operation.AlterStrict.reason(operation)
 
     def reason(%{operation: operation}, multitenancy) do
       operation
@@ -849,6 +864,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     def requires_rebuild?(%Operation.AlterDeferrability{}), do: true
     def requires_rebuild?(%Operation.RemovePrimaryKey{}), do: true
     def requires_rebuild?(%Operation.Omitted{}), do: true
+    def requires_rebuild?(%Operation.AlterStrict{}), do: true
 
     def requires_rebuild?(%Operation.AddAttribute{attribute: attribute}),
       do: attribute.allow_nil? == false and attribute.default == "nil"
@@ -1165,6 +1181,8 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       "add #{inspect(attribute.source)} as NOT NULL without a default, " <>
         "which SQLite refuses on a table with rows"
     end
+
+    defp reason(%Operation.AlterStrict{} = change), do: Operation.AlterStrict.reason(change)
 
     defp reason(%Operation.DropForeignKey{direction: :down, attribute: %{references: reference}}),
       do: "dropping the foreign key #{reference.name} when rolling back"

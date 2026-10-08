@@ -1215,4 +1215,77 @@ defmodule AshSqlite.TableRebuildTest do
       refute last_migration(ctx) =~ "default:"
     end
   end
+
+  describe "STRICT" do
+    defmacrop strict_items(strict?) do
+      quote do
+        defitem do
+          sqlite do
+            strict?(unquote(strict?))
+          end
+
+          attributes do
+            uuid_primary_key(:id)
+            attribute(:count, :integer)
+            attribute(:name, :string)
+          end
+        end
+      end
+    end
+
+    defp table_sql, do: sql("SELECT sql FROM sqlite_master WHERE name = 'items'") |> hd() |> hd()
+
+    test "making a table STRICT rebuilds it and keeps the rows", %{ctx: ctx} do
+      strict_items(false)
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("INSERT INTO items (id, count, name) VALUES ('a', 1, 'x')")
+      refute table_sql() =~ "STRICT"
+
+      strict_items(true)
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ "# - making `items` a STRICT table"
+
+      assert last_migration(ctx) =~ ~S|rebuild_table :items, options: "STRICT" do|
+
+      migrate(ctx)
+      assert table_sql() =~ "STRICT"
+      assert sql("SELECT id, count, name FROM items") == [["a", 1, "x"]]
+    end
+
+    test "a value that does not fit its column stops it, and nothing is changed", %{ctx: ctx} do
+      strict_items(false)
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("INSERT INTO items (id, count) VALUES ('a', 'many')")
+      versions_before = versions()
+
+      strict_items(true)
+      generate(Domain, ctx)
+
+      assert migrate_error(ctx) =~ "cannot store TEXT value in INTEGER column"
+      assert leftovers() == []
+      assert versions() == versions_before
+      refute table_sql() =~ "STRICT"
+      assert sql("SELECT count FROM items") == [["many"]]
+    end
+
+    test "making a table not STRICT, and rolling that back", %{ctx: ctx} do
+      strict_items(true)
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("INSERT INTO items (id, count) VALUES ('a', 1)")
+      assert table_sql() =~ "STRICT"
+
+      strict_items(false)
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ "# - `items` is no longer a STRICT table"
+      migrate(ctx)
+      refute table_sql() =~ "STRICT"
+
+      rollback(ctx)
+      assert table_sql() =~ "STRICT"
+      assert sql("SELECT id, count FROM items") == [["a", 1]]
+    end
+  end
 end
