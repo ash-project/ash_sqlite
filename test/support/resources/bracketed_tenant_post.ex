@@ -2,19 +2,16 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshSqlite.Test.TenantedPost do
+defmodule AshSqlite.Test.BracketedTenantPost do
   @moduledoc """
-  A `strategy :context` resource whose tenant is a database file.
-
-  `migrate? false` because its table is created directly in each tenant's file by
-  the test setup — there is no one database for the generator to migrate, which is
-  the whole shape of database-per-tenant.
+  `AshSqlite.Test.TenantedPost`'s table, reached through a tenant repo module that
+  implements `with_repo/4`.
   """
   use Ash.Resource, domain: AshSqlite.Test.Domain, data_layer: AshSqlite.DataLayer
 
   actions do
     default_accept(:*)
-    defaults([:create, :read, :update, :destroy])
+    defaults([:create, :read])
   end
 
   multitenancy do
@@ -29,7 +26,7 @@ defmodule AshSqlite.Test.TenantedPost do
   sqlite do
     table("tenanted_posts")
     repo(AshSqlite.TenantTestRepo)
-    tenant_repo(&AshSqlite.Test.TenantRepos.repo/2)
+    tenant_repo(AshSqlite.Test.BracketingTenantRepo)
     migrate?(false)
   end
 end

@@ -203,10 +203,11 @@ defmodule AshSqlite.DataLayer do
         doc:
           "The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more. Can also be a capture of a named function in another module that takes a resource and a type `:read | :mutate` and returns the repo. An inline `fn` is not supported, because it cannot be called while the resource is compiling."
       ],
-      tenant_binder: [
-        type: {:behaviour, AshSqlite.TenantBinder},
+      tenant_repo: [
+        type:
+          {:spark_function_behaviour, AshSqlite.TenantRepo, {AshSqlite.TenantRepo.Function, 2}},
         doc:
-          "A module that selects the connection a tenanted statement runs on. Required for `strategy :context`, where each tenant has its own database file. See `AshSqlite.TenantBinder`."
+          "Selects the repo instance a tenanted statement runs on. Required for `strategy :context`, where each tenant has its own database file. Either a function `(tenant, %{resource: resource, type: :read | :mutate}) -> pid | atom`, or a module implementing `AshSqlite.TenantRepo`."
       ],
       migrate?: [
         type: :boolean,
@@ -313,7 +314,7 @@ defmodule AshSqlite.DataLayer do
       AshSqlite.Verifiers.VerifyRepo,
       AshSqlite.Verifiers.EnsureTableOrPolymorphic,
       AshSqlite.Verifiers.VerifyGlobalMultitenancy,
-      AshSqlite.Verifiers.VerifyTenantBinder
+      AshSqlite.Verifiers.VerifyTenantRepo
     ]
 
   def migrate(args) do
@@ -552,7 +553,7 @@ defmodule AshSqlite.DataLayer do
   @doc """
   A no-op on the query. Each tenant has its own database file, so the tenant is
   applied by choosing the connection rather than by changing the query. The
-  resource's `tenant_binder` chooses it, once per statement.
+  resource's `tenant_repo` chooses it, once per statement.
   """
   def set_tenant(_resource, query, _tenant) do
     {:ok, query}
@@ -614,7 +615,7 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def run_aggregate_query(query, aggregates, resource) do
-    bind_tenant(resource, query_tenant(query), :read, fn ->
+    with_tenant_repo(resource, query_tenant(query), :read, fn ->
       AshSql.AggregateQuery.run_aggregate_query(
         query,
         aggregates,
@@ -626,7 +627,7 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def run_query(query, resource) do
-    bind_tenant(resource, query_tenant(query), :read, fn -> do_run_query(query, resource) end)
+    with_tenant_repo(resource, query_tenant(query), :read, fn -> do_run_query(query, resource) end)
   end
 
   defp do_run_query(query, resource) do
@@ -694,7 +695,7 @@ defmodule AshSqlite.DataLayer do
   def bulk_create(resource, stream, options) do
     stream = Enum.to_list(stream)
 
-    bind_tenant(resource, changesets_tenant(stream), :write, fn ->
+    with_tenant_repo(resource, changesets_tenant(stream), :mutate, fn ->
       do_bulk_create(resource, stream, options)
     end)
   end
@@ -1410,7 +1411,9 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def upsert(resource, changeset, keys \\ nil) do
-    bind_tenant(resource, changeset.tenant, :write, fn -> do_upsert(resource, changeset, keys) end)
+    with_tenant_repo(resource, changeset.tenant, :mutate, fn ->
+      do_upsert(resource, changeset, keys)
+    end)
   end
 
   defp do_upsert(resource, changeset, keys) do
@@ -1562,7 +1565,7 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def update(resource, changeset) do
-    bind_tenant(resource, changeset.tenant, :write, fn -> do_update(resource, changeset) end)
+    with_tenant_repo(resource, changeset.tenant, :mutate, fn -> do_update(resource, changeset) end)
   end
 
   defp do_update(resource, changeset) do
@@ -1622,7 +1625,7 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def destroy(resource, %{data: record} = changeset) do
-    bind_tenant(resource, changeset.tenant, :write, fn ->
+    with_tenant_repo(resource, changeset.tenant, :mutate, fn ->
       do_destroy(resource, record, changeset)
     end)
   end
@@ -1702,7 +1705,7 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def update_query(query, changeset, resource, options) do
-    bind_tenant(resource, changeset.tenant, :write, fn ->
+    with_tenant_repo(resource, changeset.tenant, :mutate, fn ->
       do_update_query(query, changeset, resource, options)
     end)
   end
@@ -1833,7 +1836,7 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def destroy_query(query, changeset, resource, options) do
-    bind_tenant(resource, changeset.tenant, :write, fn ->
+    with_tenant_repo(resource, changeset.tenant, :mutate, fn ->
       do_destroy_query(query, changeset, resource, options)
     end)
   end
@@ -2226,7 +2229,7 @@ defmodule AshSqlite.DataLayer do
 
     if is_nil(tenant) and tenant_required?(resource) do
       raise ArgumentError, """
-      #{inspect(resource)} has a tenant_binder and `strategy :context`, but the \
+      #{inspect(resource)} has a tenant_repo and `strategy :context`, but the \
       transaction about to be opened for this action carried no tenant.
 
       A transaction is opened on one connection, and for a database-per-tenant \
@@ -2250,7 +2253,7 @@ defmodule AshSqlite.DataLayer do
         timeout -> [mode: :immediate, timeout: timeout]
       end
 
-    bind_tenant(resource, tenant, :transaction, fn -> repo.transaction(func, opts) end)
+    with_tenant_repo(resource, tenant, :mutate, fn -> repo.transaction(func, opts) end)
   end
 
   defp reason_tenant(reason), do: reason[:tenant]
@@ -2281,29 +2284,27 @@ defmodule AshSqlite.DataLayer do
 
   # Every callback that issues SQL goes through here, because a caller cannot bind
   # around a path it never sees -- aggregates and atomic writes give it nothing to
-  # wrap. `usage` is passed on so a binder can route reads and writes differently.
-  defp bind_tenant(resource, nil, _usage, fun), do: unbound(resource, fun)
+  # wrap. `type` is passed on so a tenant repo can route reads and writes differently.
+  defp with_tenant_repo(resource, nil, _type, fun), do: unbound(resource, fun)
 
-  defp bind_tenant(resource, tenant, usage, fun) do
-    bind_to_tenant(resource, tenant, usage, fun)
-  end
-
-  defp bind_to_tenant(resource, tenant, usage, fun) do
-    case AshSqlite.DataLayer.Info.tenant_binder(resource) do
-      # No binder and a tenant means multitenancy this data layer does not resolve
-      # to a connection, such as `strategy :attribute`. `VerifyTenantBinder` covers
-      # `strategy :context` at compile time.
+  defp with_tenant_repo(resource, tenant, type, fun) do
+    case AshSqlite.DataLayer.Info.tenant_repo(resource) do
+      # No tenant repo and a tenant means multitenancy this data layer does not
+      # resolve to a connection, such as `strategy :attribute`. `VerifyTenantRepo`
+      # covers `strategy :context` at compile time.
       nil ->
         fun.()
 
-      binder ->
+      {module, opts} ->
         repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
 
         # Captured before the bind: if a transaction is already open it is open on
         # *this* connection, so a statement that binds elsewhere leaves it.
         enclosing = if in_transaction?(resource), do: repo.get_dynamic_repo()
 
-        binder.bind(tenant, [resource: resource, usage: usage], fn ->
+        context = %{resource: resource, type: type}
+
+        bind_tenant_repo(module, tenant, context, opts, fn ->
           if enclosing && repo.get_dynamic_repo() != enclosing do
             raise ArgumentError, """
             #{inspect(resource)} tried to run a statement for tenant \
@@ -2317,6 +2318,21 @@ defmodule AshSqlite.DataLayer do
 
           fun.()
         end)
+    end
+  end
+
+  defp bind_tenant_repo(module, tenant, context, opts, fun) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :with_repo, 4) do
+      module.with_repo(tenant, context, opts, fun)
+    else
+      repo = AshSqlite.DataLayer.Info.repo(context.resource, context.type)
+      previous = repo.put_dynamic_repo(module.repo(tenant, context, opts))
+
+      try do
+        fun.()
+      after
+        repo.put_dynamic_repo(previous)
+      end
     end
   end
 

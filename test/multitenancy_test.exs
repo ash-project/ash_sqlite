@@ -10,7 +10,7 @@ defmodule AshSqlite.MultitenancyTest do
 
   import ExUnit.CaptureIO
 
-  alias AshSqlite.Test.{TenantBinder, TenantedPost}
+  alias AshSqlite.Test.{BracketedTenantPost, BracketingTenantRepo, TenantedPost, TenantRepos}
 
   require Ash.Query
 
@@ -27,7 +27,7 @@ defmodule AshSqlite.MultitenancyTest do
     repos =
       Map.new(["acme", "globex"], fn tenant ->
         path = Path.join(dir, "#{tenant}.db")
-        {:ok, pid} = AshSqlite.TenantRepo.start_link(name: nil, database: path, pool_size: 1)
+        {:ok, pid} = AshSqlite.TenantTestRepo.start_link(name: nil, database: path, pool_size: 1)
 
         Ecto.Adapters.SQL.query!(
           pid,
@@ -35,11 +35,11 @@ defmodule AshSqlite.MultitenancyTest do
           []
         )
 
-        TenantBinder.register(tenant, pid)
+        TenantRepos.register(tenant, pid)
         {tenant, %{pid: pid, path: path}}
       end)
 
-    TenantBinder.reset_calls()
+    TenantRepos.reset_calls()
 
     %{repos: repos}
   end
@@ -68,15 +68,18 @@ defmodule AshSqlite.MultitenancyTest do
     assert Ash.DataLayer.data_layer_can?(TenantedPost, :multitenancy)
   end
 
-  test "a resource that names a binder gets that one, not the default" do
-    assert AshSqlite.DataLayer.Info.tenant_binder(TenantedPost) == TenantBinder
+  test "a function given as the tenant repo is wrapped in a module" do
+    assert {AshSqlite.TenantRepo.Function, [fun: fun]} =
+             AshSqlite.DataLayer.Info.tenant_repo(TenantedPost)
+
+    assert fun == (&TenantRepos.repo/2)
   end
 
-  test "the named binder is what actually runs" do
-    TenantBinder.reset_calls()
+  test "the tenant repo function is what actually runs" do
+    TenantRepos.reset_calls()
     create!("acme", "one")
 
-    assert TenantBinder.calls() != []
+    assert TenantRepos.calls() != []
   end
 
   test "a tenant given to Ash.create/3 rather than to the changeset still arrives" do
@@ -125,24 +128,38 @@ defmodule AshSqlite.MultitenancyTest do
     assert titles_in_file(repos["acme"].path) == ["after"]
   end
 
-  test "reads are reported to the binder as reads" do
+  test "reads are reported to the tenant repo as reads" do
     create!("acme", "one")
-    TenantBinder.reset_calls()
+    TenantRepos.reset_calls()
 
     Ash.read!(TenantedPost, tenant: "acme")
 
-    assert TenantBinder.calls() != []
-    assert Enum.all?(TenantBinder.calls(), &match?({"acme", :read}, &1))
+    assert TenantRepos.calls() != []
+    assert Enum.all?(TenantRepos.calls(), &match?({"acme", :read}, &1))
   end
 
-  test "a write reports both the transaction and the write inside it" do
-    TenantBinder.reset_calls()
+  test "a write and the transaction around it are reported as mutations" do
+    TenantRepos.reset_calls()
     create!("acme", "two")
 
-    usages = TenantBinder.calls() |> Enum.map(&elem(&1, 1)) |> Enum.uniq()
+    assert TenantRepos.calls() != []
+    assert Enum.all?(TenantRepos.calls(), &match?({"acme", :mutate}, &1))
+  end
 
-    assert :transaction in usages
-    assert :write in usages
+  test "a tenant repo module with with_repo/4 brackets each statement itself", %{repos: repos} do
+    BracketingTenantRepo.reset_events()
+
+    BracketedTenantPost
+    |> Ash.Changeset.for_create(:create, %{title: "bracketed"}, tenant: "acme")
+    |> Ash.create!()
+
+    events = BracketingTenantRepo.events()
+
+    assert events != []
+    assert List.first(events) == :entered
+    assert List.last(events) == :left
+    assert Enum.count(events, &(&1 == :entered)) == Enum.count(events, &(&1 == :left))
+    assert titles_in_file(repos["acme"].path) == ["bracketed"]
   end
 
   test "Ash refuses a tenantless query before it reaches the data layer" do
@@ -202,8 +219,8 @@ defmodule AshSqlite.MultitenancyTest do
 
               sqlite do
                 table("refused_global_posts")
-                repo(AshSqlite.TenantRepo)
-                tenant_binder(AshSqlite.Test.TenantBinder)
+                repo(AshSqlite.TenantTestRepo)
+                tenant_repo(&AshSqlite.Test.TenantRepos.repo/2)
                 migrate?(false)
               end
             end
@@ -217,5 +234,43 @@ defmodule AshSqlite.MultitenancyTest do
       assert message =~ "no shared connection to fall back to"
       assert message =~ "resource with no multitenancy"
     end
+  end
+
+  test "strategy :context without a tenant repo is refused at compile time" do
+    message =
+      capture_io(:stderr, fn ->
+        try do
+          Code.eval_string("""
+          defmodule NoTenantRepoPost do
+            use Ash.Resource,
+              domain: nil,
+              validate_domain_inclusion?: false,
+              data_layer: AshSqlite.DataLayer
+
+            actions do
+              defaults([:read])
+            end
+
+            attributes do
+              uuid_primary_key(:id)
+            end
+
+            multitenancy do
+              strategy(:context)
+            end
+
+            sqlite do
+              table("no_tenant_repo_posts")
+              repo(AshSqlite.TenantTestRepo)
+              migrate?(false)
+            end
+          end
+          """)
+        rescue
+          _ -> :raised
+        end
+      end)
+
+    assert message =~ "`strategy :context` needs a `tenant_repo`"
   end
 end

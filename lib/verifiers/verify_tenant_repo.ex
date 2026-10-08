@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshSqlite.Verifiers.VerifyTenantBinder do
+defmodule AshSqlite.Verifiers.VerifyTenantRepo do
   @moduledoc false
   use Spark.Dsl.Verifier
 
@@ -12,23 +12,24 @@ defmodule AshSqlite.Verifiers.VerifyTenantBinder do
   @impl true
   def verify(dsl) do
     if Ash.Resource.Info.multitenancy_strategy(dsl) == :context and
-         is_nil(Verifier.get_option(dsl, [:sqlite], :tenant_binder)) do
+         is_nil(Verifier.get_option(dsl, [:sqlite], :tenant_repo)) do
       {:error,
        DslError.exception(
          module: Verifier.get_persisted(dsl, :module),
-         path: [:sqlite, :tenant_binder],
+         path: [:sqlite, :tenant_repo],
          message: """
-         `strategy :context` needs a `tenant_binder`.
+         `strategy :context` needs a `tenant_repo`.
 
          Each tenant has its own database file, so a tenanted statement has to be \
-         given the connection for its tenant. Only the application knows how to map \
-         a tenant to a connection.
+         given the repo instance for its tenant. Only the application knows how to \
+         map a tenant to a repo instance.
 
              sqlite do
-               tenant_binder MyApp.TenantBinder
+               repo MyApp.Repo
+               tenant_repo &MyApp.Tenants.repo/2
              end
 
-         See `AshSqlite.TenantBinder`.\
+         See `AshSqlite.TenantRepo`.\
          """
        )}
     else

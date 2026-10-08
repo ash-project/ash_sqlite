@@ -67,12 +67,14 @@ defmodule AshSqlite.DataLayer.Info do
     do: Spark.Dsl.Transformer.get_persisted(dsl_state, :module)
 
   @doc """
-  The tenant binder for a resource, or nil.
+  The tenant repo for a resource as `{module, opts}`, or nil.
 
-  Only set for resources with context multitenancy.
+  Only set for resources with context multitenancy. A function given to the
+  `tenant_repo` option is returned wrapped in a module implementing
+  `AshSqlite.TenantRepo`.
   """
-  def tenant_binder(resource) do
-    Extension.get_opt(resource, [:sqlite], :tenant_binder, nil, true)
+  def tenant_repo(resource) do
+    Extension.get_opt(resource, [:sqlite], :tenant_repo, nil, true)
   end
 
   @doc "The configured table for a resource"

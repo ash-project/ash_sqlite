@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 
-defmodule AshSqlite.TenantRepo do
+defmodule AshSqlite.TenantTestRepo do
   @moduledoc """
   A repo used as a template, started per tenant as an anonymous instance rather than under its own name.
   """
