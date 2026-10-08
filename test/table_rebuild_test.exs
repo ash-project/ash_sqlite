@@ -1139,4 +1139,80 @@ defmodule AshSqlite.TableRebuildTest do
       assert sql("SELECT id, subject FROM items") == [["a", "untitled"]]
     end
   end
+
+  describe "default values" do
+    @describetag repo_config: [rebuild_tables: true]
+
+    test "a new table gets the defaults of its attributes", %{ctx: ctx} do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string, default: "it's untitled")
+          attribute(:count, :integer, default: 0)
+          attribute(:ratio, :float, default: 1.5)
+          attribute(:done, :boolean, default: false)
+          attribute(:price, :decimal, default: Decimal.new("9.50"))
+          attribute(:on, :date, default: ~D[2020-01-02])
+          attribute(:at, :utc_datetime, default: ~U[2020-01-02 03:04:05Z])
+        end
+      end
+
+      generate(Domain, ctx)
+      migration = last_migration(ctx)
+      assert migration =~ ~S|add :title, :text, default: "it's untitled"|
+      assert migration =~ "add :count, :bigint, default: 0"
+      assert migration =~ "add :done, :boolean, default: false"
+
+      migrate(ctx)
+      sql("INSERT INTO items (id) VALUES ('a')")
+
+      assert [["a", "it's untitled", 0, 1.5, 0, price, "2020-01-02", at]] =
+               sql("SELECT id, title, count, ratio, done, price, \"on\", at FROM items")
+
+      assert to_string(price) =~ "9.5"
+      # the text Ecto stores, so that comparing with a value it dumps finds the row
+      assert at == "2020-01-02T03:04:05Z"
+    end
+
+    test "a default added to an existing attribute rebuilds the table to get it", %{ctx: ctx} do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string)
+        end
+      end
+
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("INSERT INTO items (id, title) VALUES ('a', NULL)")
+
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string, default: "untitled")
+        end
+      end
+
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ ~S|add :title, :text, default: "untitled"|
+      migrate(ctx)
+
+      sql("INSERT INTO items (id) VALUES ('b')")
+      # the rows that were there keep what they had
+      assert sql("SELECT id, title FROM items ORDER BY id") == [["a", nil], ["b", "untitled"]]
+    end
+
+    test "--no-rebuild-tables turns them off for a run, whatever the config says", %{ctx: ctx} do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:count, :integer, default: 0)
+        end
+      end
+
+      generate(Domain, ctx, rebuild_tables: false)
+
+      refute last_migration(ctx) =~ "default:"
+    end
+  end
 end

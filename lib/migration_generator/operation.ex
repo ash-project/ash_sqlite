@@ -1038,8 +1038,8 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       stops this migration (nothing is changed). Give those rows one with the `copy:` option
       of `rebuild_table`#{replaces}, for example
         rebuild_table :#{as_atom(table)}, copy: [#{atom_key(name)} "COALESCE(#{from}, 'your value')"] do
-      To give new rows one too, add `migration_defaults(#{atom_key(name)} "\\"your value\\"")` to the
-      resource's `sqlite` block and regenerate.\
+      To give new rows one too, set a `default` on the attribute (or use `migration_defaults`)
+      and regenerate.\
       """
     end
 
@@ -1049,8 +1049,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       migration stops (nothing is changed). Give the existing rows a value with the `copy:`
       option of `rebuild_table`, for example
         rebuild_table :#{as_atom(table)}, copy: [#{atom_key(name)} "'your value'"] do
-      or add `migration_defaults(#{atom_key(name)} "\\"your value\\"")` to the resource's `sqlite`
-      block and regenerate.\
+      or set a `default` on the attribute (or use `migration_defaults`) and regenerate.\
       """
     end
 

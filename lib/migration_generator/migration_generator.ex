@@ -36,7 +36,7 @@ defmodule AshSqlite.MigrationGenerator do
         Ash.DataLayer.data_layer(resource) == AshSqlite.DataLayer &&
           AshSqlite.DataLayer.Info.migrate?(resource)
       end)
-      |> Enum.flat_map(&get_snapshots(&1, all_resources))
+      |> Enum.flat_map(&get_snapshots(&1, all_resources, opts))
 
     repos =
       snapshots
@@ -2250,7 +2250,7 @@ defmodule AshSqlite.MigrationGenerator do
   defp pad(i) when i < 10, do: <<?0, ?0 + i>>
   defp pad(i), do: to_string(i)
 
-  def get_snapshots(resource, all_resources) do
+  def get_snapshots(resource, all_resources, opts \\ %__MODULE__{}) do
     Code.ensure_compiled!(AshSqlite.DataLayer.Info.repo(resource))
 
     if AshSqlite.DataLayer.Info.polymorphic?(resource) do
@@ -2262,7 +2262,7 @@ defmodule AshSqlite.MigrationGenerator do
       |> Enum.uniq()
       |> Enum.map(fn relationship ->
         resource
-        |> do_snapshot(relationship.context[:data_layer][:table])
+        |> do_snapshot(relationship.context[:data_layer][:table], opts)
         |> Map.update!(:identities, fn identities ->
           identity_index_names = AshSqlite.DataLayer.Info.identity_index_names(resource)
 
@@ -2292,7 +2292,8 @@ defmodule AshSqlite.MigrationGenerator do
                   default(
                     source_attribute,
                     relationship.destination,
-                    AshSqlite.DataLayer.Info.repo(relationship.destination)
+                    AshSqlite.DataLayer.Info.repo(relationship.destination),
+                    opts
                   ),
                 deferrable: false,
                 match_tenant?: false,
@@ -2313,13 +2314,13 @@ defmodule AshSqlite.MigrationGenerator do
         end)
       end)
     else
-      [do_snapshot(resource, AshSqlite.DataLayer.Info.table(resource))]
+      [do_snapshot(resource, AshSqlite.DataLayer.Info.table(resource), opts)]
     end
   end
 
-  defp do_snapshot(resource, table) do
+  defp do_snapshot(resource, table, opts) do
     snapshot = %{
-      attributes: attributes(resource, table),
+      attributes: attributes(resource, table, opts),
       identities: identities(resource),
       table: table || AshSqlite.DataLayer.Info.table(resource),
       custom_indexes: custom_indexes(resource),
@@ -2373,7 +2374,7 @@ defmodule AshSqlite.MigrationGenerator do
     }
   end
 
-  defp attributes(resource, table) do
+  defp attributes(resource, table, opts) do
     repo = AshSqlite.DataLayer.Info.repo(resource)
     ignored = AshSqlite.DataLayer.Info.migration_ignore_attributes(resource) || []
 
@@ -2393,7 +2394,7 @@ defmodule AshSqlite.MigrationGenerator do
       ])
     )
     |> Enum.map(fn attribute ->
-      default = default(attribute, resource, repo)
+      default = default(attribute, resource, repo, opts)
 
       type =
         AshSqlite.DataLayer.Info.migration_types(resource)[attribute.name] ||
@@ -2705,23 +2706,24 @@ defmodule AshSqlite.MigrationGenerator do
     |> Enum.map(&Map.put(&1, :base_filter, AshSqlite.DataLayer.Info.base_filter_sql(resource)))
   end
 
-  defp default(%{name: name, default: default}, resource, _repo) when is_function(default) do
+  defp default(%{name: name, default: default}, resource, _repo, _opts)
+       when is_function(default) do
     configured_default(resource, name) || "nil"
   end
 
-  defp default(%{name: name, default: {_, _, _}}, resource, _),
+  defp default(%{name: name, default: {_, _, _}}, resource, _, _),
     do: configured_default(resource, name) || "nil"
 
-  defp default(%{name: name, default: nil}, resource, _),
+  defp default(%{name: name, default: nil}, resource, _, _),
     do: configured_default(resource, name) || "nil"
 
-  defp default(%{name: name, default: []}, resource, _),
+  defp default(%{name: name, default: []}, resource, _, _),
     do: configured_default(resource, name) || "[]"
 
-  defp default(%{name: name, default: default}, resource, _) when default == %{},
+  defp default(%{name: name, default: default}, resource, _, _) when default == %{},
     do: configured_default(resource, name) || "%{}"
 
-  defp default(%{name: name, default: value, type: type} = attr, resource, _) do
+  defp default(%{name: name, default: value, type: type} = attr, resource, repo, opts) do
     case configured_default(resource, name) do
       nil ->
         case migration_default(type, Map.get(attr, :constraints, []), value) do
@@ -2729,12 +2731,40 @@ defmodule AshSqlite.MigrationGenerator do
             default
 
           :error ->
-            "nil"
+            literal_default(value, repo, opts)
         end
 
       default ->
         default
     end
+  end
+
+  defp literal_default(value, repo, opts) do
+    if rebuild_tables?(opts, repo),
+      do: literal_default(value),
+      else: "nil"
+  end
+
+  defp literal_default(value) when is_number(value), do: to_string(value)
+  defp literal_default(value) when is_boolean(value), do: to_string(value)
+  defp literal_default(value) when is_atom(value), do: inspect(to_string(value))
+  defp literal_default(value) when is_binary(value), do: inspect(value)
+  defp literal_default(%Decimal{} = value), do: inspect(to_string(value))
+
+  defp literal_default(%module{} = value) when module in [Date, Time, DateTime, NaiveDateTime],
+    do: ~s[fragment("'#{module.to_iso8601(value)}'")]
+
+  defp literal_default(value) do
+    Logger.warning("""
+    You have specified a default value that cannot be explicitly converted to a column default:
+
+      `#{inspect(value)}`
+
+    The default value in the migration will be set to `nil`. To set one, use
+    `migration_defaults` in the sqlite section of the resource.
+    """)
+
+    "nil"
   end
 
   defp migration_default(type, constraints, value) do
