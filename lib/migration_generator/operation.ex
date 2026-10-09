@@ -853,7 +853,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
         to_columns: new.attributes ++ Enum.map(leftover, &as_nullable/1),
         renames: renames,
         reasons: reasons(changes),
-        notes: type_notes(old, new, changes) ++ leftover_notes(leftover)
+        notes: type_notes(old, new, changes) ++ leftover_notes(leftover) ++ statement_notes(old)
       })
     end
 
@@ -869,7 +869,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
         to_columns: old.attributes,
         renames: Map.new(up_renames, fn {to, from} -> {from, to} end),
         reasons: ["undoing the rebuild above (rows in columns it added are not kept)"],
-        notes: []
+        notes: statement_notes(new)
       })
     end
 
@@ -898,6 +898,9 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
       [
         header(table, lines),
+        Enum.map(plan.from.custom_statements, fn statement ->
+          Operation.AddCustomStatement.down(%{statement: statement, table: table})
+        end),
         "rebuild_table :#{as_atom(table)}#{options} do\n#{adds}\nend",
         Enum.map(plan.to.identities, fn identity ->
           Operation.AddUniqueIndex.up(%{
@@ -913,6 +916,9 @@ defmodule AshSqlite.MigrationGenerator.Operation do
             base_filter: plan.to.base_filter,
             multitenancy: plan.to.multitenancy
           })
+        end),
+        Enum.map(plan.to.custom_statements, fn statement ->
+          Operation.AddCustomStatement.up(%{statement: statement, table: table})
         end)
       ]
       |> List.flatten()
@@ -1011,6 +1017,19 @@ defmodule AshSqlite.MigrationGenerator.Operation do
         "REVIEW: `#{to.source}` changes type in a table that is not STRICT, so values that " <>
           "do not convert are copied as they are, not rejected"
       end
+    end
+
+    defp statement_notes(%{custom_statements: []}), do: []
+
+    defp statement_notes(%{custom_statements: statements}) do
+      names = Enum.map_join(statements, ", ", &inspect(&1.name))
+
+      [
+        "REVIEW: the custom statements #{names} are dropped (their `down`) before and " <>
+          "recreated (their `up`) after the rebuild.\n" <>
+          "What they hold, such as the rows of a table or the contents of a full-text index, " <>
+          "is not kept: to keep it, copy it before and restore it after, in this migration"
+      ]
     end
 
     defp leftover_notes([]), do: []

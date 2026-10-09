@@ -756,6 +756,47 @@ defmodule AshSqlite.TableRebuildTest do
     end
   end
 
+  defmacrop trigger_items(nullable?) do
+    quote do
+      defitem do
+        sqlite do
+          custom_statements do
+            statement :items_audit do
+              up "CREATE TRIGGER items_audit AFTER INSERT ON items BEGIN INSERT INTO audit VALUES (new.id); END"
+              down "DROP TRIGGER items_audit"
+            end
+          end
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string, allow_nil?: unquote(!nullable?))
+        end
+      end
+    end
+  end
+
+  describe "custom statements on the rebuilt table" do
+    test "a trigger is dropped before the rebuild, recreated after, and still fires", %{ctx: ctx} do
+      sql("CREATE TABLE IF NOT EXISTS audit (msg TEXT)")
+      trigger_items(false)
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("CREATE TABLE IF NOT EXISTS audit (msg TEXT)")
+      sql("INSERT INTO items (id, name) VALUES ('a', 'x')")
+      assert sql("SELECT msg FROM audit") == [["a"]]
+
+      trigger_items(true)
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ "REVIEW: the custom statements :items_audit"
+      migrate(ctx)
+
+      sql("INSERT INTO items (id, name) VALUES ('b', 'y')")
+      assert sql("SELECT msg FROM audit ORDER BY msg") == [["a"], ["b"]]
+      assert [["items_audit"]] = sql("SELECT name FROM sqlite_master WHERE type = 'trigger'")
+    end
+  end
+
   describe "dropping columns" do
     test "--drop-columns drops the column instead of keeping it", %{ctx: ctx} do
       defitem do
