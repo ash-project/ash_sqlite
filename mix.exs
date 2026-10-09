@@ -120,7 +120,8 @@ defmodule AshSqlite.MixProject do
           AshSqlite.DataLayer
         ],
         Utilities: [
-          AshSqlite.ManualRelationship
+          AshSqlite.ManualRelationship,
+          AshSqlite.Migration
         ],
         Introspection: [
           AshSqlite.DataLayer.Info,
