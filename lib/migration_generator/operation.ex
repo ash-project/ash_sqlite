@@ -852,6 +852,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
         to: new,
         to_columns: new.attributes ++ Enum.map(leftover, &as_nullable/1),
         renames: renames,
+        direction: :up,
         reasons: reasons(changes),
         notes: type_notes(old, new, changes) ++ leftover_notes(leftover) ++ statement_notes(old)
       })
@@ -868,6 +869,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
         to: old,
         to_columns: old.attributes,
         renames: Map.new(up_renames, fn {to, from} -> {from, to} end),
+        direction: :down,
         reasons: ["undoing the rebuild above (rows in columns it added are not kept)"],
         notes: statement_notes(new)
       })
@@ -876,7 +878,7 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     defp render(%{table: table} = plan) do
       columns = plan.to_columns
 
-      lines = plan.reasons ++ plan.notes
+      lines = plan.reasons ++ plan.notes ++ review_notes(columns, plan)
 
       options =
         [
@@ -983,6 +985,60 @@ defmodule AshSqlite.MigrationGenerator.Operation do
     end
 
     defp backfill(_from, _to, _expression), do: nil
+
+    defp review_notes(_columns, %{direction: :down}), do: []
+
+    defp review_notes(columns, plan) do
+      for column <- columns,
+          note = review_note(column, plan) do
+        note
+      end
+    end
+
+    defp review_note(%{allow_nil?: false} = column, plan) do
+      from_name = Map.get(plan.renames, column.source, column.source)
+
+      case Enum.find(plan.from_columns, &(&1.source == from_name)) do
+        nil ->
+          if unfilled?(column),
+            do: review_new_column(plan.table, column.source)
+
+        %{allow_nil?: true} ->
+          if default_sql(column.default) == nil,
+            do: review_required_column(plan.table, column.source, from_name)
+
+        _ ->
+          nil
+      end
+    end
+
+    defp review_note(_column, _plan), do: nil
+
+    defp unfilled?(attribute), do: attribute.default == "nil" and !attribute.generated?
+
+    defp review_required_column(table, name, from) do
+      replaces = if from != name, do: " (in place of its `#{atom_key(name)} #{inspect(from)}`)"
+
+      """
+      REVIEW: #{inspect(name)} becomes required and has no default, so a row without a value for it
+      stops this migration (nothing is changed). Give those rows one with the `copy:` option
+      of `rebuild_table`#{replaces}, for example
+        rebuild_table :#{as_atom(table)}, copy: [#{atom_key(name)} "COALESCE(#{from}, 'your value')"] do
+      To give new rows one too, add `migration_defaults(#{atom_key(name)} "\\"your value\\"")` to the
+      resource's `sqlite` block and regenerate.\
+      """
+    end
+
+    defp review_new_column(table, name) do
+      """
+      REVIEW: #{inspect(name)} is new, required and has no default, so if the table has rows this
+      migration stops (nothing is changed). Give the existing rows a value with the `copy:`
+      option of `rebuild_table`, for example
+        rebuild_table :#{as_atom(table)}, copy: [#{atom_key(name)} "'your value'"] do
+      or add `migration_defaults(#{atom_key(name)} "\\"your value\\"")` to the resource's `sqlite`
+      block and regenerate.\
+      """
+    end
 
     defp renames(changes) do
       for %Operation.RenameAttribute{old_attribute: old, new_attribute: new} <- changes,

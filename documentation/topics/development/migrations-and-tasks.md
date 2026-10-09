@@ -56,7 +56,7 @@ def up do
 end
 ```
 
-The rebuild runs in one transaction with foreign keys off, and changes nothing if it fails.
+The rebuild runs in one transaction with foreign keys off, and changes nothing if it fails. Columns both tables have are copied as they are. When the right value for the rows depends on your data, as when a column becomes required and has no default, a `REVIEW` comment says so and shows how to give them one.
 
 The custom statements of the resource are dropped (their `down`) before the rebuild and recreated (their `up`) after it, so what they hold is lost. To keep it, add the copy to the generated migration, around the statement's `execute` lines. For a statement that creates a table:
 

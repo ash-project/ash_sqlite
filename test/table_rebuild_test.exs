@@ -897,4 +897,86 @@ defmodule AshSqlite.TableRebuildTest do
       Domain
     end
   end
+
+  describe "the copy" do
+    defp edit_last_migration(ctx, from, to) do
+      file = ctx |> migrations() |> List.last()
+      contents = File.read!(file)
+      assert contents =~ from
+      File.write!(file, String.replace(contents, from, to, global: false))
+    end
+
+    test "a required column without a default: the comment's remedy gives the rows a value",
+         %{ctx: ctx} do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string)
+        end
+      end
+
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("INSERT INTO items (id, name) VALUES ('a', 'x'), ('b', NULL)")
+
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string, allow_nil?: false)
+        end
+      end
+
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ "REVIEW: :name becomes required and has no default"
+      assert last_migration(ctx) =~ ~S|copy: [name: "COALESCE(name, 'your value')"]|
+
+      # as it is, it stops, as the comment says
+      assert migrate_error(ctx) =~ "NOT NULL constraint failed"
+
+      edit_last_migration(
+        ctx,
+        "rebuild_table :items do",
+        ~S|rebuild_table :items, copy: [name: "COALESCE(name, 'unnamed')"] do|
+      )
+
+      migrate(ctx)
+      assert sql("SELECT id, name FROM items ORDER BY id") == [["a", "x"], ["b", "unnamed"]]
+    end
+
+    test "a new required column: the comment's remedy gives the existing rows a value", %{
+      ctx: ctx
+    } do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      generate(Domain, ctx)
+      migrate(ctx)
+      sql("INSERT INTO items (id) VALUES ('a')")
+
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:code, :string, allow_nil?: false)
+        end
+      end
+
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ "REVIEW: :code is new, required and has no default"
+      assert last_migration(ctx) =~ ~S|copy: [code: "'your value'"]|
+
+      assert migrate_error(ctx) =~ "NOT NULL constraint failed"
+
+      edit_last_migration(
+        ctx,
+        "rebuild_table :items do",
+        ~S|rebuild_table :items, copy: [code: "'none'"] do|
+      )
+
+      migrate(ctx)
+      assert sql("SELECT id, code FROM items") == [["a", "none"]]
+    end
+  end
 end
