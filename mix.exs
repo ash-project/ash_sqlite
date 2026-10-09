@@ -123,7 +123,8 @@ defmodule AshSqlite.MixProject do
           AshSqlite.TenantRepo
         ],
         Utilities: [
-          AshSqlite.ManualRelationship
+          AshSqlite.ManualRelationship,
+          AshSqlite.Migration
         ],
         Introspection: [
           AshSqlite.DataLayer.Info,
