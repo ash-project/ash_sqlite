@@ -13,6 +13,9 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
   * `migration-path` - a custom path to store the migrations, defaults to "priv".
     Migrations are stored in a folder for each repo, so `priv/repo_name/migrations`
   * `drop-columns` - whether or not to drop columns as attributes are removed. See below for more
+  * `rebuild-tables` - rebuild a table when SQLite cannot make a change in place. Can be set for
+    every run with `rebuild_tables: true` in the repo's config, and turned off for one run with
+    `--no-rebuild-tables`. See "Rebuilding tables" below
   * `name` -
       names the generated migrations, prepending with the timestamp. The default is `migrate_resources_<n>`,
       where `<n>` is the count of migrations matching `*migrate_resources*` plus one.
@@ -45,6 +48,13 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
   To that end, the migration generator leaves the column dropping code commented. You can pass `--drop_columns`
   to tell it to uncomment those statements. Additionally, you can just uncomment that code on a case by case
   basis.
+
+  #### Rebuilding tables
+
+  SQLite and its Ecto adapters cannot change a column's type, default or nullability, or a foreign key,
+  in place. By default the generator writes a statement that fails when the migration runs, and prints a hint
+  saying so. With `--rebuild-tables` it writes a `rebuild_table` instead, which creates the table
+  again in its new shape and copies the rows. See the "Migrations" guide.
 
   #### Conflicts/Multiple Resources
 
@@ -117,7 +127,8 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
           check: :boolean,
           dev: :boolean,
           auto_name: :boolean,
-          drop_columns: :boolean
+          drop_columns: :boolean,
+          rebuild_tables: :boolean
         ]
       )
 
