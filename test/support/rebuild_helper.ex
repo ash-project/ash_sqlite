@@ -4,7 +4,7 @@
 
 defmodule AshSqlite.RebuildHelper do
   @moduledoc """
-  Runs migrations against a real SQLite file, for the tests of `AshSqlite.Migration`.
+  Runs generated migrations against a real SQLite file, for the table rebuild tests.
   """
   alias AshSqlite.RebuildTestRepo
 
@@ -41,6 +41,33 @@ defmodule AshSqlite.RebuildHelper do
 
     ctx
   end
+
+  @doc "Generates migrations for `domain` (as `mix ash_sqlite.generate_migrations` would)."
+  def generate(domain, ctx, opts \\ []) do
+    AshSqlite.MigrationGenerator.generate(
+      domain,
+      Keyword.merge(
+        [
+          snapshot_path: ctx.snapshot_path,
+          migration_path: ctx.migration_path,
+          quiet: true,
+          format: false,
+          auto_name: true,
+          rebuild_tables: true
+        ],
+        opts
+      )
+    )
+
+    migrations(ctx)
+  end
+
+  @doc "The generated migration files, oldest first."
+  def migrations(ctx) do
+    Enum.sort(Path.wildcard("#{ctx.migration_path}/**/*_migrate_resources*.exs"))
+  end
+
+  def last_migration(ctx), do: ctx |> migrations() |> List.last() |> File.read!()
 
   @doc "Writes a migration, `body` being what goes in the module after `use AshSqlite.Migration`."
   def write_migration(ctx, version, name, body) do
@@ -82,6 +109,9 @@ defmodule AshSqlite.RebuildHelper do
   def sql(statement, params \\ []) do
     Ecto.Adapters.SQL.query!(repo(), statement, params).rows
   end
+
+  @doc "`PRAGMA foreign_key_check` rows (an empty list means all foreign keys hold)."
+  def fk_violations, do: sql("PRAGMA foreign_key_check")
 
   def columns(table) do
     "SELECT name, type, \"notnull\", dflt_value, pk FROM pragma_table_info('#{table}')"

@@ -820,4 +820,294 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       end
     end
   end
+
+  defmodule RebuildTable do
+    @moduledoc false
+    # The operations of a table when one of them cannot be done in place (`requires_rebuild?/1`):
+    # a `rebuild_table` of the table's new shape, followed by its indexes.
+    defstruct [:table, :old_snapshot, :snapshot, :changes, no_phase: true]
+
+    import Helper
+
+    alias AshSqlite.MigrationGenerator.Operation
+
+    def requires_rebuild?(%Operation.AlterAttribute{}), do: true
+    def requires_rebuild?(%Operation.DropForeignKey{}), do: true
+    def requires_rebuild?(%Operation.AlterDeferrability{}), do: true
+    def requires_rebuild?(%Operation.RemovePrimaryKey{}), do: true
+
+    def requires_rebuild?(%Operation.AddAttribute{attribute: attribute}),
+      do: attribute.allow_nil? == false and attribute.default == "nil"
+
+    def requires_rebuild?(_), do: false
+
+    def up(%{old_snapshot: old, snapshot: new, changes: changes}) do
+      renames = renames(changes)
+      leftover = leftover_columns(old, new, renames, changes)
+
+      render(%{
+        table: new.table,
+        from: old,
+        from_columns: old.attributes,
+        to: new,
+        to_columns: new.attributes ++ Enum.map(leftover, &as_nullable/1),
+        renames: renames,
+        reasons: reasons(changes),
+        notes: type_notes(old, new, changes) ++ leftover_notes(leftover)
+      })
+    end
+
+    def down(%{old_snapshot: old, snapshot: new, changes: changes}) do
+      up_renames = renames(changes)
+      leftover = leftover_columns(old, new, up_renames, changes)
+
+      render(%{
+        table: new.table,
+        from: new,
+        from_columns: new.attributes ++ Enum.map(leftover, &as_nullable/1),
+        to: old,
+        to_columns: old.attributes,
+        renames: Map.new(up_renames, fn {to, from} -> {from, to} end),
+        reasons: ["undoing the rebuild above (rows in columns it added are not kept)"],
+        notes: []
+      })
+    end
+
+    defp render(%{table: table} = plan) do
+      columns = plan.to_columns
+
+      lines = plan.reasons ++ plan.notes
+
+      options =
+        [
+          copy_option(columns, plan),
+          if(plan.to.strict?, do: ~s|options: "STRICT"|)
+        ]
+        |> Enum.reject(&is_nil/1)
+        |> Enum.map_join("", &(", " <> &1))
+
+      adds =
+        Enum.map_join(columns, "\n", fn attribute ->
+          Operation.AddAttribute.up(%Operation.AddAttribute{
+            attribute: attribute,
+            table: table,
+            multitenancy: plan.to.multitenancy,
+            old_multitenancy: plan.from.multitenancy
+          })
+        end)
+
+      [
+        header(table, lines),
+        "rebuild_table :#{as_atom(table)}#{options} do\n#{adds}\nend",
+        Enum.map(plan.to.identities, fn identity ->
+          Operation.AddUniqueIndex.up(%{
+            identity: identity,
+            table: table,
+            multitenancy: plan.to.multitenancy
+          })
+        end),
+        Enum.map(plan.to.custom_indexes, fn index ->
+          Operation.AddCustomIndex.up(%{
+            index: index,
+            table: table,
+            base_filter: plan.to.base_filter,
+            multitenancy: plan.to.multitenancy
+          })
+        end)
+      ]
+      |> List.flatten()
+      |> Enum.join("\n")
+    end
+
+    defp header(table, lines) do
+      Enum.join(
+        [
+          "# SQLite cannot change `#{table}` in place, so it is rebuilt from the resource's",
+          "# snapshot. Anything on the table that the resource does not describe (a column,",
+          "# index or trigger added by hand) is not kept. Changes:"
+          | Enum.flat_map(lines, &entry_lines/1)
+        ],
+        "\n"
+      )
+    end
+
+    defp entry_lines(entry) do
+      case String.split(entry, "\n") do
+        [first | rest] -> ["# - #{first}" | Enum.map(rest, &"#   #{&1}")]
+      end
+    end
+
+    # `copy: [subject: :title, name: "COALESCE(name, 'x')"]`: only what differs from copying
+    # the column of the same name; nil when nothing does.
+    defp copy_option(columns, plan) do
+      entries =
+        for column <- columns,
+            from_name = Map.get(plan.renames, column.source, column.source),
+            from_column = Enum.find(plan.from_columns, &(&1.source == from_name)),
+            entry = copy_entry(column, from_name, from_column),
+            do: entry
+
+      if entries != [], do: "copy: [#{Enum.join(entries, ", ")}]"
+    end
+
+    defp copy_entry(column, from_name, from_column) do
+      cond do
+        expression = backfill(from_column, column, quote_name(from_name)) ->
+          "#{atom_key(column.source)} #{inspect(expression)}"
+
+        from_name == column.source ->
+          nil
+
+        true ->
+          "#{atom_key(column.source)} :#{as_atom(from_name)}"
+      end
+    end
+
+    defp atom_key(name), do: Macro.inspect_atom(:key, atom(name))
+
+    defp atom(name) when is_atom(name), do: name
+    # sobelow_skip ["DOS.StringToAtom"]
+    defp atom(name), do: String.to_atom(name)
+
+    defp backfill(%{allow_nil?: true}, %{allow_nil?: false} = column, expression) do
+      case default_sql(column.default) do
+        nil -> nil
+        default -> "COALESCE(#{expression}, #{default})"
+      end
+    end
+
+    defp backfill(_from, _to, _expression), do: nil
+
+    defp renames(changes) do
+      for %Operation.RenameAttribute{old_attribute: old, new_attribute: new} <- changes,
+          into: %{},
+          do: {new.source, old.source}
+    end
+
+    # The columns of the old table that the resource no longer describes. They stay, as nullable
+    # columns, unless the author asked for them to be dropped (`--drop-columns`).
+    defp leftover_columns(old, new, renames, changes) do
+      new_names = MapSet.new(new.attributes, & &1.source)
+      renamed_away = MapSet.new(Map.values(renames))
+
+      dropped =
+        for %Operation.RemoveAttribute{attribute: attribute, commented?: false} <- changes,
+            into: MapSet.new(),
+            do: attribute.source
+
+      Enum.reject(old.attributes, fn attribute ->
+        MapSet.member?(new_names, attribute.source) or
+          MapSet.member?(renamed_away, attribute.source) or
+          MapSet.member?(dropped, attribute.source)
+      end)
+    end
+
+    defp type_notes(_old, %{strict?: true}, _changes), do: []
+
+    defp type_notes(old, _new, changes) do
+      for %Operation.AlterAttribute{old_attribute: from, new_attribute: to} <- changes,
+          from.type != to.type,
+          Enum.any?(old.attributes, &(&1.source == from.source)) do
+        "REVIEW: `#{to.source}` changes type in a table that is not STRICT, so values that " <>
+          "do not convert are copied as they are, not rejected"
+      end
+    end
+
+    defp leftover_notes([]), do: []
+
+    defp leftover_notes(leftover) do
+      names = Enum.map_join(leftover, ", ", &inspect(&1.source))
+
+      [
+        "#{names} no longer in the resource, kept as nullable so no data is lost " <>
+          "(to drop one, delete its line from the `rebuild_table` below)"
+      ]
+    end
+
+    defp as_nullable(attribute) do
+      %{attribute | allow_nil?: true, default: "nil", primary_key?: false, references: nil}
+    end
+
+    def reasons(changes), do: changes |> blocking_reasons() |> Enum.map(&elem(&1, 0))
+
+    def blocking_reasons(changes) do
+      for change <- changes,
+          requires_rebuild?(change),
+          !covered_by_other_change?(change, changes),
+          reason = reason(change),
+          uniq: true,
+          do: {reason, blocks(change)}
+    end
+
+    defp blocks(%Operation.DropForeignKey{direction: :down}), do: :rollback
+    defp blocks(_change), do: :run
+
+    # Changing a foreign key is two operations, dropping it and altering the column. One line
+    # says it: the drop when the column no longer has a foreign key (and the alteration is only
+    # that), the alteration when it has another one.
+    defp covered_by_other_change?(
+           %Operation.DropForeignKey{attribute: %{source: source}},
+           changes
+         ) do
+      Enum.any?(
+        changes,
+        &match?(%Operation.AlterAttribute{new_attribute: %{source: ^source, references: %{}}}, &1)
+      )
+    end
+
+    defp covered_by_other_change?(
+           %Operation.AlterAttribute{old_attribute: old, new_attribute: %{references: nil} = new},
+           changes
+         ) do
+      Enum.any?(
+        changes,
+        &match?(
+          %Operation.DropForeignKey{attribute: %{source: source}} when source == new.source,
+          &1
+        )
+      ) and %{old | references: nil} == new
+    end
+
+    defp covered_by_other_change?(_change, _changes), do: false
+
+    defp reason(%Operation.AlterAttribute{} = change),
+      do: change |> Operation.AlterAttribute.up() |> String.trim()
+
+    defp reason(%Operation.AddAttribute{attribute: attribute}) do
+      "add #{inspect(attribute.source)} as NOT NULL without a default, " <>
+        "which SQLite refuses on a table with rows"
+    end
+
+    defp reason(%Operation.DropForeignKey{direction: :down, attribute: %{references: reference}}),
+      do: "dropping the foreign key #{reference.name} when rolling back"
+
+    defp reason(%Operation.DropForeignKey{attribute: %{references: reference}}),
+      do: "dropping the foreign key #{reference.name}"
+
+    defp reason(%Operation.RemovePrimaryKey{}), do: "changing the primary key"
+
+    defp reason(%Operation.AlterDeferrability{references: %{name: name, deferrable: deferrable}})
+         when deferrable not in [false, nil],
+         do:
+           "NOT APPLIED: the foreign key #{name} is deferrable " <>
+             "(SQLite migrations cannot create DEFERRABLE constraints)"
+
+    defp reason(%Operation.AlterDeferrability{}), do: nil
+
+    defp quote_name(name), do: ~s("#{name}")
+
+    defp default_sql(nil), do: nil
+    defp default_sql("nil"), do: nil
+
+    defp default_sql(code) when is_binary(code) do
+      case Code.string_to_quoted(code) do
+        {:ok, value} when is_binary(value) -> "'" <> String.replace(value, "'", "''") <> "'"
+        {:ok, value} when is_number(value) -> to_string(value)
+        {:ok, true} -> "1"
+        {:ok, false} -> "0"
+        {:ok, {:fragment, _, [sql]}} when is_binary(sql) -> sql
+        _ -> nil
+      end
+    end
+  end
 end

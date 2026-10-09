@@ -37,6 +37,27 @@ For single-step changes or when you know the final feature name:
 
 For more information on generating migrations, run `mix help ash_sqlite.generate_migrations` (the underlying task that is called by `mix ash.codegen`)
 
+### Changes SQLite cannot make in place
+
+SQLite can mostly add, rename and drop a column in place. Changing a column's type or default, adding or dropping a foreign key, changing a primary key and, as the adapters write it, making a column required or optional all need the table to be created again in its new shape, with the rows copied over.
+
+By default the generator writes a statement that fails when the migration runs. With `--rebuild-tables`, or `rebuild_tables: true` in the repo's config, it writes a `rebuild_table` instead, which shows the table's new shape and what triggered it:
+
+```elixir
+def up do
+  # SQLite cannot change `comments` in place, so it is rebuilt from the resource's
+  # snapshot. Anything on the table that the resource does not describe (a column,
+  # index or trigger added by hand) is not kept. Changes:
+  # - dropping the foreign key comments_post_id_fkey
+  rebuild_table :comments do
+    add :id, :uuid, null: false, primary_key: true
+    add :post_id, :uuid
+  end
+end
+```
+
+The rebuild runs in one transaction with foreign keys off, and changes nothing if it fails.
+
 ### Regenerating Migrations
 
 Often, you will run into a situation where you want to make a slight change to a resource after you've already generated and run migrations. If you are using git and would like to undo those changes, then regenerate the migrations, this script may prove useful:
