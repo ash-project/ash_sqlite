@@ -88,6 +88,39 @@ defmodule AshSqlite.MultiTenancy.ManagedTest do
     end
   end
 
+  describe "the whole action surface, per tenant" do
+    test "create, read, update and destroy all stay in one tenant's file", %{dir: dir} do
+      post = create!("acme", "one")
+      create!("globex", "untouched")
+
+      updated =
+        post
+        |> Ash.Changeset.for_update(:update, %{title: "two"}, tenant: "acme")
+        |> Ash.update!()
+
+      assert updated.title == "two"
+      assert titles_in_file(dir, "acme") == ["two"]
+
+      Ash.destroy!(updated, tenant: "acme")
+
+      assert titles_in_file(dir, "acme") == []
+      assert titles_in_file(dir, "globex") == ["untouched"]
+    end
+
+    # The bulk paths take a different route to the tenant than the single-record
+    # ones -- they carry the whole changeset context rather than its data layer half.
+    test "a bulk create lands in its own tenant's file", %{dir: dir} do
+      result =
+        Ash.bulk_create!([%{title: "b1"}, %{title: "b2"}], ManagedPost, :create,
+          tenant: "acme",
+          return_records?: true
+        )
+
+      assert length(result.records) == 2
+      assert titles_in_file(dir, "acme") == ["b1", "b2"]
+    end
+  end
+
   describe "the paths a caller could not have wrapped" do
     test "Ash.count/2 goes through the tenant repo with the right tenant" do
       create!("acme", "one")

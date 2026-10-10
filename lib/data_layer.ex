@@ -313,7 +313,8 @@ defmodule AshSqlite.DataLayer do
       AshSqlite.Verifiers.ValidateReferences,
       AshSqlite.Verifiers.VerifyRepo,
       AshSqlite.Verifiers.EnsureTableOrPolymorphic,
-      AshSqlite.Verifiers.VerifyGlobalMultitenancy
+      AshSqlite.Verifiers.VerifyGlobalMultitenancy,
+      AshSqlite.Verifiers.VerifyTenantRepo
     ]
 
   def migrate(args) do

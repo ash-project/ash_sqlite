@@ -62,36 +62,58 @@ defmodule AshSqlite.MultiTenancy.Manager do
     activate(repo, tenant, attempts_left - 1)
   end
 
-  @doc "Closes a tenant's database, leaving the file on disk."
-  @spec close(module(), String.t(), keyword()) :: :ok
+  @doc """
+  Closes a tenant's database, leaving the file on disk.
+
+  Waits up to `:grace_ms` for statements in flight to finish, and reports
+  `{:error, :busy}` if they do not. Closing anyway would pull the connection out
+  from under them -- and for `rename/3`, move the file too -- so the caller is told
+  rather than left to find out. `force: true` closes regardless, which is what
+  eviction and `delete/2` want once they know nothing is bound.
+  """
+  @spec close(module(), String.t(), keyword()) :: :ok | {:error, :busy}
   def close(repo, tenant, opts \\ []) do
     # A caller that had already marked the tenant closing wants it to stay that way
     # afterwards -- `rename/3` holds the mark across the close *and* the file move.
     held_open_by_caller? = Binds.closing?(repo, tenant)
+    force? = Keyword.get(opts, :force, false)
     Binds.begin_closing(repo, tenant)
 
     try do
-      unless Keyword.get(opts, :force, false) do
-        await_quiescence(repo, tenant, Keyword.get(opts, :grace_ms, 1_000))
-      end
+      if force? or quiesced?(repo, tenant, Keyword.get(opts, :grace_ms, 1_000)) do
+        case TenantRegistry.lookup(repo, tenant) do
+          {:ok, connection, _repo_pid} -> ConnectionSupervisor.stop_connection(repo, connection)
+          :error -> :ok
+        end
 
-      case TenantRegistry.lookup(repo, tenant) do
-        {:ok, connection, _repo_pid} -> ConnectionSupervisor.stop_connection(repo, connection)
-        :error -> :ok
+        Binds.forget(repo, tenant)
+        :ok
+      else
+        {:error, :busy}
       end
-
-      Binds.forget(repo, tenant)
-      :ok
     after
       unless held_open_by_caller?, do: Binds.end_closing(repo, tenant)
     end
   end
 
-  @doc "Closes a tenant and deletes its database, including the WAL sidecars."
+  @doc """
+  Closes a tenant and deletes its database, including the WAL sidecars.
+
+  The tenant is held closed across the close *and* the unlink, as in `rename/3`. A
+  request arriving in between would otherwise reopen the database and go on serving
+  it from the unlinked inode, accepting writes that are discarded when the
+  connection finally closes.
+  """
   @spec delete(module(), String.t()) :: {:ok, [Path.t()]}
   def delete(repo, tenant) do
-    close(repo, tenant, force: true)
-    GenServer.call(name(repo), {:delete, tenant})
+    Binds.begin_closing(repo, tenant)
+
+    try do
+      close(repo, tenant, force: true)
+      GenServer.call(name(repo), {:delete, tenant})
+    after
+      Binds.end_closing(repo, tenant)
+    end
   end
 
   @doc """
@@ -105,7 +127,7 @@ defmodule AshSqlite.MultiTenancy.Manager do
   Refuses rather than overwrites when the destination already has a database.
   """
   @spec rename(module(), String.t(), String.t()) ::
-          :ok | {:error, :no_database | :target_exists | File.posix()}
+          :ok | {:error, :busy | :no_database | :target_exists | File.posix()}
   def rename(_repo, tenant, tenant), do: :ok
 
   def rename(repo, from, to) do
@@ -113,8 +135,11 @@ defmodule AshSqlite.MultiTenancy.Manager do
     Binds.begin_closing(repo, to)
 
     try do
-      close(repo, from)
-      GenServer.call(name(repo), {:rename, from, to})
+      # Not moved while something is still reading or writing it: the statement in
+      # flight would keep the old inode and commit into the destination's database.
+      with :ok <- close(repo, from) do
+        GenServer.call(name(repo), {:rename, from, to})
+      end
     after
       Binds.end_closing(repo, from)
       Binds.end_closing(repo, to)
@@ -182,7 +207,12 @@ defmodule AshSqlite.MultiTenancy.Manager do
         with {:ok, _repo_pid} <- activate(repo, tenant),
              {:ok, connection, _} <- TenantRegistry.lookup(repo, tenant) do
           version = AshSqlite.MultiTenancy.Connection.info(connection).schema_version
-          if close_after?, do: close(repo, tenant)
+
+          # `close_after?` frees residency, it is not part of migrating. A tenant
+          # serving traffic stays open rather than turning a migrated tenant into a
+          # reported failure.
+          if close_after?, do: close(repo, tenant, Keyword.take(opts, [:grace_ms]))
+
           {:ok, version}
         else
           :error -> {:error, :connection_died}
@@ -331,12 +361,30 @@ defmodule AshSqlite.MultiTenancy.Manager do
           """)
 
         tenant ->
-          # No wait: the candidate was chosen because nothing is bound to it.
-          close(state.repo, tenant, force: true)
+          evict(state.repo, tenant)
       end
     end
 
     state
+  end
+
+  # The candidate was chosen because nothing was bound to it, which was true when it
+  # was chosen. Marking it closing *before* re-reading the count is what makes it
+  # still true: `Binds.bound/2` publishes its increment before reading the mark, so
+  # after the mark is set a count of zero means no bind can still arrive. A bind that
+  # got in first is left alone and the limit is exceeded instead.
+  defp evict(repo, tenant) do
+    Binds.begin_closing(repo, tenant)
+
+    try do
+      if Binds.count(repo, tenant) == 0 do
+        close(repo, tenant, force: true)
+      else
+        :ok
+      end
+    after
+      Binds.end_closing(repo, tenant)
+    end
   end
 
   # The sidecars only exist between a write and a checkpoint, but when they do they
@@ -354,14 +402,18 @@ defmodule AshSqlite.MultiTenancy.Manager do
     end
   end
 
-  defp await_quiescence(_repo, _tenant, grace_ms) when grace_ms <= 0, do: :ok
+  # A deadline rather than a loop count: `Process.sleep(1)` sleeps *at least* a
+  # millisecond, so counting iterations made `grace_ms` mean something between one
+  # and several times what it said, depending on how loaded the scheduler was.
+  defp quiesced?(repo, tenant, grace_ms) do
+    await_quiescence(repo, tenant, System.monotonic_time(:millisecond) + grace_ms)
+  end
 
-  defp await_quiescence(repo, tenant, grace_ms) do
-    if Binds.count(repo, tenant) == 0 do
-      :ok
-    else
-      Process.sleep(1)
-      await_quiescence(repo, tenant, grace_ms - 1)
+  defp await_quiescence(repo, tenant, deadline) do
+    cond do
+      Binds.count(repo, tenant) == 0 -> true
+      System.monotonic_time(:millisecond) >= deadline -> false
+      true -> Process.sleep(1) && await_quiescence(repo, tenant, deadline)
     end
   end
 end
