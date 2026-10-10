@@ -406,9 +406,15 @@ defmodule AshSqlite.MultiTenancy.Manager do
 
   defp await_quiescence(repo, tenant, deadline) do
     cond do
-      Binds.count(repo, tenant) == 0 -> true
-      System.monotonic_time(:millisecond) >= deadline -> false
-      true -> Process.sleep(1) && await_quiescence(repo, tenant, deadline)
+      Binds.count(repo, tenant) == 0 ->
+        true
+
+      System.monotonic_time(:millisecond) >= deadline ->
+        false
+
+      true ->
+        Process.sleep(1)
+        await_quiescence(repo, tenant, deadline)
     end
   end
 end
