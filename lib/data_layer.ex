@@ -313,8 +313,7 @@ defmodule AshSqlite.DataLayer do
       AshSqlite.Verifiers.ValidateReferences,
       AshSqlite.Verifiers.VerifyRepo,
       AshSqlite.Verifiers.EnsureTableOrPolymorphic,
-      AshSqlite.Verifiers.VerifyGlobalMultitenancy,
-      AshSqlite.Verifiers.VerifyTenantRepo
+      AshSqlite.Verifiers.VerifyGlobalMultitenancy
     ]
 
   def migrate(args) do
@@ -2290,8 +2289,8 @@ defmodule AshSqlite.DataLayer do
   defp with_tenant_repo(resource, tenant, type, fun) do
     case AshSqlite.DataLayer.Info.tenant_repo(resource) do
       # No tenant repo and a tenant means multitenancy this data layer does not
-      # resolve to a connection, such as `strategy :attribute`. `VerifyTenantRepo`
-      # covers `strategy :context` at compile time.
+      # resolve to a connection, such as `strategy :attribute`. `strategy :context`
+      # always has one, by default `AshSqlite.MultiTenancy.TenantRepo`.
       nil ->
         fun.()
 

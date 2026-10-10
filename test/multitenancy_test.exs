@@ -235,42 +235,4 @@ defmodule AshSqlite.MultitenancyTest do
       assert message =~ "resource with no multitenancy"
     end
   end
-
-  test "strategy :context without a tenant repo is refused at compile time" do
-    message =
-      capture_io(:stderr, fn ->
-        try do
-          Code.eval_string("""
-          defmodule NoTenantRepoPost do
-            use Ash.Resource,
-              domain: nil,
-              validate_domain_inclusion?: false,
-              data_layer: AshSqlite.DataLayer
-
-            actions do
-              defaults([:read])
-            end
-
-            attributes do
-              uuid_primary_key(:id)
-            end
-
-            multitenancy do
-              strategy(:context)
-            end
-
-            sqlite do
-              table("no_tenant_repo_posts")
-              repo(AshSqlite.TenantTestRepo)
-              migrate?(false)
-            end
-          end
-          """)
-        rescue
-          _ -> :raised
-        end
-      end)
-
-    assert message =~ "`strategy :context` needs a `tenant_repo`"
-  end
 end
