@@ -9,6 +9,9 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
   import ExUnit.CaptureLog
 
+  import AshSqlite.RebuildHelper,
+    only: [generate: 2, generate: 3, last_migration: 1, migrations: 1]
+
   setup %{tmp_dir: tmp_dir} do
     current_shell = Mix.shell()
     :ok = Mix.shell(Mix.Shell.Process)
@@ -1594,6 +1597,529 @@ defmodule AshSqlite.MigrationGeneratorTest do
       # Down migration
       assert File.read!(file2) =~ ~S[rename table(:posts), :creator2_id, to: :creator_id]
       assert File.read!(file2) =~ ~S[rename table(:posts), :contributer2_id, to: :contributer_id]
+    end
+  end
+
+  describe "rebuilding tables" do
+    defmacrop defitem(do: body) do
+      quote do
+        defresource Item, "items" do
+          unquote(body)
+        end
+      end
+    end
+
+    defmacrop defparent_and_child do
+      quote do
+        defresource Parent, "parents" do
+          attributes do
+            uuid_primary_key(:id)
+          end
+        end
+
+        defresource Child, "children" do
+          attributes do
+            uuid_primary_key(:id)
+          end
+
+          relationships do
+            belongs_to(:parent, Parent)
+          end
+        end
+      end
+    end
+
+    # `name` was required and is now optional, which SQLite cannot do in place
+    defp name_required_then_optional(ctx) do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string, allow_nil?: false)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx, rebuild_tables: nil)
+
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string)
+        end
+      end
+
+      # the alias made by `defdomain` only lives in this function
+      Domain
+    end
+
+    test "without the option, a change SQLite cannot make is written as it always was", ctx do
+      domain = name_required_then_optional(ctx)
+      generate(domain, ctx, rebuild_tables: nil, quiet: false)
+
+      migration = last_migration(ctx)
+      assert migration =~ "modify :name, :text, null: true"
+      refute migration =~ "rebuild_table"
+      refute migration =~ "AshSqlite.Migration"
+
+      assert_received {:mix_shell, :info,
+                       ["SQLite cannot make these changes to `items`" <> _ = hint]}
+
+      assert hint =~ "  - modify :name, :text, null: true  (fails when the migration runs)"
+      assert hint =~ "--rebuild-tables"
+      assert hint =~ "rebuild_tables: true"
+    end
+
+    test "without the option, the hint's advice depends on the run", ctx do
+      domain = name_required_then_optional(ctx)
+
+      generate(domain, ctx, rebuild_tables: nil, quiet: false, dry_run: true)
+      assert_received {:mix_shell, :info, ["SQLite cannot make" <> _ = hint]}
+      assert hint =~ "run again with `--rebuild-tables`."
+
+      # the dev migration may have been run: the final run takes care of it
+      generate(domain, ctx, rebuild_tables: nil, quiet: false, dev: true)
+      assert_received {:mix_shell, :info, ["SQLite cannot make" <> _ = hint]}
+      assert hint =~ "make the final run"
+
+      generate(domain, ctx, rebuild_tables: nil, quiet: false)
+      assert_received {:mix_shell, :info, ["SQLite cannot make" <> _ = hint]}
+      assert hint =~ "undo this run"
+    end
+
+    test "without the option, a dropped foreign key still raises with guidance", ctx do
+      defparent_and_child()
+      defdomain([Parent, Child])
+      generate(Domain, ctx, rebuild_tables: nil)
+
+      defresource Child, "children" do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:parent_id, :uuid)
+        end
+      end
+
+      defdomain([Parent, Child])
+      generate(Domain, ctx, rebuild_tables: nil)
+
+      migration = last_migration(ctx)
+      assert migration =~ "SQLite does not support dropping foreign key constraints."
+      refute migration =~ "rebuild_table"
+    end
+
+    test "without the option, the hint says that a new required column is refused", ctx do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx, rebuild_tables: nil)
+
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:code, :string, allow_nil?: false)
+        end
+      end
+
+      generate(Domain, ctx, rebuild_tables: nil, quiet: false)
+
+      assert_received {:mix_shell, :info,
+                       ["SQLite cannot make these changes to `items`" <> _ = hint]}
+
+      assert hint =~ "  - add :code as NOT NULL without a default, which SQLite refuses"
+    end
+
+    test "without the option, a new foreign key column says that rolling back is blocked", ctx do
+      defresource Owner, "owners" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defresource Pet, "pets" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defdomain([Owner, Pet])
+      generate(Domain, ctx, rebuild_tables: nil)
+
+      defresource Pet, "pets" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+
+        relationships do
+          belongs_to(:owner, Owner)
+        end
+      end
+
+      generate(Domain, ctx, rebuild_tables: nil, quiet: false)
+
+      # the way up works, as it always did
+      migration = last_migration(ctx)
+      assert migration =~ "add :owner_id, references(:owners"
+      refute migration =~ "rebuild_table"
+
+      assert_received {:mix_shell, :info,
+                       ["SQLite cannot make these changes to `pets`" <> _ = hint]}
+
+      assert hint =~
+               "  - dropping the foreign key pets_owner_id_fkey when rolling back  (fails when rolled back)"
+
+      refute hint =~ "fails when the migration runs"
+    end
+
+    test "with the option, a new foreign key column is rebuilt, so that it can be rolled back",
+         ctx do
+      defresource Owner, "owners" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defresource Pet, "pets" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defdomain([Owner, Pet])
+      generate(Domain, ctx)
+
+      defresource Pet, "pets" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+
+        relationships do
+          belongs_to(:owner, Owner)
+        end
+      end
+
+      generate(Domain, ctx)
+
+      [up, down] = String.split(last_migration(ctx), "def down do")
+      assert up =~ "# - dropping the foreign key pets_owner_id_fkey when rolling back"
+      assert up =~ "rebuild_table :pets"
+      assert down =~ "rebuild_table :pets"
+    end
+
+    test "with the option, there is no hint and the table is rebuilt", ctx do
+      domain = name_required_then_optional(ctx)
+      generate(domain, ctx, rebuild_tables: true, quiet: false)
+
+      refute_received {:mix_shell, :info, ["SQLite cannot make these changes" <> _]}
+      assert last_migration(ctx) =~ "rebuild_table :items"
+    end
+
+    test "the copy is not written when every column is simply copied", ctx do
+      domain = name_required_then_optional(ctx)
+      generate(domain, ctx)
+
+      refute last_migration(ctx) =~ "copy:"
+      refute last_migration(ctx) =~ "REVIEW"
+    end
+
+    test "the copy lists only the rename", ctx do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string)
+          attribute(:body, :string)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx)
+
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:subject, :string)
+          attribute(:body, :string, allow_nil?: false)
+        end
+      end
+
+      send(self(), {:mix_shell_input, :yes?, true})
+      send(self(), {:mix_shell_input, :prompt, "subject"})
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ "rebuild_table :items, copy: [subject: :title] do"
+    end
+
+    test "a default fills the rows of a required column, so there is no REVIEW", ctx do
+      defitem do
+        sqlite do
+          migration_defaults(name: "\"unnamed\"")
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx)
+
+      defitem do
+        sqlite do
+          migration_defaults(name: "\"unnamed\"")
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:name, :string, allow_nil?: false)
+        end
+      end
+
+      generate(Domain, ctx)
+      refute last_migration(ctx) =~ "REVIEW"
+      assert last_migration(ctx) =~ "COALESCE"
+    end
+
+    test "the comment says once that a foreign key is dropped", ctx do
+      defparent_and_child()
+      defdomain([Parent, Child])
+      generate(Domain, ctx)
+
+      defresource Child, "children" do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:parent_id, :uuid)
+        end
+      end
+
+      defdomain([Parent, Child])
+      generate(Domain, ctx)
+
+      [up, _down] = String.split(last_migration(ctx), "def down do")
+      assert up =~ "# - dropping the foreign key children_parent_id_fkey"
+      refute up =~ "modify :parent_id"
+    end
+
+    test "the comment says once that a foreign key is changed", ctx do
+      defparent_and_child()
+      defdomain([Parent, Child])
+      generate(Domain, ctx)
+
+      defresource Child, "children" do
+        sqlite do
+          references do
+            reference(:parent, on_delete: :delete)
+          end
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+        end
+
+        relationships do
+          belongs_to(:parent, Parent)
+        end
+      end
+
+      defdomain([Parent, Child])
+      generate(Domain, ctx)
+
+      [up, _down] = String.split(last_migration(ctx), "def down do")
+      assert up =~ "# - modify :parent_id, references(:parents"
+      refute up =~ "dropping the foreign key"
+    end
+
+    test "a plain rename of a foreign key column stays a plain rename", ctx do
+      defresource Parent, "parents" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defresource Child, "children" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+
+        relationships do
+          belongs_to(:parent, Parent, source_attribute: :owner_id)
+        end
+      end
+
+      defdomain([Parent, Child])
+      generate(Domain, ctx)
+
+      defresource Child, "children" do
+        attributes do
+          uuid_primary_key(:id)
+        end
+
+        relationships do
+          belongs_to(:parent, Parent, source_attribute: :guardian_id)
+        end
+      end
+
+      send(self(), {:mix_shell_input, :yes?, true})
+      send(self(), {:mix_shell_input, :prompt, "guardian_id"})
+      generate(Domain, ctx)
+      migration = last_migration(ctx)
+      refute migration =~ "use AshSqlite.Migration"
+      assert migration =~ "rename table(:children), :owner_id, to: :guardian_id"
+    end
+
+    test "without the option, a rename together with a change is only a rename", ctx do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx, rebuild_tables: nil)
+
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:subject, :string, allow_nil?: false)
+        end
+      end
+
+      send(self(), {:mix_shell_input, :yes?, true})
+      generate(Domain, ctx, rebuild_tables: nil, quiet: false)
+      migration = last_migration(ctx)
+
+      assert migration =~ "rename table(:items), :title, to: :subject"
+      refute migration =~ "rebuild_table"
+      refute migration =~ "modify"
+
+      # the change that is left out is in the hint
+      assert_received {:mix_shell, :info,
+                       ["SQLite cannot make these changes to `items`" <> _ = hint]}
+
+      assert hint =~ "  - modify :subject, :text, null: false  (not in the migration)"
+    end
+
+    test "an attribute's default is not a column default when rebuilding is off", ctx do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:count, :integer, default: 0)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx, rebuild_tables: nil)
+
+      refute last_migration(ctx) =~ "default:"
+    end
+
+    test "a value that cannot be a column default is nil, with a warning", ctx do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:tags, {:array, :string}, default: ["a"])
+        end
+      end
+
+      defdomain([Item])
+      log = capture_log(fn -> generate(Domain, ctx) end)
+
+      assert log =~ "cannot be explicitly converted to a column default"
+      assert log =~ ~S|["a"]|
+      assert last_migration(ctx) =~ "add :tags, {:array, :text}"
+    end
+
+    test "a migration_defaults entry still wins over an attribute's default", ctx do
+      defitem do
+        sqlite do
+          migration_defaults(title: "\"from migration_defaults\"")
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:title, :string, default: "from the attribute")
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ ~S|default: "from migration_defaults"|
+    end
+
+    test "generating again after the defaults were applied finds nothing to do", ctx do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+          attribute(:count, :integer, default: 3)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx)
+      assert last_migration(ctx) =~ "default: 3"
+
+      generate(Domain, ctx)
+      assert length(migrations(ctx)) == 1
+    end
+
+    test "a snapshot from before there was strict? is a table that is not", ctx do
+      defitem do
+        sqlite do
+          strict?(false)
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx)
+
+      for file <- Path.wildcard(Path.join(ctx.snapshot_path, "**/*.json")) do
+        snapshot = file |> File.read!() |> Jason.decode!() |> Map.delete("strict?")
+        File.write!(file, Jason.encode!(snapshot))
+      end
+
+      generate(Domain, ctx)
+      assert length(migrations(ctx)) == 1
+    end
+
+    test "without the option, a table that becomes STRICT is only in the hint", ctx do
+      defitem do
+        sqlite do
+          strict?(false)
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defdomain([Item])
+      generate(Domain, ctx, rebuild_tables: nil)
+
+      defitem do
+        sqlite do
+          strict?(true)
+        end
+
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      generate(Domain, ctx, rebuild_tables: nil, quiet: false)
+
+      assert length(migrations(ctx)) == 1
+
+      assert_received {:mix_shell, :info,
+                       ["SQLite cannot make these changes to `items`" <> _ = hint]}
+
+      assert hint =~ "making `items` a STRICT table"
+      assert hint =~ "(not in the migration)"
     end
   end
 end
