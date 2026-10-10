@@ -69,12 +69,22 @@ defmodule AshSqlite.DataLayer.Info do
   @doc """
   The tenant repo for a resource as `{module, opts}`, or nil.
 
-  Only set for resources with context multitenancy. A function given to the
+  Only set for resources with context multitenancy, where it defaults to
+  `AshSqlite.MultiTenancy.TenantRepo` so that database-per-tenant works without
+  the application supplying a runtime of its own. A function given to the
   `tenant_repo` option is returned wrapped in a module implementing
   `AshSqlite.TenantRepo`.
   """
   def tenant_repo(resource) do
-    Extension.get_opt(resource, [:sqlite], :tenant_repo, nil, true)
+    case Extension.get_opt(resource, [:sqlite], :tenant_repo, nil, true) do
+      nil ->
+        if Ash.Resource.Info.multitenancy_strategy(resource) == :context do
+          {AshSqlite.MultiTenancy.TenantRepo, []}
+        end
+
+      tenant_repo ->
+        tenant_repo
+    end
   end
 
   @doc "The configured table for a resource"
