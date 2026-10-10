@@ -2723,7 +2723,7 @@ defmodule AshSqlite.MigrationGenerator do
     |> Map.update!(:custom_indexes, &load_custom_indexes/1)
     |> Map.put_new(:custom_statements, [])
     |> Map.update!(:custom_statements, &load_custom_statements/1)
-    |> Map.update!(:repo, &String.to_atom/1)
+    |> Map.update!(:repo, &maybe_to_atom/1)
     |> Map.put_new(:multitenancy, %{
       attribute: nil,
       strategy: nil,
@@ -2744,14 +2744,14 @@ defmodule AshSqlite.MigrationGenerator do
 
   defp load_custom_statements(statements) do
     Enum.map(statements || [], fn statement ->
-      Map.update!(statement, :name, &String.to_atom/1)
+      Map.update!(statement, :name, &maybe_to_atom/1)
     end)
   end
 
   defp load_multitenancy(multitenancy) do
     multitenancy
-    |> Map.update!(:strategy, fn strategy -> strategy && String.to_atom(strategy) end)
-    |> Map.update!(:attribute, fn attribute -> attribute && String.to_atom(attribute) end)
+    |> Map.update!(:strategy, fn strategy -> strategy && maybe_to_atom(strategy) end)
+    |> Map.update!(:attribute, fn attribute -> attribute && maybe_to_atom(attribute) end)
   end
 
   defp load_attribute(attribute, table) do
@@ -2774,9 +2774,9 @@ defmodule AshSqlite.MigrationGenerator do
 
     attribute =
       if Map.has_key?(attribute, :name) do
-        Map.put(attribute, :source, String.to_atom(attribute.name))
+        Map.put(attribute, :source, maybe_to_atom(attribute.name))
       else
-        Map.update!(attribute, :source, &String.to_atom/1)
+        Map.update!(attribute, :source, &maybe_to_atom/1)
       end
 
     attribute
@@ -2803,7 +2803,7 @@ defmodule AshSqlite.MigrationGenerator do
         )
         |> Map.delete(:ignore)
         |> rewrite(:ignore?, :ignore)
-        |> Map.update!(:destination_attribute, &String.to_atom/1)
+        |> Map.update!(:destination_attribute, &maybe_to_atom/1)
         |> Map.put_new(:deferrable, false)
         |> Map.update!(:deferrable, fn
           "initially" -> :initially
@@ -2814,8 +2814,8 @@ defmodule AshSqlite.MigrationGenerator do
         |> Map.put_new(:match_tenant?, false)
         |> Map.put_new(:on_delete, nil)
         |> Map.put_new(:on_update, nil)
-        |> Map.update!(:on_delete, &(&1 && String.to_atom(&1)))
-        |> Map.update!(:on_update, &(&1 && String.to_atom(&1)))
+        |> Map.update!(:on_delete, &(&1 && maybe_to_atom(&1)))
+        |> Map.update!(:on_update, &(&1 && maybe_to_atom(&1)))
         |> Map.put(
           :name,
           Map.get(references, :name) || "#{table}_#{attribute.source}_fkey"
@@ -2871,15 +2871,15 @@ defmodule AshSqlite.MigrationGenerator do
   end
 
   defp load_type(type) do
-    String.to_atom(type)
+    maybe_to_atom(type)
   end
 
   defp load_identity(identity, table) do
     identity
-    |> Map.update!(:name, &String.to_atom/1)
+    |> Map.update!(:name, &maybe_to_atom/1)
     |> Map.update!(:keys, fn keys ->
       keys
-      |> Enum.map(&String.to_atom/1)
+      |> Enum.map(&maybe_to_atom/1)
       |> Enum.sort()
     end)
     |> add_index_name(table)
@@ -2889,4 +2889,7 @@ defmodule AshSqlite.MigrationGenerator do
   defp add_index_name(%{name: name} = index, table) do
     Map.put_new(index, :index_name, "#{table}_#{name}_unique_index")
   end
+
+  defp maybe_to_atom(value) when is_atom(value), do: value
+  defp maybe_to_atom(value), do: String.to_atom(value)
 end
