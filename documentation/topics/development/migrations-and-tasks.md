@@ -58,45 +58,7 @@ end
 
 The rebuild runs in one transaction with foreign keys off, and changes nothing if it fails. Columns both tables have are copied as they are. When the right value for the rows depends on your data, as when a column becomes required and has no default, a `REVIEW` comment says so and shows how to give them one.
 
-The custom statements of the resource are dropped (their `down`) before the rebuild and recreated (their `up`) after it, so what they hold is lost. To keep it, add the copy to the generated migration, around the statement's `execute` lines. For a statement that creates a table:
-
-```elixir
-custom_statements do
-  statement :items_history do
-    up "CREATE TABLE items_history (item_id TEXT)"
-    down "DROP TABLE items_history"
-  end
-end
-```
-
-the generated migration drops and recreates `items_history` around the rebuild of `items`. The two lines marked `# added` keep the rows:
-
-```elixir
-def up do
-  # SQLite cannot change `items` in place, so it is rebuilt ... Changes:
-  # - modify :name, :text, null: true
-  # - REVIEW: the custom statements :items_history are dropped (their `down`) before and ...
-  execute("CREATE TABLE items_history_backup AS SELECT * FROM items_history")  # added
-
-  execute("""
-  DROP TABLE items_history
-  """)
-
-  rebuild_table :items do
-    add :id, :uuid, null: false, primary_key: true
-    add :name, :text
-  end
-
-  execute("""
-  CREATE TABLE items_history (item_id TEXT)
-  """)
-
-  execute("INSERT INTO items_history SELECT * FROM items_history_backup")  # added
-  execute("DROP TABLE items_history_backup")  # added
-end
-```
-
-A full-text index needs no backup: it is rebuilt from its table by a command after the statement's `up`.
+The custom statements of the resource are dropped (their `down`) before the rebuild and recreated (their `up`) after it, so what they hold is lost. That suits what can be dropped and recreated without losing anything, such as a trigger, a view or an index, and a full-text index, which is rebuilt from its table. Data that exists nowhere else does not belong in a custom statement. The full-text index needs a command that you add to the generated migration, after the statement's `up`:
 
 ```elixir
 statement :items_fts do
