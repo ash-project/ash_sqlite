@@ -208,6 +208,32 @@ defmodule AshSqlite.MigrationTest do
     assert sql("SELECT id FROM comments") == [["c"]]
   end
 
+  # a repo can have foreign keys off for every connection, which is all the check above looks at
+  @tag repo_config: [foreign_keys: :off, pool_size: 1]
+  test "a migration without a transaction refuses, with foreign keys off", %{ctx: ctx} do
+    blog(ctx)
+
+    write_migration(ctx, 2, "no_transaction", """
+    @disable_ddl_transaction true
+
+    def up do
+      rebuild_table :posts do
+        add :id, :text, primary_key: true
+        add :title, :text
+        add :subtitle, :text
+      end
+    end
+
+    def down, do: :ok
+    """)
+
+    assert migrate_error(ctx) =~
+             "refusing to rebuild posts: the migration is not in a transaction"
+
+    assert versions() == [1]
+    assert sql("SELECT id FROM comments") == [["c"]]
+  end
+
   test "a table that stops being AUTOINCREMENT and becomes one again has one row", %{ctx: ctx} do
     write_migration(ctx, 1, "create_things", """
     def up do

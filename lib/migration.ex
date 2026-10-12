@@ -71,17 +71,31 @@ defmodule AshSqlite.Migration do
     end
   end
 
+  @doc false
+  def __check_can_rebuild__(repo, table) do
+    check_foreign_keys_off!(repo, table)
+    check_in_transaction!(repo, table)
+  end
+
   # Ecto does not run the callbacks for a migration without a transaction
   # (`@disable_ddl_transaction true`), and dropping a table with foreign keys on deletes
-  # from the tables that reference it. So `rebuild_table/3` checks first that they are off.
-  @doc false
-  def __check_foreign_keys_off__(repo, table) do
+  # from the tables that reference it.
+  defp check_foreign_keys_off!(repo, table) do
     if pragma(repo, "foreign_keys") != 0 do
       raise "refusing to rebuild #{table}: foreign keys are on, so dropping it would run " <>
               "the ON DELETE actions of the tables that reference it. They are switched " <>
               "off by the callbacks `use AshSqlite.Migration` adds. Ecto runs them only when " <>
               "the migration runs in its own transaction (remove `@disable_ddl_transaction " <>
               "true`), and only in an `ecto_sql` that has them."
+    end
+  end
+
+  # Without one nothing keeps other connections from writing during the rebuild, and a failure
+  # leaves the table half rebuilt.
+  defp check_in_transaction!(repo, table) do
+    unless repo.in_transaction?() do
+      raise "refusing to rebuild #{table}: the migration is not in a transaction, so a rebuild " <>
+              "could lose concurrent writes or fail halfway. Remove `@disable_ddl_transaction true`."
     end
   end
 
@@ -111,7 +125,7 @@ defmodule AshSqlite.Migration do
       {copy, opts} = Keyword.pop(unquote(opts), :copy, [])
       temporary = "#{table}_rebuild"
 
-      execute(fn -> AshSqlite.Migration.__check_foreign_keys_off__(repo(), table) end)
+      execute(fn -> AshSqlite.Migration.__check_can_rebuild__(repo(), table) end)
 
       create table(temporary, [primary_key: false] ++ opts) do
         unquote(block)
