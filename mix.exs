@@ -151,10 +151,10 @@ defmodule AshSqlite.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:ecto_sql, "~> 3.13"},
+      {:ecto_sql, ecto_sql_version("~> 3.13")},
       {:ecto_sqlite3, "~> 0.12"},
       {:ecto_libsql, "~> 0.9", optional: true},
-      {:ecto, "~> 3.13"},
+      {:ecto, "~> 3.13", override: System.get_env("ECTO_SQL_VERSION") == "main"},
       {:jason, "~> 1.0"},
       {:ash, ash_version("~> 3.33 and >= 3.33.2")},
       {:ash_sql, ash_sql_version("~> 0.2 and >= 0.6.9")},
@@ -168,6 +168,21 @@ defmodule AshSqlite.MixProject do
       {:sobelow, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:mix_audit, ">= 0.0.0", only: [:dev, :test], runtime: false}
     ]
+  end
+
+  # `main` has migration callbacks that are not released yet. It asks for `ecto` from git, which
+  # the `ecto` entry above overrides to stay on Hex.
+  defp ecto_sql_version(default_version) do
+    case System.get_env("ECTO_SQL_VERSION") do
+      nil ->
+        default_version
+
+      "main" ->
+        [git: "https://github.com/elixir-ecto/ecto_sql.git", override: true]
+
+      version ->
+        "~> #{version}"
+    end
   end
 
   defp ash_version(default_version) do
