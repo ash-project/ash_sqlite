@@ -23,6 +23,10 @@ defmodule AshSqlite.Migration do
   safe: foreign keys are off while it runs (dropping a table would otherwise run the `ON DELETE`
   actions of the tables that point to it) and they are checked before it commits. A rebuild
   either completes or changes nothing.
+
+  Foreign keys can only be switched off by an `ecto_sql` that runs the `before_transaction/1`
+  and `after_transaction/1` migration callbacks. Without them, a rebuild refuses to run
+  unless the connection has foreign keys off already.
   """
 
   @pragmas_key :ash_sqlite_rebuild_pragmas
@@ -38,6 +42,12 @@ defmodule AshSqlite.Migration do
 
       def before_commit, do: AshSqlite.Migration.__check_foreign_keys__(repo())
     end
+  end
+
+  # An `ecto_sql` without the callbacks never calls the ones `use AshSqlite.Migration` adds.
+  @doc false
+  def rebuild_supported? do
+    {:before_transaction, 1} in Ecto.Migration.behaviour_info(:optional_callbacks)
   end
 
   # `PRAGMA foreign_keys` does nothing inside a transaction, so it is set before Ecto opens one,
@@ -69,9 +79,9 @@ defmodule AshSqlite.Migration do
     if pragma(repo, "foreign_keys") != 0 do
       raise "refusing to rebuild #{table}: foreign keys are on, so dropping it would run " <>
               "the ON DELETE actions of the tables that reference it. They are switched " <>
-              "off by the callbacks `use AshSqlite.Migration` adds, which Ecto only runs " <>
-              "when the migration runs in its own transaction: remove " <>
-              "`@disable_ddl_transaction true`."
+              "off by the callbacks `use AshSqlite.Migration` adds. Ecto runs them only when " <>
+              "the migration runs in its own transaction (remove `@disable_ddl_transaction " <>
+              "true`), and only in an `ecto_sql` that has them."
     end
   end
 

@@ -56,6 +56,8 @@ def up do
 end
 ```
 
+A rebuild needs an `ecto_sql` that runs the `before_transaction/1` and `after_transaction/1` migration callbacks, which is how foreign keys are switched off outside the transaction. Without them, asking for rebuilds raises, and the generator only prints its hint, without suggesting one.
+
 The rebuild runs in one transaction with foreign keys off, and changes nothing if it fails. Columns both tables have are copied as they are. When the right value for the rows depends on your data, as when a column becomes required and has no default, a `REVIEW` comment says so and shows how to give them one.
 
 The custom statements of the resource are dropped (their `down`) before the rebuild and recreated (their `up`) after it, so what they hold is lost. That suits what can be dropped and recreated without losing anything, such as a trigger, a view or an index, and a full-text index, which is rebuilt from its table. Data that exists nowhere else does not belong in a custom statement. The full-text index needs a command that you add to the generated migration, after the statement's `up`:

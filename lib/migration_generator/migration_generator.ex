@@ -1691,9 +1691,23 @@ defmodule AshSqlite.MigrationGenerator do
     |> rebuild_if_needed(snapshot, old_snapshot, opts)
   end
 
+  defp rebuild_tables?(opts, repo) do
+    rebuild_tables = rebuild_requested?(opts, repo)
+
+    if rebuild_tables and !AshSqlite.Migration.rebuild_supported?() do
+      raise "rebuilding tables needs an `ecto_sql` that runs the `before_transaction/1` and " <>
+              "`after_transaction/1` migration callbacks, and the one installed does not. " <>
+              "Turn `rebuild_tables` off in the repo's config, or pass `--no-rebuild-tables`."
+    end
+
+    rebuild_tables
+  end
+
   # `--rebuild-tables` (or `--no-rebuild-tables`) for this run, else the repo's `rebuild_tables`.
-  defp rebuild_tables?(%{rebuild_tables: nil}, repo), do: repo.config()[:rebuild_tables] == true
-  defp rebuild_tables?(%{rebuild_tables: rebuild_tables}, _repo), do: rebuild_tables
+  defp rebuild_requested?(%{rebuild_tables: nil}, repo),
+    do: repo.config()[:rebuild_tables] == true
+
+  defp rebuild_requested?(%{rebuild_tables: rebuild_tables}, _repo), do: rebuild_tables
 
   defp add_strict_change(operations, snapshot, old_snapshot, opts) do
     from = !!old_snapshot[:strict?]
@@ -1746,10 +1760,15 @@ defmodule AshSqlite.MigrationGenerator do
 
       omitted_lines = for reason <- omitted_reasons, do: "  - #{reason}  (not in the migration)"
 
+      advice =
+        if AshSqlite.Migration.rebuild_supported?(),
+          do: "To rebuild the table instead, #{rebuild_advice(opts)}\n",
+          else: ""
+
       warn("""
       SQLite cannot make these changes to `#{snapshot.table}` in place:
       #{Enum.join(fails ++ omitted_lines, "\n")}
-      To rebuild the table instead, #{rebuild_advice(opts)}
+      #{advice}\
       """)
     end
   end

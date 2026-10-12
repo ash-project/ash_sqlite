@@ -8,6 +8,7 @@ defmodule AshSqlite.MigrationTest do
   """
   use ExUnit.Case, async: false
   @moduletag :migration
+  @moduletag :rebuild
   @moduletag :tmp_dir
 
   import AshSqlite.RebuildHelper

@@ -15,7 +15,8 @@ defmodule Mix.Tasks.AshSqlite.GenerateMigrations do
   * `drop-columns` - whether or not to drop columns as attributes are removed. See below for more
   * `rebuild-tables` - rebuild a table when SQLite cannot make a change in place. Can be set for
     every run with `rebuild_tables: true` in the repo's config, and turned off for one run with
-    `--no-rebuild-tables`. See "Rebuilding tables" below
+    `--no-rebuild-tables`. It needs an `ecto_sql` with the `before_transaction/1` and
+    `after_transaction/1` migration callbacks. See "Rebuilding tables" below
   * `name` -
       names the generated migrations, prepending with the timestamp. The default is `migrate_resources_<n>`,
       where `<n>` is the count of migrations matching `*migrate_resources*` plus one.

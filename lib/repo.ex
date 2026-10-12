@@ -23,6 +23,8 @@ defmodule AshSqlite.Repo do
   - `:rebuild_tables` - Set to `true` to rebuild tables SQLite cannot change in place, as if
     `--rebuild-tables` were passed to every run (`--no-rebuild-tables` turns it off for one run).
     Prefer it to the flag: the defaults it applies are kept in the snapshots, so every run has to agree.
+    It needs an `ecto_sql` with the `before_transaction/1` and `after_transaction/1` migration
+    callbacks, and raises without them.
   """
 
   @doc "Use this to inform the data layer about what extensions are installed"

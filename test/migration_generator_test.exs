@@ -1601,6 +1601,8 @@ defmodule AshSqlite.MigrationGeneratorTest do
   end
 
   describe "rebuilding tables" do
+    @describetag :rebuild
+
     defmacrop defitem(do: body) do
       quote do
         defresource Item, "items" do
@@ -2120,6 +2122,35 @@ defmodule AshSqlite.MigrationGeneratorTest do
 
       assert hint =~ "making `items` a STRICT table"
       assert hint =~ "(not in the migration)"
+    end
+  end
+
+  describe "without the migration callbacks of ecto_sql" do
+    @describetag :no_rebuild_support
+
+    test "asking for rebuilds raises", ctx do
+      defitem do
+        attributes do
+          uuid_primary_key(:id)
+        end
+      end
+
+      defdomain([Item])
+
+      assert_raise RuntimeError, ~r/needs an `ecto_sql` that runs/, fn ->
+        generate(Domain, ctx, rebuild_tables: true)
+      end
+    end
+
+    test "the hint lists what SQLite cannot do and does not suggest a rebuild", ctx do
+      domain = name_required_then_optional(ctx)
+      generate(domain, ctx, rebuild_tables: nil, quiet: false)
+
+      assert_received {:mix_shell, :info,
+                       ["SQLite cannot make these changes to `items`" <> _ = hint]}
+
+      assert hint =~ "  - modify :name, :text, null: true  (fails when the migration runs)"
+      refute hint =~ "rebuild"
     end
   end
 end
