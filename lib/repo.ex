@@ -33,6 +33,24 @@ defmodule AshSqlite.Repo do
   @doc "Whether Ash may wrap write actions on this repo's resources in a transaction"
   @callback write_transactions?() :: boolean()
 
+  @doc """
+  The repo instance, a pid or a registered name, that `tenant`'s statements run on.
+
+  Implementing this makes the repo a tenant repo, for `strategy :context`: each
+  tenant has its own database file, and the tenant is applied by choosing the
+  instance. Every resource on a tenant repo must use `strategy :context`, so put
+  tables shared across tenants on a repo module of their own.
+
+  `context.type` is `:read` for queries and aggregates, and `:mutate` for writes and
+  for opening a transaction.
+  """
+  @callback tenant_repo(
+              tenant :: term(),
+              context :: %{resource: Ash.Resource.t(), type: :read | :mutate}
+            ) :: pid() | atom()
+
+  @optional_callbacks tenant_repo: 2
+
   @doc "The path where your migrations are stored"
   @callback migrations_path() :: String.t() | nil
   @doc "Allows overriding a given migration type for *all* fields, for example if you wanted to always use :timestamptz for :utc_datetime fields"

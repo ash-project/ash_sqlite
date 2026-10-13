@@ -29,7 +29,6 @@ defmodule AshSqlite.Test.TenantedPost do
   sqlite do
     table("tenanted_posts")
     repo(AshSqlite.TenantTestRepo)
-    tenant_repo(&AshSqlite.Test.TenantRepos.repo/2)
     migrate?(false)
   end
 end

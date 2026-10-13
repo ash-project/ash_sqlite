@@ -119,9 +119,6 @@ defmodule AshSqlite.MixProject do
           AshSqlite.Repo,
           AshSqlite.DataLayer
         ],
-        Multitenancy: [
-          AshSqlite.TenantRepo
-        ],
         Utilities: [
           AshSqlite.ManualRelationship
         ],

@@ -203,12 +203,6 @@ defmodule AshSqlite.DataLayer do
         doc:
           "The repo that will be used to fetch your data. See the `AshSqlite.Repo` documentation for more. Can also be a capture of a named function in another module that takes a resource and a type `:read | :mutate` and returns the repo. An inline `fn` is not supported, because it cannot be called while the resource is compiling."
       ],
-      tenant_repo: [
-        type:
-          {:spark_function_behaviour, AshSqlite.TenantRepo, {AshSqlite.TenantRepo.Function, 2}},
-        doc:
-          "Selects the repo instance a tenanted statement runs on. Required for `strategy :context`, where each tenant has its own database file. Either a function `(tenant, %{resource: resource, type: :read | :mutate}) -> pid | atom`, or a module implementing `AshSqlite.TenantRepo`."
-      ],
       migrate?: [
         type: :boolean,
         default: true,
@@ -553,7 +547,7 @@ defmodule AshSqlite.DataLayer do
   @doc """
   A no-op on the query. Each tenant has its own database file, so the tenant is
   applied by choosing the connection rather than by changing the query. The
-  resource's `tenant_repo` chooses it, once per statement.
+  repo's `c:AshSqlite.Repo.tenant_repo/2` chooses it, once per statement.
   """
   def set_tenant(_resource, query, _tenant) do
     {:ok, query}
@@ -2206,8 +2200,13 @@ defmodule AshSqlite.DataLayer do
 
   @impl true
   def in_transaction?(resource) do
-    repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
+    resource
+    |> AshSqlite.DataLayer.Info.repo(:mutate)
+    |> repo_in_transaction?()
+  end
 
+  # A tenant repo's default instance is usually never started, so it can't be asked.
+  defp repo_in_transaction?(repo) do
     case repo.get_dynamic_repo() do
       pid when is_pid(pid) -> repo.in_transaction?()
       name when is_atom(name) -> !is_nil(GenServer.whereis(name)) and repo.in_transaction?()
@@ -2229,16 +2228,13 @@ defmodule AshSqlite.DataLayer do
 
     if is_nil(tenant) and tenant_required?(resource) do
       raise ArgumentError, """
-      #{inspect(resource)} has a tenant_repo and `strategy :context`, but the \
-      transaction about to be opened for this action carried no tenant.
+      #{inspect(resource)} has `strategy :context`, but the transaction about to be \
+      opened for it carried no tenant.
 
-      A transaction is opened on one connection, and for a database-per-tenant \
-      layout that means one tenant's database. Ash forwards only the changeset's \
-      data layer context to this callback, so the tenant has to travel in it:
+      A transaction is opened on one connection, which here means one tenant's \
+      database. Pass the tenant:
 
-          Ash.Changeset.set_context(changeset, %{data_layer: %{tenant: tenant}})
-
-      A global change on the resource is the usual place to do that.
+          Ash.transaction(#{inspect(resource)}, fun, tenant: tenant)
       """
     end
 
@@ -2285,69 +2281,74 @@ defmodule AshSqlite.DataLayer do
   # Every callback that issues SQL goes through here, because a caller cannot bind
   # around a path it never sees -- aggregates and atomic writes give it nothing to
   # wrap. `type` is passed on so a tenant repo can route reads and writes differently.
-  defp with_tenant_repo(resource, nil, _type, fun), do: unbound(resource, fun)
-
+  #
+  # Ecto binds an instance per repo module, so a tenant repo serves only
+  # `strategy :context` resources. That makes anything else on the module during a
+  # tenant's transaction tenant work too. `VerifyTenantRepo` enforces this at compile
+  # time; the raises below are for a function `repo` that resolves differently at
+  # runtime.
   defp with_tenant_repo(resource, tenant, type, fun) do
-    case AshSqlite.DataLayer.Info.tenant_repo(resource) do
-      # No tenant repo and a tenant means multitenancy this data layer does not
-      # resolve to a connection, such as `strategy :attribute`. `VerifyTenantRepo`
-      # covers `strategy :context` at compile time.
-      nil ->
+    repo = AshSqlite.DataLayer.Info.repo(resource, type)
+
+    case {tenant_required?(resource), tenant_repo?(repo)} do
+      {false, false} ->
         fun.()
 
-      {module, opts} ->
-        repo = AshSqlite.DataLayer.Info.repo(resource, :mutate)
+      {true, true} ->
+        bind_tenant_repo(resource, repo, tenant, type, fun)
 
-        # Captured before the bind: if a transaction is already open it is open on
-        # *this* connection, so a statement that binds elsewhere leaves it.
-        enclosing = if in_transaction?(resource), do: repo.get_dynamic_repo()
+      {true, false} ->
+        raise ArgumentError, """
+        #{inspect(resource)} has `strategy :context`, but its repo #{inspect(repo)} \
+        does not implement `c:AshSqlite.Repo.tenant_repo/2`.
+        """
 
-        context = %{resource: resource, type: type}
-
-        bind_tenant_repo(module, tenant, context, opts, fn ->
-          if enclosing && repo.get_dynamic_repo() != enclosing do
-            raise ArgumentError, """
-            #{inspect(resource)} tried to run a statement for tenant \
-            #{inspect(tenant)} inside a transaction open on another tenant's \
-            database. SQLite cannot commit across files atomically in WAL mode, so \
-            this statement would commit on its own and survive a rollback.
-
-            Open one transaction per tenant instead.
-            """
-          end
-
-          fun.()
-        end)
-    end
-  end
-
-  defp bind_tenant_repo(module, tenant, context, opts, fun) do
-    if Code.ensure_loaded?(module) and function_exported?(module, :with_repo, 4) do
-      module.with_repo(tenant, context, opts, fun)
-    else
-      repo = AshSqlite.DataLayer.Info.repo(context.resource, context.type)
-      previous = repo.put_dynamic_repo(module.repo(tenant, context, opts))
-
-      try do
-        fun.()
-      after
-        repo.put_dynamic_repo(previous)
-      end
+      {false, true} ->
+        raise ArgumentError, """
+        #{inspect(resource)} does not have `strategy :context`, but its repo \
+        #{inspect(repo)} is a tenant repo. Put it on a repo module of its own.
+        """
     end
   end
 
   # Without a tenant there is nothing to select a database, so this fails rather
   # than run against whichever connection the process happens to hold. Ash already
   # enforces this for actions; this catches the paths that bypass one.
-  defp unbound(resource, fun) do
-    if tenant_required?(resource) do
+  defp bind_tenant_repo(resource, _repo, nil, _type, _fun) do
+    raise ArgumentError, """
+    #{inspect(resource)} has `strategy :context` but this statement carried no \
+    tenant, so there is no database file to select. Pass a tenant.
+    """
+  end
+
+  defp bind_tenant_repo(resource, repo, tenant, type, fun) do
+    instance = repo.tenant_repo(tenant, %{resource: resource, type: type})
+
+    # An open transaction is open on the bound instance, so a statement for another
+    # one would leave it.
+    if repo_in_transaction?(repo) and repo.get_dynamic_repo() != instance do
       raise ArgumentError, """
-      #{inspect(resource)} has `strategy :context` but this statement carried no \
-      tenant, so there is no database file to select. Pass a tenant.
+      #{inspect(resource)} tried to run a statement for tenant #{inspect(tenant)} \
+      inside a transaction open on another tenant's database. SQLite cannot commit \
+      across files atomically in WAL mode, so this statement would commit on its \
+      own and survive a rollback.
+
+      Open one transaction per tenant instead.
       """
     end
 
-    fun.()
+    previous = repo.put_dynamic_repo(instance)
+
+    try do
+      fun.()
+    after
+      repo.put_dynamic_repo(previous)
+    end
+  end
+
+  @doc false
+  def tenant_repo?(repo) do
+    Code.ensure_loaded?(repo) and function_exported?(repo, :tenant_repo, 2)
   end
 
   defp tenant_required?(resource) do
