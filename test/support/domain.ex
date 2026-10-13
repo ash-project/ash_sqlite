@@ -22,6 +22,7 @@ defmodule AshSqlite.Test.Domain do
     resource(AshSqlite.Test.NamedFnRepoAccount)
     resource(AshSqlite.Test.TenantedPost)
     resource(AshSqlite.Test.BracketedTenantPost)
+    resource(AshSqlite.Test.ManagedPost)
     resource(AshSqlite.Test.Organization)
     resource(AshSqlite.Test.Manager)
     resource(AshSqlite.Test.Device)
