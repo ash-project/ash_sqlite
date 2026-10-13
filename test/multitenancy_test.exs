@@ -10,7 +10,7 @@ defmodule AshSqlite.MultitenancyTest do
 
   import ExUnit.CaptureIO
 
-  alias AshSqlite.Test.{BracketedTenantPost, BracketingTenantRepo, TenantedPost, TenantRepos}
+  alias AshSqlite.Test.{TenantedPost, TenantRepos}
 
   require Ash.Query
 
@@ -68,14 +68,7 @@ defmodule AshSqlite.MultitenancyTest do
     assert Ash.DataLayer.data_layer_can?(TenantedPost, :multitenancy)
   end
 
-  test "a function given as the tenant repo is wrapped in a module" do
-    assert {AshSqlite.TenantRepo.Function, [fun: fun]} =
-             AshSqlite.DataLayer.Info.tenant_repo(TenantedPost)
-
-    assert fun == (&TenantRepos.repo/2)
-  end
-
-  test "the tenant repo function is what actually runs" do
+  test "the repo's tenant_repo/2 is what actually runs" do
     TenantRepos.reset_calls()
     create!("acme", "one")
 
@@ -146,22 +139,6 @@ defmodule AshSqlite.MultitenancyTest do
     assert Enum.all?(TenantRepos.calls(), &match?({"acme", :mutate}, &1))
   end
 
-  test "a tenant repo module with with_repo/4 brackets each statement itself", %{repos: repos} do
-    BracketingTenantRepo.reset_events()
-
-    BracketedTenantPost
-    |> Ash.Changeset.for_create(:create, %{title: "bracketed"}, tenant: "acme")
-    |> Ash.create!()
-
-    events = BracketingTenantRepo.events()
-
-    assert events != []
-    assert List.first(events) == :entered
-    assert List.last(events) == :left
-    assert Enum.count(events, &(&1 == :entered)) == Enum.count(events, &(&1 == :left))
-    assert titles_in_file(repos["acme"].path) == ["bracketed"]
-  end
-
   test "Ash refuses a tenantless query before it reaches the data layer" do
     assert_raise Ash.Error.Invalid, ~r/require a tenant to be specified/, fn ->
       Ash.read!(TenantedPost)
@@ -220,7 +197,6 @@ defmodule AshSqlite.MultitenancyTest do
               sqlite do
                 table("refused_global_posts")
                 repo(AshSqlite.TenantTestRepo)
-                tenant_repo(&AshSqlite.Test.TenantRepos.repo/2)
                 migrate?(false)
               end
             end
@@ -261,7 +237,7 @@ defmodule AshSqlite.MultitenancyTest do
 
             sqlite do
               table("no_tenant_repo_posts")
-              repo(AshSqlite.TenantTestRepo)
+              repo(AshSqlite.TestRepo)
               migrate?(false)
             end
           end
@@ -271,6 +247,83 @@ defmodule AshSqlite.MultitenancyTest do
         end
       end)
 
-    assert message =~ "`strategy :context` needs a `tenant_repo`"
+    assert message =~ "`strategy :context` needs a tenant repo"
+    assert message =~ "AshSqlite.TestRepo does not implement"
+  end
+
+  describe "a resource without strategy :context on a tenant repo" do
+    test "is refused at compile time" do
+      message =
+        capture_io(:stderr, fn ->
+          try do
+            Code.eval_string("""
+            defmodule SharedOnTenantRepoPost do
+              use Ash.Resource,
+                domain: nil,
+                validate_domain_inclusion?: false,
+                data_layer: AshSqlite.DataLayer
+
+              actions do
+                defaults([:read])
+              end
+
+              attributes do
+                uuid_primary_key(:id)
+              end
+
+              sqlite do
+                table("shared_posts")
+                repo(AshSqlite.TenantTestRepo)
+                migrate?(false)
+              end
+            end
+            """)
+          rescue
+            _ -> :raised
+          end
+        end)
+
+      assert message =~ "AshSqlite.TenantTestRepo is a tenant repo"
+      assert message =~ "repo MyApp.SharedRepo"
+    end
+
+    test "is refused at compile time when the repo is a function" do
+      message =
+        capture_io(:stderr, fn ->
+          try do
+            Code.eval_string("""
+            defmodule SharedOnTenantRepoRouting do
+              def repo(_resource, :read), do: AshSqlite.TestRepo
+              def repo(_resource, :mutate), do: AshSqlite.TenantTestRepo
+            end
+
+            defmodule SharedOnRoutedTenantRepoPost do
+              use Ash.Resource,
+                domain: nil,
+                validate_domain_inclusion?: false,
+                data_layer: AshSqlite.DataLayer
+
+              actions do
+                defaults([:read])
+              end
+
+              attributes do
+                uuid_primary_key(:id)
+              end
+
+              sqlite do
+                table("shared_posts")
+                repo(&SharedOnTenantRepoRouting.repo/2)
+                migrate?(false)
+              end
+            end
+            """)
+          rescue
+            _ -> :raised
+          end
+        end)
+
+      assert message =~ "AshSqlite.TenantTestRepo is a tenant repo"
+    end
   end
 end

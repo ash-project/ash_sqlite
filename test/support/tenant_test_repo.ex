@@ -4,7 +4,7 @@
 
 defmodule AshSqlite.TenantTestRepo do
   @moduledoc """
-  A repo used as a template, started per tenant as an anonymous instance rather than under its own name.
+  A tenant repo, started per tenant as an anonymous instance rather than under its own name.
   """
   use AshSqlite.Repo, otp_app: :ash_sqlite
 
@@ -15,4 +15,6 @@ defmodule AshSqlite.TenantTestRepo do
   # Transactions are a repo decision rather than a resource one, so the tenanted
   # tests get them by asking here.
   def write_transactions?, do: true
+
+  def tenant_repo(tenant, context), do: AshSqlite.Test.TenantRepos.repo(tenant, context)
 end
