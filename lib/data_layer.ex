@@ -2372,6 +2372,11 @@ defmodule AshSqlite.DataLayer do
             sqlite do
               repo MyApp.SharedRepo
             end
+
+        Its writes then commit in their own transaction, not the tenant's, so a \
+        later rollback of the tenant's transaction does not undo them. To write \
+        it only once the tenant's data has committed, write it from an \
+        `Ash.Changeset.after_transaction/3` hook on the outermost action.
         """
     end
   end

@@ -273,6 +273,7 @@ defmodule AshSqlite.MultitenancyTest do
       assert message =~ ~s("acme")
       assert message =~ "AshSqlite.TenantTestRepo"
       assert message =~ "repo MyApp.SharedRepo"
+      assert message =~ "Ash.Changeset.after_transaction/3"
     end
 
     test "lands in the shared file outside any transaction", %{
@@ -299,6 +300,26 @@ defmodule AshSqlite.MultitenancyTest do
 
       assert ["untenanted post"] = Post |> Ash.read!() |> Enum.map(& &1.title)
       assert titles("acme") == ["tenant post"]
+    end
+
+    test "on a different repo module commits on its own, and survives the tenant's rollback", %{
+      repos: repos
+    } do
+      :ok = Ecto.Adapters.SQL.Sandbox.checkout(AshSqlite.TestRepo)
+
+      assert {:error, :rolled_back} =
+               in_acme_transaction(fn ->
+                 create!("acme", "tenant post")
+
+                 Post
+                 |> Ash.Changeset.for_create(:create, %{title: "untenanted post"})
+                 |> Ash.create!()
+
+                 AshSqlite.DataLayer.rollback(TenantedPost, :rolled_back)
+               end)
+
+      assert ["untenanted post"] = Post |> Ash.read!() |> Enum.map(& &1.title)
+      assert titles_in_file(repos["acme"].path) == []
     end
 
     test "follows a binding the caller made with put_dynamic_repo", %{
