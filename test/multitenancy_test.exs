@@ -10,7 +10,14 @@ defmodule AshSqlite.MultitenancyTest do
 
   import ExUnit.CaptureIO
 
-  alias AshSqlite.Test.{BracketedTenantPost, BracketingTenantRepo, TenantedPost, TenantRepos}
+  alias AshSqlite.Test.{
+    BracketedTenantPost,
+    BracketingTenantRepo,
+    Post,
+    SharedNote,
+    TenantedPost,
+    TenantRepos
+  }
 
   require Ash.Query
 
@@ -189,6 +196,126 @@ defmodule AshSqlite.MultitenancyTest do
         nil,
         %{type: :custom, metadata: %{}, tenant: "acme"}
       )
+    end
+  end
+
+  describe "a resource without a tenant repo on the same repo module" do
+    setup %{repos: repos} do
+      dir = Path.dirname(repos["acme"].path)
+      shared_path = Path.join(dir, "shared.db")
+
+      start_supervised!({AshSqlite.TenantTestRepo, database: shared_path, pool_size: 1})
+
+      for repo <- [AshSqlite.TenantTestRepo, repos["acme"].pid, repos["globex"].pid] do
+        Ecto.Adapters.SQL.query!(
+          repo,
+          "CREATE TABLE shared_notes (id TEXT PRIMARY KEY, body TEXT)",
+          []
+        )
+      end
+
+      %{shared_path: shared_path}
+    end
+
+    defp bodies_in_file(path) do
+      {:ok, db} = Exqlite.Sqlite3.open(path)
+      {:ok, stmt} = Exqlite.Sqlite3.prepare(db, "SELECT body FROM shared_notes ORDER BY body")
+      {:ok, rows} = Exqlite.Sqlite3.fetch_all(db, stmt)
+      :ok = Exqlite.Sqlite3.close(db)
+      List.flatten(rows)
+    end
+
+    defp create_note!(body) do
+      SharedNote
+      |> Ash.Changeset.for_create(:create, %{body: body})
+      |> Ash.create!()
+    end
+
+    defp in_acme_transaction(fun) do
+      AshSqlite.DataLayer.transaction(
+        TenantedPost,
+        fun,
+        nil,
+        %{type: :custom, metadata: %{}, tenant: "acme"}
+      )
+    end
+
+    test "is refused when written from a tenanted action's hook", %{
+      repos: repos,
+      shared_path: shared_path
+    } do
+      assert_raise Ash.Error.Unknown, ~r/AshSqlite.Test.SharedNote.*"acme"/s, fn ->
+        TenantedPost
+        |> Ash.Changeset.for_create(:create, %{title: "with a note"}, tenant: "acme")
+        |> Ash.Changeset.after_action(fn _changeset, post ->
+          create_note!("from the hook")
+          {:ok, post}
+        end)
+        |> Ash.create!()
+      end
+
+      assert bodies_in_file(repos["acme"].path) == []
+      assert bodies_in_file(shared_path) == []
+      assert titles_in_file(repos["acme"].path) == []
+    end
+
+    test "is refused when read inside a tenant's transaction", %{shared_path: shared_path} do
+      create_note!("shared one")
+      assert bodies_in_file(shared_path) == ["shared one"]
+
+      error =
+        assert_raise Ash.Error.Unknown, fn ->
+          in_acme_transaction(fn -> Ash.read!(SharedNote) end)
+        end
+
+      message = Exception.message(error)
+      assert message =~ "AshSqlite.Test.SharedNote"
+      assert message =~ ~s("acme")
+      assert message =~ "AshSqlite.TenantTestRepo"
+      assert message =~ "repo MyApp.SharedRepo"
+    end
+
+    test "lands in the shared file outside any transaction", %{
+      repos: repos,
+      shared_path: shared_path
+    } do
+      create_note!("shared one")
+
+      assert bodies_in_file(shared_path) == ["shared one"]
+      assert bodies_in_file(repos["acme"].path) == []
+      assert ["shared one"] = SharedNote |> Ash.read!() |> Enum.map(& &1.body)
+    end
+
+    test "on a different repo module is unaffected inside a tenant's transaction" do
+      :ok = Ecto.Adapters.SQL.Sandbox.checkout(AshSqlite.TestRepo)
+
+      in_acme_transaction(fn ->
+        create!("acme", "tenant post")
+
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "untenanted post"})
+        |> Ash.create!()
+      end)
+
+      assert ["untenanted post"] = Post |> Ash.read!() |> Enum.map(& &1.title)
+      assert titles("acme") == ["tenant post"]
+    end
+
+    test "follows a binding the caller made with put_dynamic_repo", %{
+      repos: repos,
+      shared_path: shared_path
+    } do
+      previous = AshSqlite.TenantTestRepo.put_dynamic_repo(repos["acme"].pid)
+
+      try do
+        create_note!("explicitly bound")
+        assert ["explicitly bound"] = SharedNote |> Ash.read!() |> Enum.map(& &1.body)
+      after
+        AshSqlite.TenantTestRepo.put_dynamic_repo(previous)
+      end
+
+      assert bodies_in_file(repos["acme"].path) == ["explicitly bound"]
+      assert bodies_in_file(shared_path) == []
     end
   end
 

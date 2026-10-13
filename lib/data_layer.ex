@@ -2285,7 +2285,7 @@ defmodule AshSqlite.DataLayer do
   # Every callback that issues SQL goes through here, because a caller cannot bind
   # around a path it never sees -- aggregates and atomic writes give it nothing to
   # wrap. `type` is passed on so a tenant repo can route reads and writes differently.
-  defp with_tenant_repo(resource, nil, _type, fun), do: unbound(resource, fun)
+  defp with_tenant_repo(resource, nil, type, fun), do: unbound(resource, type, fun)
 
   defp with_tenant_repo(resource, tenant, type, fun) do
     case AshSqlite.DataLayer.Info.tenant_repo(resource) do
@@ -2293,6 +2293,7 @@ defmodule AshSqlite.DataLayer do
       # resolve to a connection, such as `strategy :attribute`. `VerifyTenantRepo`
       # covers `strategy :context` at compile time.
       nil ->
+        refuse_tenant_binding!(resource, type)
         fun.()
 
       {module, opts} ->
@@ -2322,24 +2323,63 @@ defmodule AshSqlite.DataLayer do
   end
 
   defp bind_tenant_repo(module, tenant, context, opts, fun) do
-    if Code.ensure_loaded?(module) and function_exported?(module, :with_repo, 4) do
-      module.with_repo(tenant, context, opts, fun)
-    else
-      repo = AshSqlite.DataLayer.Info.repo(context.resource, context.type)
-      previous = repo.put_dynamic_repo(module.repo(tenant, context, opts))
+    repo = AshSqlite.DataLayer.Info.repo(context.resource, context.type)
+    previous_binding = Process.put({__MODULE__, :tenant_binding, repo}, tenant)
 
-      try do
-        fun.()
-      after
-        repo.put_dynamic_repo(previous)
+    try do
+      if Code.ensure_loaded?(module) and function_exported?(module, :with_repo, 4) do
+        module.with_repo(tenant, context, opts, fun)
+      else
+        previous = repo.put_dynamic_repo(module.repo(tenant, context, opts))
+
+        try do
+          fun.()
+        after
+          repo.put_dynamic_repo(previous)
+        end
       end
+    after
+      restore_tenant_binding(repo, previous_binding)
+    end
+  end
+
+  defp restore_tenant_binding(repo, nil), do: Process.delete({__MODULE__, :tenant_binding, repo})
+
+  defp restore_tenant_binding(repo, tenant),
+    do: Process.put({__MODULE__, :tenant_binding, repo}, tenant)
+
+  # Ecto keeps one dynamic repo per repo module, not per resource, so a resource with
+  # no tenant repo that shares the module would run on the bound tenant's database.
+  # Falling back to the default instance would commit outside the tenant's
+  # transaction, so this refuses instead. Only this data layer's own binding is
+  # recorded, which leaves a caller's `put_dynamic_repo/1` alone.
+  defp refuse_tenant_binding!(resource, type) do
+    repo = AshSqlite.DataLayer.Info.repo(resource, type)
+
+    case Process.get({__MODULE__, :tenant_binding, repo}) do
+      nil ->
+        :ok
+
+      tenant ->
+        raise ArgumentError, """
+        #{inspect(resource)} has no tenant_repo, but its repo #{inspect(repo)} is \
+        bound to tenant #{inspect(tenant)}'s database by another resource's \
+        tenant_repo. Ecto binds a repo module per process, not per resource, so \
+        this statement would run on that tenant's database.
+
+        A resource shared across tenants needs its own repo module:
+
+            sqlite do
+              repo MyApp.SharedRepo
+            end
+        """
     end
   end
 
   # Without a tenant there is nothing to select a database, so this fails rather
   # than run against whichever connection the process happens to hold. Ash already
   # enforces this for actions; this catches the paths that bypass one.
-  defp unbound(resource, fun) do
+  defp unbound(resource, type, fun) do
     if tenant_required?(resource) do
       raise ArgumentError, """
       #{inspect(resource)} has `strategy :context` but this statement carried no \
@@ -2347,6 +2387,7 @@ defmodule AshSqlite.DataLayer do
       """
     end
 
+    refuse_tenant_binding!(resource, type)
     fun.()
   end
 
