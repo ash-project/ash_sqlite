@@ -861,7 +861,6 @@ defmodule AshSqlite.MigrationGenerator.Operation do
 
     def requires_rebuild?(%Operation.AlterAttribute{}), do: true
     def requires_rebuild?(%Operation.DropForeignKey{}), do: true
-    def requires_rebuild?(%Operation.AlterDeferrability{}), do: true
     def requires_rebuild?(%Operation.RemovePrimaryKey{}), do: true
     def requires_rebuild?(%Operation.Omitted{}), do: true
     def requires_rebuild?(%Operation.AlterStrict{}), do: true
@@ -1191,14 +1190,6 @@ defmodule AshSqlite.MigrationGenerator.Operation do
       do: "dropping the foreign key #{reference.name}"
 
     defp reason(%Operation.RemovePrimaryKey{}), do: "changing the primary key"
-
-    defp reason(%Operation.AlterDeferrability{references: %{name: name, deferrable: deferrable}})
-         when deferrable not in [false, nil],
-         do:
-           "NOT APPLIED: the foreign key #{name} is deferrable " <>
-             "(SQLite migrations cannot create DEFERRABLE constraints)"
-
-    defp reason(%Operation.AlterDeferrability{}), do: nil
 
     defp quote_name(name), do: ~s("#{name}")
 

@@ -487,53 +487,6 @@ defmodule AshSqlite.TableRebuildTest do
     end
   end
 
-  describe "deferrable foreign keys" do
-    test "a deferrable reference next to a rebuild says it is not applied", %{ctx: ctx} do
-      defres Parent, "parents" do
-        attributes do
-          uuid_primary_key(:id)
-        end
-      end
-
-      defres Child, "children" do
-        attributes do
-          uuid_primary_key(:id)
-        end
-
-        relationships do
-          belongs_to(:parent, Parent)
-        end
-      end
-
-      defdomain([Parent, Child])
-      generate(Domain, ctx)
-      migrate(ctx)
-
-      defres Child, "children" do
-        attributes do
-          uuid_primary_key(:id)
-          attribute(:note, :string, allow_nil?: false)
-        end
-
-        relationships do
-          belongs_to(:parent, Parent)
-        end
-
-        sqlite do
-          references do
-            reference(:parent, deferrable: :initially)
-          end
-        end
-      end
-
-      generate(Domain, ctx)
-      migration = last_migration(ctx)
-      assert migration =~ "NOT APPLIED: the foreign key children_parent_id_fkey is deferrable"
-      migrate(ctx)
-      assert fk_violations() == []
-    end
-  end
-
   # Two versions of the resource on "items": `name` required, then optional.
   defmacrop items_v1 do
     quote do
