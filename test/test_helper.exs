@@ -5,6 +5,13 @@
 ExUnit.start()
 ExUnit.configure(stacktrace_depth: 100)
 
+# A rebuild needs the migration callbacks of an `ecto_sql` that has them
+if AshSqlite.Migration.rebuild_supported?() do
+  ExUnit.configure(exclude: [:no_rebuild_support])
+else
+  ExUnit.configure(exclude: [:rebuild])
+end
+
 AshSqlite.TestRepo.start_link()
 AshSqlite.TransactionTestRepo.start_link()
 AshSqlite.DevTestRepo.start_link()

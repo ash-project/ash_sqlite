@@ -20,6 +20,11 @@ defmodule AshSqlite.Repo do
 
   - `:tenant_migrations_path` - The path where your tenant migrations are stored (only relevant for a multitenant implementation)
   - `:snapshots_path` - The path where the resource snapshots for the migration generator are stored.
+  - `:rebuild_tables` - Set to `true` to rebuild tables SQLite cannot change in place, as if
+    `--rebuild-tables` were passed to every run (`--no-rebuild-tables` turns it off for one run).
+    Prefer it to the flag: the defaults it applies are kept in the snapshots, so every run has to agree.
+    It needs an `ecto_sql` with the `before_transaction/1` and `after_transaction/1` migration
+    callbacks, and raises without them.
   """
 
   @doc "Use this to inform the data layer about what extensions are installed"

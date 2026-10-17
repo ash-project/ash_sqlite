@@ -37,6 +37,63 @@ For single-step changes or when you know the final feature name:
 
 For more information on generating migrations, run `mix help ash_sqlite.generate_migrations` (the underlying task that is called by `mix ash.codegen`)
 
+### Changes SQLite cannot make in place
+
+SQLite can mostly add, rename and drop a column in place. Changing a column's type or default, adding or dropping a foreign key, changing a primary key, making a table `STRICT` and, as the adapters write it, making a column required or optional all need the table to be created again in its new shape, with the rows copied over.
+
+By default the generator writes a statement that fails when the migration runs, or leaves the change out (a renamed attribute that also changes, a table that becomes `STRICT`). With `--rebuild-tables`, or `rebuild_tables: true` in the repo's config, it writes a `rebuild_table` instead, which shows the table's new shape and what triggered it:
+
+```elixir
+def up do
+  # SQLite cannot change `comments` in place, so it is rebuilt from the resource's
+  # snapshot. Anything on the table that the resource does not describe (a column,
+  # index or trigger added by hand) is not kept. Changes:
+  # - dropping the foreign key comments_post_id_fkey
+  rebuild_table :comments do
+    add :id, :uuid, null: false, primary_key: true
+    add :post_id, :uuid
+  end
+end
+```
+
+A rebuild needs an `ecto_sql` that runs the `before_transaction/1` and `after_transaction/1` migration callbacks, which is how foreign keys are switched off outside the transaction. Without them, asking for rebuilds raises, and the generator only prints its hint, without suggesting one.
+
+The rebuild runs in one transaction with foreign keys off, and changes nothing if it fails. Columns both tables have are copied as they are. When the right value for the rows depends on your data, as when a column becomes required and has no default, a `REVIEW` comment says so and shows how to give them one.
+
+The custom statements of the resource are dropped (their `down`) before the rebuild and recreated (their `up`) after it, so what they hold is lost. That suits what can be dropped and recreated without losing anything, such as a trigger, a view or an index, and a full-text index, which is rebuilt from its table. Data that exists nowhere else does not belong in a custom statement. The full-text index needs a command that you add to the generated migration, after the statement's `up`:
+
+```elixir
+statement :items_fts do
+  up "CREATE VIRTUAL TABLE items_fts USING fts5(name, content='items', content_rowid='rowid')"
+  down "DROP TABLE items_fts"
+end
+```
+
+```elixir
+def up do
+  # SQLite cannot change `items` in place, so it is rebuilt ... Changes:
+  # ...
+  execute("""
+  DROP TABLE items_fts
+  """)
+
+  rebuild_table :items do
+    add :id, :uuid, null: false, primary_key: true
+    add :name, :text
+  end
+
+  execute("""
+  CREATE VIRTUAL TABLE items_fts USING fts5(name, content='items', content_rowid='rowid')
+  """)
+
+  execute("INSERT INTO items_fts(items_fts) VALUES('rebuild')")  # added
+end
+```
+
+The `default:` of an attribute (a number, string, boolean, atom, decimal, date or time) is then also the default of its column. SQLite cannot change a default in place either, so the first run rebuilds the tables whose attributes have one: `--dry-run` shows which.
+
+Snapshots keep the defaults, so a run without the option after one with it sees them as removed. If you use rebuilds, set `rebuild_tables: true` in the repo's config instead of passing the flag, so that every run agrees, `mix ash.codegen --check` in CI included.
+
 ### Regenerating Migrations
 
 Often, you will run into a situation where you want to make a slight change to a resource after you've already generated and run migrations. If you are using git and would like to undo those changes, then regenerate the migrations, this script may prove useful:
