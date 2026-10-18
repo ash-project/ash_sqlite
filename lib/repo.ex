@@ -65,10 +65,15 @@ defmodule AshSqlite.Repo do
         adapter: adapter,
         otp_app: otp_app
 
+      defoverridable child_spec: 1
+
       @behaviour AshSqlite.Repo
       @before_compile AshSqlite.Repo.BeforeCompile
 
       defoverridable insert: 2, insert: 1, insert!: 2, insert!: 1
+
+      def child_spec(opts),
+        do: AshSqlite.MultiTenancy.Supervisor.child_spec(__MODULE__, opts, super(opts))
 
       def installed_extensions, do: []
       def migrations_path, do: nil

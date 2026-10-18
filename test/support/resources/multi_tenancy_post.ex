@@ -1,0 +1,30 @@
+# SPDX-FileCopyrightText: 2023 ash_sqlite contributors <https://github.com/ash-project/ash_sqlite/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
+defmodule AshSqlite.Test.MultiTenancyPost do
+  @moduledoc """
+  A `strategy :context` resource on a repo whose tenants `AshSqlite.MultiTenancy` opens.
+  """
+  use Ash.Resource, domain: AshSqlite.Test.Domain, data_layer: AshSqlite.DataLayer
+
+  actions do
+    default_accept(:*)
+    defaults([:create, :read])
+  end
+
+  multitenancy do
+    strategy(:context)
+  end
+
+  attributes do
+    uuid_primary_key(:id)
+    attribute(:title, :string, public?: true)
+  end
+
+  sqlite do
+    table("posts")
+    repo(AshSqlite.Test.MultiTenancyRepo)
+    migrate?(false)
+  end
+end
