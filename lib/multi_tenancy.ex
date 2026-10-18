@@ -6,9 +6,25 @@ defmodule AshSqlite.MultiTenancy do
   @moduledoc """
   A `c:AshSqlite.Repo.tenant_repo/2` implementation that gives each tenant its own database file.
 
-  Configure the repo with `config :my_app, MyApp.Repo, tenants: [dir: "...", migrations_path: "...", max_children: ..., open_timeout: ...]`
-  and implement the callback with `def tenant_repo(tenant, context), do: AshSqlite.MultiTenancy.tenant_repo(__MODULE__, tenant, context)`.
-  A tenant's file is opened and migrated on first use, and `init/2` sees the tenant as `config[:tenant]`.
+  A tenant's file is opened and migrated on first use, and the repo's `init/2` sees the tenant as `config[:tenant]`.
+  Only `dir` is required. `max_children` defaults to `:infinity` and `open_timeout`, in milliseconds, to 15000.
+
+  ```elixir
+  config :my_app, MyApp.Repo,
+    tenants: [
+      dir: "priv/tenants",
+      migrations_path: "priv/repo/tenant_migrations",
+      max_children: 1_000,
+      open_timeout: 15_000
+    ]
+
+  defmodule MyApp.Repo do
+    use AshSqlite.Repo, otp_app: :my_app
+
+    def tenant_repo(tenant, context),
+      do: AshSqlite.MultiTenancy.tenant_repo(__MODULE__, tenant, context)
+  end
+  ```
   """
 
   alias AshSqlite.MultiTenancy.{Supervisor, Tenant}

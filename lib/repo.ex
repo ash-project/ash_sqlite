@@ -20,6 +20,10 @@ defmodule AshSqlite.Repo do
 
   - `:tenant_migrations_path` - The path where your tenant migrations are stored (only relevant for a multitenant implementation)
   - `:snapshots_path` - The path where the resource snapshots for the migration generator are stored.
+
+  In the repo's application config, as it is read before `init/2` runs:
+
+  - `:tenants` - Opens one database file per tenant. See `AshSqlite.MultiTenancy` for its options.
   """
 
   @doc "Use this to inform the data layer about what extensions are installed"
@@ -40,6 +44,9 @@ defmodule AshSqlite.Repo do
   tenant has its own database file, and the tenant is applied by choosing the
   instance. Every resource on a tenant repo must use `strategy :context`, so put
   tables shared across tenants on a repo module of their own.
+
+  `AshSqlite.MultiTenancy.tenant_repo/3` is a default implementation that opens
+  one database file per tenant.
 
   `context.type` is `:read` for queries and aggregates, and `:mutate` for writes and
   for opening a transaction.
