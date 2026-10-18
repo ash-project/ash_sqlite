@@ -6,9 +6,7 @@ defmodule AshSqlite.MultiTenancy.Supervisor do
   @moduledoc false
   use Supervisor
 
-  def child_spec(repo, opts, ecto_child_spec) do
-    config = Keyword.merge(repo.config(), opts)
-
+  def child_spec(repo, config, ecto_child_spec) do
     case Keyword.fetch(config, :tenants) do
       :error ->
         ecto_child_spec
@@ -49,7 +47,11 @@ defmodule AshSqlite.MultiTenancy.Supervisor do
         {Registry,
          keys: :unique,
          name: registry(repo),
-         meta: [migrations: migrations, dir: Keyword.fetch!(tenants, :dir)]},
+         meta: [
+           migrations: migrations,
+           dir: Keyword.fetch!(tenants, :dir),
+           open_timeout: Keyword.get(tenants, :open_timeout, 15_000)
+         ]},
         {DynamicSupervisor,
          name: tenants(repo), max_children: Keyword.get(tenants, :max_children, :infinity)}
       ] ++ base_repo
@@ -75,12 +77,25 @@ defmodule AshSqlite.MultiTenancy.Supervisor do
     |> Enum.sort()
   end
 
+  # A restart, or a second repo sharing the path, reuses the modules already loaded
+  # rather than redefining code a running migration may be executing.
   defp migration_module!(file) do
-    file
-    |> Code.compile_file()
-    |> Enum.map(&elem(&1, 0))
-    |> Enum.find(&function_exported?(&1, :__migration__, 0)) ||
+    modules =
+      case Code.require_file(file) do
+        nil -> modules_compiled_from(file)
+        compiled -> Enum.map(compiled, &elem(&1, 0))
+      end
+
+    Enum.find(modules, &function_exported?(&1, :__migration__, 0)) ||
       raise Ecto.MigrationError,
             "file #{Path.relative_to_cwd(file)} does not define an Ecto.Migration"
+  end
+
+  defp modules_compiled_from(file) do
+    source = file |> Path.expand() |> String.to_charlist()
+
+    for {module, _} <- :code.all_loaded(),
+        module.module_info(:compile)[:source] == source,
+        do: module
   end
 end

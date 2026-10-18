@@ -150,4 +150,115 @@ defmodule AshSqlite.MultiTenancyTest do
 
     for ref <- refs, do: assert_receive({:DOWN, ^ref, _, _, _})
   end
+
+  test "tenants that differ only by case get different files", %{dir: dir} do
+    start_repo(dir)
+
+    create!("Acme", "upper")
+    create!("acme", "lower")
+
+    assert length(db_files(dir)) == 2
+    assert titles("Acme") == ["upper"]
+  end
+
+  test "a bad tenant is refused in the caller, without starting a process", %{dir: dir} do
+    start_repo(dir)
+
+    assert_raise ArgumentError, ~r/expected a non-empty binary tenant/, fn ->
+      MultiTenancyRepo.tenant_repo(1, %{})
+    end
+
+    assert_raise ArgumentError, ~r/encodes to/, fn ->
+      MultiTenancyRepo.tenant_repo(String.duplicate("A", 100), %{})
+    end
+
+    assert %{active: 0} = DynamicSupervisor.count_children(MultiTenancyRepo.Tenants)
+  end
+
+  test "a caller that finds a dead tenant still in the Registry opens a new one", %{dir: dir} do
+    start_repo(dir)
+    old_instance = MultiTenancyRepo.tenant_repo("acme", %{})
+    [{tenant, _}] = Registry.lookup(MultiTenancyRepo.TenantRegistry, "acme")
+
+    Process.exit(tenant, :kill)
+    instance = MultiTenancyRepo.tenant_repo("acme", %{})
+
+    assert instance != old_instance
+    assert Process.alive?(instance)
+  end
+
+  test "stopping a tenant stops its instance before it returns", %{dir: dir} do
+    start_repo(dir)
+    instance = MultiTenancyRepo.tenant_repo("acme", %{})
+    [{tenant, _}] = Registry.lookup(MultiTenancyRepo.TenantRegistry, "acme")
+
+    :ok = DynamicSupervisor.terminate_child(MultiTenancyRepo.Tenants, tenant)
+
+    refute Process.alive?(instance)
+  end
+
+  test "a tenant whose instance crashes stops too", %{dir: dir} do
+    start_repo(dir)
+    instance = MultiTenancyRepo.tenant_repo("acme", %{})
+    [{tenant, _}] = Registry.lookup(MultiTenancyRepo.TenantRegistry, "acme")
+    ref = Process.monitor(tenant)
+
+    Process.exit(instance, :kill)
+
+    assert_receive {:DOWN, ^ref, _, _, _}
+  end
+
+  test "an open that outlasts open_timeout raises and stops the tenant", %{dir: dir} do
+    migrations = Path.join(dir, "migrations")
+    File.mkdir_p!(migrations)
+
+    File.write!(Path.join(migrations, "20260101000000_slow.exs"), """
+    defmodule AshSqlite.Test.MultiTenancyMigrations.Slow do
+      use Ecto.Migration
+      def up, do: Process.sleep(1_000)
+    end
+    """)
+
+    start_repo(Path.join(dir, "tenants"), migrations_path: migrations, open_timeout: 50)
+
+    assert_raise RuntimeError, ~r/did not open within 50ms/, fn ->
+      MultiTenancyRepo.tenant_repo("acme", %{})
+    end
+
+    assert %{active: 0} = DynamicSupervisor.count_children(MultiTenancyRepo.Tenants)
+  end
+
+  test "reaching max_children names the option", %{dir: dir} do
+    start_repo(dir, max_children: 1)
+    MultiTenancyRepo.tenant_repo("acme", %{})
+
+    assert_raise RuntimeError, ~r/max_children/, fn ->
+      MultiTenancyRepo.tenant_repo("globex", %{})
+    end
+  end
+
+  test "restarting the repo does not recompile the migrations", %{dir: dir} do
+    start_repo(dir)
+    stop_supervised!(MultiTenancyRepo)
+
+    stderr = ExUnit.CaptureIO.capture_io(:stderr, fn -> start_repo(dir) end)
+
+    refute stderr =~ "redefining module"
+    MultiTenancyRepo.tenant_repo("acme", %{})
+  end
+
+  test "tenants: is read from the application env, not from init/2", %{dir: dir} do
+    Application.put_env(:ash_sqlite, MultiTenancyRepo, tenants: [dir: dir])
+    on_exit(fn -> Application.delete_env(:ash_sqlite, MultiTenancyRepo) end)
+
+    assert %{start: {AshSqlite.MultiTenancy.Supervisor, :start_link, _}} =
+             MultiTenancyRepo.child_spec([])
+  end
+
+  test "init/2 keeps tenant and tenants away from the adapter" do
+    {:ok, config} = MultiTenancyRepo.init(:runtime, tenant: "acme", tenants: [dir: "x"])
+
+    refute Keyword.has_key?(config, :tenant)
+    refute Keyword.has_key?(config, :tenants)
+  end
 end

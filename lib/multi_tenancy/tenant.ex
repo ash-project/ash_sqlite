@@ -6,103 +6,75 @@ defmodule AshSqlite.MultiTenancy.Tenant do
   @moduledoc """
   The process that owns one tenant's database: it opens and migrates the file, and its repo instance lives and dies with it.
   """
-  use GenServer, restart: :temporary
+  use GenServer, restart: :temporary, shutdown: 30_000
 
-  @unreserved ~c"abcdefghijklmnopqrstuvwxyz0123456789-_."
-
-  # 255 is the usual per-name limit. `-shm` is the longest suffix SQLite adds to a
-  # database's name, and `.db` is ours.
-  @max_encoded_bytes 255 - byte_size(".db") - byte_size("-shm")
-
-  def start_link({repo, tenant}) do
-    GenServer.start_link(__MODULE__, {repo, tenant},
+  def start_link({repo, tenant, path}) do
+    GenServer.start_link(__MODULE__, {repo, tenant, path},
       name: {:via, Registry, {AshSqlite.MultiTenancy.Supervisor.registry(repo), tenant}}
     )
   end
 
-  @doc "The repo instance of the tenant process `pid`, waiting for its database to open."
-  @spec instance(pid(), term()) :: pid()
-  def instance(pid, tenant) do
-    GenServer.call(pid, :instance, :infinity)
+  @doc "The repo instance of the tenant process `pid`, waiting up to `timeout` for its database to open."
+  @spec instance(pid(), timeout()) ::
+          {:ok, pid()} | :stopped | {:timeout, pid()} | {:error, term()}
+  def instance(pid, timeout) do
+    {:ok, GenServer.call(pid, :instance, timeout)}
   catch
+    :exit, {reason, {GenServer, :call, _}}
+    when reason in [:noproc, :normal, :shutdown, :killed] ->
+      :stopped
+
+    :exit, {{:shutdown, _}, {GenServer, :call, _}} ->
+      :stopped
+
+    :exit, {:timeout, {GenServer, :call, _}} ->
+      {:timeout, pid}
+
     :exit, reason ->
-      raise "could not open the database of tenant #{inspect(tenant)}: #{Exception.format_exit(reason)}"
+      {:error, reason}
   end
 
   @impl true
   # `DynamicSupervisor.start_child/2` runs `init/1` inside the supervisor, so opening
   # here would queue every tenant behind every other tenant's open.
-  def init({repo, tenant}), do: {:ok, {repo, tenant}, {:continue, :open}}
+  def init({repo, tenant, path}) do
+    # Trapped so `terminate/2` can stop the instance before this process leaves the
+    # Registry; otherwise a successor could open the file while the old pool still holds it.
+    Process.flag(:trap_exit, true)
+    {:ok, %{repo: repo, tenant: tenant, path: path, instance: nil}, {:continue, :open}}
+  end
 
   @impl true
-  def handle_continue(:open, {repo, tenant}) do
-    {:ok, meta} = registry_meta(repo)
-    dir = Keyword.fetch!(meta, :dir)
-    File.mkdir_p!(dir)
+  def handle_continue(:open, state) do
+    registry = AshSqlite.MultiTenancy.Supervisor.registry(state.repo)
+    {:ok, migrations} = Registry.meta(registry, :migrations)
+    File.mkdir_p!(Path.dirname(state.path))
 
-    {:ok, instance} =
-      repo.start_link(
-        name: nil,
-        database: Path.join(dir, encode(tenant) <> ".db"),
-        tenant: tenant
-      )
+    {:ok, instance} = state.repo.start_link(name: nil, database: state.path, tenant: state.tenant)
+    state = %{state | instance: instance}
 
-    Ecto.Migrator.run(repo, Keyword.fetch!(meta, :migrations), :up,
-      all: true,
-      dynamic_repo: instance,
-      log: false
-    )
-
+    Ecto.Migrator.run(state.repo, migrations, :up, all: true, dynamic_repo: instance, log: false)
     Ecto.Adapters.SQL.query!(instance, "SELECT 1", [])
 
-    {:noreply, %{repo: repo, tenant: tenant, instance: instance}}
+    {:noreply, state}
   end
 
   @impl true
   def handle_call(:instance, _from, state), do: {:reply, state.instance, state}
 
-  defp registry_meta(repo) do
-    registry = AshSqlite.MultiTenancy.Supervisor.registry(repo)
-
-    with {:ok, migrations} <- Registry.meta(registry, :migrations),
-         {:ok, dir} <- Registry.meta(registry, :dir) do
-      {:ok, migrations: migrations, dir: dir}
-    end
+  @impl true
+  def handle_info({:EXIT, instance, reason}, %{instance: instance} = state) do
+    {:stop, reason, %{state | instance: nil}}
   end
 
-  # Escapes rather than sanitises, so no two tenants share a file and no tenant names a
-  # path outside `dir`.
-  defp encode(tenant) when is_binary(tenant) and byte_size(tenant) > 0 do
-    encoded = tenant |> :binary.bin_to_list() |> Enum.map_join(&encode_byte/1)
+  def handle_info({:EXIT, _pid, _reason}, state), do: {:noreply, state}
 
-    if byte_size(encoded) > @max_encoded_bytes do
-      raise ArgumentError, """
-      tenant #{inspect(tenant)} encodes to #{byte_size(encoded)} bytes, and a \
-      database name can be at most #{@max_encoded_bytes}. Use a shorter identifier, \
-      such as a slug or a UUID, as the tenant.
-      """
-    end
-
-    encoded
+  @impl true
+  def terminate(_reason, %{instance: instance}) when is_pid(instance) do
+    Supervisor.stop(instance, :shutdown)
+  catch
+    :exit, _ -> :ok
   end
 
-  defp encode(tenant) do
-    raise ArgumentError, """
-    expected a non-empty binary tenant, got: #{inspect(tenant)}
-
-    A tenant names a database file, and stringifying another term here would let two \
-    tenants that Ash tells apart name one file. Convert it where you set the tenant.
-    """
-  end
-
-  defp encode_byte(byte) when byte in @unreserved, do: <<byte>>
-
-  defp encode_byte(byte) do
-    <<hi::4, lo::4>> = <<byte>>
-    <<?~, hex(hi), hex(lo)>>
-  end
-
-  # Lowercase, so two encodings never differ only by case.
-  defp hex(nibble) when nibble < 10, do: ?0 + nibble
-  defp hex(nibble), do: ?a + nibble - 10
+  def terminate(_reason, _state), do: :ok
 end

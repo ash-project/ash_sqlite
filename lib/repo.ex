@@ -68,12 +68,18 @@ defmodule AshSqlite.Repo do
       defoverridable child_spec: 1
 
       @behaviour AshSqlite.Repo
+      @ash_sqlite_otp_app otp_app
       @before_compile AshSqlite.Repo.BeforeCompile
 
       defoverridable insert: 2, insert: 1, insert!: 2, insert!: 1
 
-      def child_spec(opts),
-        do: AshSqlite.MultiTenancy.Supervisor.child_spec(__MODULE__, opts, super(opts))
+      def child_spec(opts) do
+        AshSqlite.MultiTenancy.Supervisor.child_spec(
+          __MODULE__,
+          Keyword.merge(Application.get_env(@ash_sqlite_otp_app, __MODULE__, []), opts),
+          super(Keyword.delete(opts, :tenants))
+        )
+      end
 
       def installed_extensions, do: []
       def migrations_path, do: nil
@@ -83,6 +89,7 @@ defmodule AshSqlite.Repo do
       def init(_, config) do
         new_config =
           config
+          |> Keyword.drop([:tenant, :tenants])
           |> Keyword.put(:installed_extensions, installed_extensions())
           |> Keyword.put(:migrations_path, migrations_path())
           |> Keyword.put(:case_sensitive_like, :on)
