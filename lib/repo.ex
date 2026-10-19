@@ -20,6 +20,10 @@ defmodule AshSqlite.Repo do
 
   - `:tenant_migrations_path` - The path where your tenant migrations are stored (only relevant for a multitenant implementation)
   - `:snapshots_path` - The path where the resource snapshots for the migration generator are stored.
+
+  In the repo's application config, as it is read before `init/2` runs:
+
+  - `:tenants` - Opens one database file per tenant. See `AshSqlite.MultiTenancy` for its options.
   """
 
   @doc "Use this to inform the data layer about what extensions are installed"
@@ -40,6 +44,9 @@ defmodule AshSqlite.Repo do
   tenant has its own database file, and the tenant is applied by choosing the
   instance. Every resource on a tenant repo must use `strategy :context`, so put
   tables shared across tenants on a repo module of their own.
+
+  `AshSqlite.MultiTenancy.tenant_repo/3` is a default implementation that opens
+  one database file per tenant.
 
   `context.type` is `:read` for queries and aggregates, and `:mutate` for writes and
   for opening a transaction.
@@ -65,10 +72,21 @@ defmodule AshSqlite.Repo do
         adapter: adapter,
         otp_app: otp_app
 
+      defoverridable child_spec: 1
+
       @behaviour AshSqlite.Repo
+      @ash_sqlite_otp_app otp_app
       @before_compile AshSqlite.Repo.BeforeCompile
 
       defoverridable insert: 2, insert: 1, insert!: 2, insert!: 1
+
+      def child_spec(opts) do
+        AshSqlite.MultiTenancy.Supervisor.child_spec(
+          __MODULE__,
+          Keyword.merge(Application.get_env(@ash_sqlite_otp_app, __MODULE__, []), opts),
+          super(Keyword.delete(opts, :tenants))
+        )
+      end
 
       def installed_extensions, do: []
       def migrations_path, do: nil
@@ -78,6 +96,7 @@ defmodule AshSqlite.Repo do
       def init(_, config) do
         new_config =
           config
+          |> Keyword.drop([:tenant, :tenants])
           |> Keyword.put(:installed_extensions, installed_extensions())
           |> Keyword.put(:migrations_path, migrations_path())
           |> Keyword.put(:case_sensitive_like, :on)
