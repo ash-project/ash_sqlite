@@ -14,7 +14,11 @@ defmodule AshSqlite.MultiTenancy.Tenant do
     )
   end
 
-  @doc "The repo instance of the tenant process `pid`, waiting up to `timeout` for its database to open."
+  @doc """
+  The repo instance of the tenant process `pid`, waiting up to `timeout` for its database to open.
+
+  `:stopped` means the process has exited.
+  """
   @spec instance(pid(), timeout()) ::
           {:ok, pid()} | :stopped | {:timeout, pid()} | {:error, term()}
   def instance(pid, timeout) do

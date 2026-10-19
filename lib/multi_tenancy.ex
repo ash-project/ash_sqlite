@@ -35,7 +35,7 @@ defmodule AshSqlite.MultiTenancy do
   # a database's name, and `.db` is ours.
   @max_encoded_bytes 255 - byte_size(".db") - byte_size("-journal")
 
-  @attempts 100
+  @attempts 3
 
   @doc "The repo instance serving `tenant`, opening its database if it is not open."
   @spec tenant_repo(module(), term(), map()) :: pid()
@@ -55,29 +55,24 @@ defmodule AshSqlite.MultiTenancy do
     {:ok, open_timeout} = Registry.meta(registry, :open_timeout)
     path = Path.join(dir, encode(tenant) <> ".db")
 
-    instance(repo, registry, tenant, path, open_timeout, @attempts)
+    instance(repo, tenant, path, open_timeout, @attempts)
   end
 
-  defp instance(_repo, _registry, tenant, _path, _open_timeout, 0) do
+  defp instance(_repo, tenant, _path, _open_timeout, 0) do
     raise "tenant #{inspect(tenant)} kept stopping while being opened"
   end
 
-  defp instance(repo, registry, tenant, path, open_timeout, attempts) do
-    pid =
-      case Registry.lookup(registry, tenant) do
-        [{pid, _}] -> pid
-        [] -> start_tenant(repo, tenant, path)
-      end
+  defp instance(repo, tenant, path, open_timeout, attempts) do
+    pid = start_tenant(repo, tenant, path)
 
     case Tenant.instance(pid, open_timeout) do
       {:ok, instance} ->
         instance
 
+      # `:stopped` arrives only after that tenant has exited, and registering a `:via`
+      # name replaces a dead pid's entry, so the next start registers a new tenant.
       :stopped ->
-        # The Registry drops a dead tenant only once it handles the exit, so a lookup
-        # straight after can return the same pid again.
-        Process.sleep(1)
-        instance(repo, registry, tenant, path, open_timeout, attempts - 1)
+        instance(repo, tenant, path, open_timeout, attempts - 1)
 
       {:timeout, pid} ->
         DynamicSupervisor.terminate_child(Supervisor.tenants(repo), pid)
@@ -95,6 +90,7 @@ defmodule AshSqlite.MultiTenancy do
       {:ok, pid} ->
         pid
 
+      # May be a tenant that is stopping; `instance/5` waits for it and retries.
       {:error, {:already_started, pid}} ->
         pid
 

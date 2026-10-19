@@ -261,4 +261,20 @@ defmodule AshSqlite.MultiTenancyTest do
     refute Keyword.has_key?(config, :tenant)
     refute Keyword.has_key?(config, :tenants)
   end
+
+  test "a caller arriving while a tenant stops waits for it, then opens a new one", %{dir: dir} do
+    start_repo(dir)
+    old_instance = MultiTenancyRepo.tenant_repo("acme", %{})
+    [{tenant, _}] = Registry.lookup(MultiTenancyRepo.TenantRegistry, "acme")
+
+    stopping =
+      Task.async(fn -> DynamicSupervisor.terminate_child(MultiTenancyRepo.Tenants, tenant) end)
+
+    instance = MultiTenancyRepo.tenant_repo("acme", %{})
+    Task.await(stopping)
+
+    assert instance != old_instance
+    assert Process.alive?(instance)
+    refute Process.alive?(old_instance)
+  end
 end
