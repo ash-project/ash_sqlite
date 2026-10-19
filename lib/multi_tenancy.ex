@@ -103,9 +103,22 @@ defmodule AshSqlite.MultiTenancy do
     end
   end
 
-  # Escapes rather than sanitises, so no two tenants share a file and no tenant names a
-  # path outside `dir`.
-  defp encode(tenant) when is_binary(tenant) and byte_size(tenant) > 0 do
+  @doc """
+  The name, without its `.db` extension, of the file `tenant`'s database is stored in.
+
+  Escapes rather than sanitises, so no two tenants share a file, even on a
+  case-insensitive filesystem, and no tenant names a path outside `dir`. Lowercase
+  letters, digits, `-`, `_` and `.` are kept, and every other byte becomes `~` and two
+  lowercase hex digits:
+
+      iex> AshSqlite.MultiTenancy.encode("Acme:2026")
+      "~41cme~3a2026"
+
+  Raises `ArgumentError` for a tenant that is not a non-empty binary, or that encodes to
+  more than 244 bytes.
+  """
+  @spec encode(String.t()) :: String.t()
+  def encode(tenant) when is_binary(tenant) and byte_size(tenant) > 0 do
     encoded = tenant |> :binary.bin_to_list() |> Enum.map_join(&encode_byte/1)
 
     if byte_size(encoded) > @max_encoded_bytes do
@@ -119,7 +132,7 @@ defmodule AshSqlite.MultiTenancy do
     encoded
   end
 
-  defp encode(tenant) do
+  def encode(tenant) do
     raise ArgumentError, """
     expected a non-empty binary tenant, got: #{inspect(tenant)}
 

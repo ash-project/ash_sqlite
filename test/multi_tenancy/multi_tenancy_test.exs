@@ -151,6 +151,16 @@ defmodule AshSqlite.MultiTenancyTest do
     for ref <- refs, do: assert_receive({:DOWN, ^ref, _, _, _})
   end
 
+  doctest AshSqlite.MultiTenancy
+
+  test "encode/1 is public, so a tenant's file name can be computed outside the repo" do
+    assert AshSqlite.MultiTenancy.encode("acme") == "acme"
+    assert AshSqlite.MultiTenancy.encode("a:b") == "a~3ab"
+    assert AshSqlite.MultiTenancy.encode("../../etc/x") == "..~2f..~2fetc~2fx"
+    assert AshSqlite.MultiTenancy.encode("Acme") == "~41cme"
+    assert AshSqlite.MultiTenancy.encode("a~3ab") == "a~7e3ab"
+  end
+
   test "tenants that differ only by case get different files", %{dir: dir} do
     start_repo(dir)
 
