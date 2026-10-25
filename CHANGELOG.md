@@ -11,6 +11,45 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.3.0](https://github.com/ash-project/ash_sqlite/compare/v0.2.19...v0.3.0) (2026-10-25)
+
+
+
+
+### Features:
+
+* support aggregates (#232) by Will Townsend
+
+### Improvements:
+
+* make AshSqlite.MultiTenancy.encode/1 public (#247) by Conor Sinclair
+
+* open one database per tenant under a supervisor the repo starts (#246) by Conor Sinclair
+
+* spike out simplifying multitenancy via moving config to repo by Zach Daniel
+
+* support `strategy :context` multitenancy via a tenant repo (#224) by Conor Sinclair
+
+* support `upsert_conflict/1` in upsert conditions (#237) by Nassim
+
+* ash_postgres parity, part one (#236) by Zephyr Lykos
+
+### Bug Fixes:
+
+* dump in values through types that aren't cast in queries by Zach Daniel
+
+* define min_sqlite_version/0 in test repos (#240) by Conor Sinclair
+
+* remove leftover postgres-isms by Zephyr Lykos
+
+* rename leftover min_pg_version by Zephyr Lykos
+
+* move dsl transformers to verifiers by Zephyr Lykos
+
+* reenable migrate task by Zephyr Lykos
+
+* set match_tenant? on polymorphic references (#231) by Conor Sinclair
+
 ## Unreleased
 
 ### Improvements:
