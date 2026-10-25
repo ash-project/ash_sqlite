@@ -747,21 +747,28 @@ defmodule AshSqlite.SqlImplementation do
   end
 
   defp dump_in_values(query, bindings, values, item_type, constraints) do
-    ecto_type =
-      parameterized_type(item_type, constraints) ||
-        item_type
-        |> Ash.Type.get_type()
-        |> Ash.Type.storage_type(constraints)
+    case parameterized_type(item_type, constraints) do
+      # A type that isn't cast in queries has no Ecto type, and its storage type may not be one
+      # the adapter knows (like a database enum's name), so dump the values through the type itself
+      nil ->
+        Enum.map(values, fn value ->
+          case Ash.Type.dump_to_native(item_type, value, constraints) do
+            {:ok, value} -> value
+            _ -> value
+          end
+        end)
 
-    adapter = sqlite_adapter(query, bindings)
+      ecto_type ->
+        adapter = sqlite_adapter(query, bindings)
 
-    Enum.map(values, fn value ->
-      case Ecto.Type.adapter_dump(adapter, ecto_type, value) do
-        {:ok, value} -> value
-        # Some custom/already-dumped values may not accept another dump; keep the old value.
-        _ -> value
-      end
-    end)
+        Enum.map(values, fn value ->
+          case Ecto.Type.adapter_dump(adapter, ecto_type, value) do
+            {:ok, value} -> value
+            # Some custom/already-dumped values may not accept another dump; keep the old value.
+            _ -> value
+          end
+        end)
+    end
   end
 
   # Every `AshSqlite.Repo` is compiled with `adapter: Ecto.Adapters.SQLite3`,

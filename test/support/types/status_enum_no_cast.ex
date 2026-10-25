@@ -8,5 +8,5 @@ defmodule AshSqlite.Test.Types.StatusEnumNoCast do
 
   def storage_type, do: :status
 
-  def cast_in_query?, do: false
+  def cast_in_query?(_), do: false
 end
