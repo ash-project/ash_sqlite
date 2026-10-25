@@ -276,10 +276,14 @@ defmodule AshSqlite.MultiTenancyTest do
     start_repo(dir)
     old_instance = MultiTenancyRepo.tenant_repo("acme", %{})
     [{tenant, _}] = Registry.lookup(MultiTenancyRepo.TenantRegistry, "acme")
+    ref = Process.monitor(old_instance)
 
     stopping =
       Task.async(fn -> DynamicSupervisor.terminate_child(MultiTenancyRepo.Tenants, tenant) end)
 
+    # The tenant stops its instance before it leaves the registry, so a caller from here on
+    # meets the stopping tenant (or its absence) rather than the old instance
+    assert_receive {:DOWN, ^ref, :process, _, _}
     instance = MultiTenancyRepo.tenant_repo("acme", %{})
     Task.await(stopping)
 
