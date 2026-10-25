@@ -49,6 +49,8 @@ defmodule AshSqlite.MultiTenancy.Tenant do
   end
 
   @impl true
+  # `path` is the tenant directory joined with the encoded tenant, which can't contain `/`
+  # sobelow_skip ["Traversal.FileModule"]
   def handle_continue(:open, state) do
     registry = AshSqlite.MultiTenancy.Supervisor.registry(state.repo)
     {:ok, migrations} = Registry.meta(registry, :migrations)
