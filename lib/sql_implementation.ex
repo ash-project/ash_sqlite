@@ -7,7 +7,6 @@ defmodule AshSqlite.SqlImplementation do
   use AshSql.Implementation
 
   require Ecto.Query
-  require Ash.Expr
 
   @impl true
   def aggregate_strategy(_resource), do: :grouped
@@ -975,9 +974,6 @@ defmodule AshSqlite.SqlImplementation do
         else
           Ecto.Query.dynamic(type(^expr, ^type))
         end
-
-      nil ->
-        expr
 
       type ->
         Ecto.Query.dynamic(type(^expr, ^type))

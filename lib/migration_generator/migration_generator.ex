@@ -5,8 +5,6 @@
 defmodule AshSqlite.MigrationGenerator do
   @moduledoc false
 
-  require Logger
-
   alias AshSqlite.MigrationGenerator.{Operation, Phase}
 
   defstruct snapshot_path: nil,

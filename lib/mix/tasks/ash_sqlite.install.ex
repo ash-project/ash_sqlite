@@ -6,8 +6,6 @@ if Code.ensure_loaded?(Igniter) do
   defmodule Mix.Tasks.AshSqlite.Install do
     @moduledoc "Installs AshSqlite. Should be run with `mix igniter.install ash_sqlite`"
     @shortdoc @moduledoc
-    require Igniter.Code.Common
-    require Igniter.Code.Function
     use Igniter.Mix.Task
 
     @impl true
