@@ -199,30 +199,29 @@ defmodule AshSqlite.SqlImplementation do
       {left, acc} =
         AshSql.Expr.dynamic_expr(query, left, bindings, pred_embedded? || embedded?, :string, acc)
 
+      # A literal pattern is lowercased by SQLite rather than `String.downcase/1`, because
+      # `LOWER` only folds ASCII and both sides must fold the same way or a non-ASCII suffix
+      # stops matching itself. Ecto's `like/2` emits no `ESCAPE` clause, and without one SQLite
+      # reads the escaping backslashes literally.
       {inner_dyn, acc} =
-        cond do
-          is_binary(right) ->
-            text = escape_ends_with(String.downcase(right))
-            {Ecto.Query.dynamic(like(fragment("LOWER(?)", ^left), ^text)), acc}
+        if is_binary(right) or is_struct(right, Ash.CiString) do
+          text = right |> to_string() |> escape_ends_with()
 
-          is_struct(right, Ash.CiString) ->
-            text = escape_ends_with(String.downcase(right.string))
-            {Ecto.Query.dynamic(like(fragment("LOWER(?)", ^left), ^text)), acc}
+          {Ecto.Query.dynamic(fragment("LOWER(?) LIKE LOWER(?) ESCAPE '\\'", ^left, ^text)), acc}
+        else
+          {right, acc} =
+            AshSql.Expr.dynamic_expr(
+              query,
+              right,
+              bindings,
+              pred_embedded? || embedded?,
+              :string,
+              acc
+            )
 
-          true ->
-            {right, acc} =
-              AshSql.Expr.dynamic_expr(
-                query,
-                right,
-                bindings,
-                pred_embedded? || embedded?,
-                :string,
-                acc
-              )
-
-            {Ecto.Query.dynamic(
-               like(fragment("LOWER(?)", ^left), fragment("('%' || LOWER(?))", ^right))
-             ), acc}
+          {Ecto.Query.dynamic(
+             like(fragment("LOWER(?)", ^left), fragment("('%' || LOWER(?))", ^right))
+           ), acc}
         end
 
       if boolean_type?(type) do

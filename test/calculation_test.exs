@@ -368,6 +368,34 @@ defmodule AshSqlite.CalculationTest do
            |> Ash.read_one!()
   end
 
+  test "string_ends_with with CiString matches a non-ASCII suffix" do
+    Post
+    |> Ash.Changeset.for_create(:create, %{title: "CAFÉ", category: "CAFÉ"})
+    |> Ash.create!()
+
+    assert Post
+           |> Ash.Query.filter(string_ends_with(title, ^Ash.CiString.new("CAFÉ")))
+           |> Ash.read_one!()
+
+    assert Post
+           |> Ash.Query.filter(string_ends_with(category, "CAFÉ"))
+           |> Ash.read_one!()
+  end
+
+  test "string_ends_with with CiString matches wildcard characters literally" do
+    Post
+    |> Ash.Changeset.for_create(:create, %{title: "discount 50%_off"})
+    |> Ash.create!()
+
+    assert Post
+           |> Ash.Query.filter(string_ends_with(title, ^Ash.CiString.new("50%_OFF")))
+           |> Ash.read_one!()
+
+    refute Post
+           |> Ash.Query.filter(string_ends_with(title, ^Ash.CiString.new("%off")))
+           |> Ash.read_one!()
+  end
+
   test "string_ends_with matches a suffix" do
     Post
     |> Ash.Changeset.for_create(:create, %{title: "foo-dude-bar"})
