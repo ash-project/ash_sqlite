@@ -275,6 +275,52 @@ defmodule AshSqlite.CalculationTest do
     assert Post
            |> Ash.Query.filter(contains(title, "-dude-"))
            |> Ash.read_one!()
+
+    refute Post
+           |> Ash.Query.filter(contains(title, "-DUDE-"))
+           |> Ash.read_one!()
+  end
+
+  test "contains with CiString matches case-insensitively" do
+    Post
+    |> Ash.Changeset.for_create(:create, %{
+      title: "foo-dude-bar",
+      category: "News"
+    })
+    |> Ash.create!()
+
+    assert Post
+           |> Ash.Query.filter(contains(title, ^Ash.CiString.new("-DUDE-")))
+           |> Ash.read_one!()
+
+    assert Post
+           |> Ash.Query.filter(contains(category, "NEW"))
+           |> Ash.read_one!()
+
+    assert Post
+           |> Ash.Query.filter(contains(category, ^Ash.CiString.new("new")))
+           |> Ash.read_one!()
+  end
+
+  test "string_starts_with with CiString matches case-insensitively" do
+    Post
+    |> Ash.Changeset.for_create(:create, %{
+      title: "foo-dude-bar",
+      category: "News"
+    })
+    |> Ash.create!()
+
+    assert Post
+           |> Ash.Query.filter(string_starts_with(title, ^Ash.CiString.new("FOO-")))
+           |> Ash.read_one!()
+
+    refute Post
+           |> Ash.Query.filter(string_starts_with(title, "FOO-"))
+           |> Ash.read_one!()
+
+    assert Post
+           |> Ash.Query.filter(string_starts_with(category, "NEW"))
+           |> Ash.read_one!()
   end
 
   test "string_starts_with matches a prefix" do
@@ -298,6 +344,27 @@ defmodule AshSqlite.CalculationTest do
 
     refute Post
            |> Ash.Query.filter(string_starts_with(title, "a%"))
+           |> Ash.read_one!()
+  end
+
+  test "string_ends_with with CiString matches case-insensitively" do
+    Post
+    |> Ash.Changeset.for_create(:create, %{
+      title: "foo-dude-bar",
+      category: "News"
+    })
+    |> Ash.create!()
+
+    assert Post
+           |> Ash.Query.filter(string_ends_with(title, ^Ash.CiString.new("-BAR")))
+           |> Ash.read_one!()
+
+    refute Post
+           |> Ash.Query.filter(string_ends_with(title, "-BAR"))
+           |> Ash.read_one!()
+
+    assert Post
+           |> Ash.Query.filter(string_ends_with(category, "WS"))
            |> Ash.read_one!()
   end
 
