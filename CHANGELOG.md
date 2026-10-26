@@ -11,6 +11,19 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.3.1](https://github.com/ash-project/ash_sqlite/compare/v0.3.0...v0.3.1) (2026-10-26)
+
+
+
+
+### Bug Fixes:
+
+* apply attribute multitenancy when returning skipped upserts by Zach Daniel
+
+* match non-ASCII and wildcard suffixes in ci_string string_ends_with by Zach Daniel
+
+* honour ci_string in contains, starts_with, and ends_with (#248) by Kyushu21
+
 ## [v0.3.0](https://github.com/ash-project/ash_sqlite/compare/v0.2.19...v0.3.0) (2026-10-25)
 
 
