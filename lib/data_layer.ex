@@ -1455,13 +1455,28 @@ defmodule AshSqlite.DataLayer do
           resource
           |> Ash.Query.do_filter(and: [key_filters])
           |> Ash.Query.set_tenant(changeset.tenant)
+          # Attribute multitenancy is applied by the read action, which a query passed
+          # straight to `Ash.Query.data_layer_query/1` doesn't run.
+          |> then(&AshSql.Join.handle_attribute_multitenancy(&1, changeset.tenant, &1.action))
 
         {:ok,
          {:upsert_skipped, ash_query,
           fn ->
             with {:ok, ecto_query} <- Ash.Query.data_layer_query(ash_query),
-                 {:ok, [result]} <- run_query(ecto_query, resource) do
-              {:ok, Ash.Resource.put_metadata(result, :upsert_skipped, true)}
+                 {:ok, results} <- run_query(ecto_query, resource) do
+              case results do
+                [result] ->
+                  {:ok, Ash.Resource.put_metadata(result, :upsert_skipped, true)}
+
+                # e.g. the primary key or an `all_tenants?` identity conflicting with
+                # another tenant's record
+                [] ->
+                  {:error,
+                   Ash.Error.Changes.StaleRecord.exception(
+                     resource: resource,
+                     filter: changeset.filter
+                   )}
+              end
             end
           end}}
 

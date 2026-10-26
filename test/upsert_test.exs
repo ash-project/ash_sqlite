@@ -9,6 +9,42 @@ defmodule AshSqlite.Test.UpsertTest do
   import Ash.Expr
   require Ash.Query
 
+  defmodule TenantDomain do
+    @moduledoc false
+    use Ash.Domain, validate_config_inclusion?: false
+
+    resources do
+      allow_unregistered?(true)
+    end
+  end
+
+  defmodule TenantPost do
+    @moduledoc false
+    use Ash.Resource, domain: TenantDomain, data_layer: AshSqlite.DataLayer
+
+    sqlite do
+      table("posts")
+      repo(AshSqlite.TestRepo)
+    end
+
+    multitenancy do
+      strategy(:attribute)
+      attribute(:category)
+    end
+
+    actions do
+      defaults([:read, create: [:id, :title]])
+    end
+
+    attributes do
+      uuid_primary_key(:id, writable?: true)
+      attribute(:title, :string, public?: true)
+      attribute(:category, :string, allow_nil?: false)
+      create_timestamp(:created_at)
+      update_timestamp(:updated_at)
+    end
+  end
+
   test "upserting results in the same created_at timestamp, but a new updated_at timestamp" do
     id = Ash.UUID.generate()
 
@@ -189,5 +225,27 @@ defmodule AshSqlite.Test.UpsertTest do
                  condition
                )
     end
+  end
+
+  test "a skipped upsert doesn't return a record in another tenant" do
+    post = Ash.create!(TenantPost, %{title: "theirs"}, tenant: "org2")
+
+    upsert_opts = [upsert?: true, upsert_fields: [:title], tenant: "org1"]
+
+    for opts <- [upsert_opts, [return_skipped_upsert?: true] ++ upsert_opts] do
+      assert {:error, %Ash.Error.Invalid{errors: [%Ash.Error.Changes.StaleRecord{}]}} =
+               Ash.create(TenantPost, %{id: post.id, title: "hello"}, opts)
+    end
+
+    assert %Ash.BulkResult{records: []} =
+             Ash.bulk_create(
+               [%{id: post.id, title: "hello"}],
+               TenantPost,
+               :create,
+               [return_skipped_upsert?: true, return_records?: true, return_errors?: true] ++
+                 upsert_opts
+             )
+
+    assert %{title: "theirs"} = Ash.get!(TenantPost, post.id, tenant: "org2")
   end
 end
