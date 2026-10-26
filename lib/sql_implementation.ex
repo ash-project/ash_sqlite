@@ -121,6 +121,122 @@ defmodule AshSqlite.SqlImplementation do
 
   def expr(
         query,
+        %Ash.Query.Function.Contains{arguments: [left, right], embedded?: pred_embedded?},
+        bindings,
+        embedded?,
+        acc,
+        type
+      ) do
+    if ci_string?(left) or ci_string?(right) do
+      {left, acc} =
+        AshSql.Expr.dynamic_expr(query, left, bindings, pred_embedded? || embedded?, :string, acc)
+
+      {right, acc} =
+        AshSql.Expr.dynamic_expr(
+          query,
+          right,
+          bindings,
+          pred_embedded? || embedded?,
+          :string,
+          acc
+        )
+
+      inner_dyn = Ecto.Query.dynamic(fragment("instr(LOWER(?), LOWER(?)) > 0", ^left, ^right))
+
+      if boolean_type?(type) do
+        {:ok, Ecto.Query.dynamic(type(^inner_dyn, :boolean)), acc}
+      else
+        {:ok, inner_dyn, acc}
+      end
+    else
+      :error
+    end
+  end
+
+  def expr(
+        query,
+        %Ash.Query.Function.StringStartsWith{arguments: [left, right], embedded?: pred_embedded?},
+        bindings,
+        embedded?,
+        acc,
+        type
+      ) do
+    if ci_string?(left) or ci_string?(right) do
+      {left, acc} =
+        AshSql.Expr.dynamic_expr(query, left, bindings, pred_embedded? || embedded?, :string, acc)
+
+      {right, acc} =
+        AshSql.Expr.dynamic_expr(
+          query,
+          right,
+          bindings,
+          pred_embedded? || embedded?,
+          :string,
+          acc
+        )
+
+      inner_dyn = Ecto.Query.dynamic(fragment("instr(LOWER(?), LOWER(?)) = 1", ^left, ^right))
+
+      if boolean_type?(type) do
+        {:ok, Ecto.Query.dynamic(type(^inner_dyn, :boolean)), acc}
+      else
+        {:ok, inner_dyn, acc}
+      end
+    else
+      :error
+    end
+  end
+
+  def expr(
+        query,
+        %Ash.Query.Function.StringEndsWith{arguments: [left, right], embedded?: pred_embedded?},
+        bindings,
+        embedded?,
+        acc,
+        type
+      ) do
+    if ci_string?(left) or ci_string?(right) do
+      {left, acc} =
+        AshSql.Expr.dynamic_expr(query, left, bindings, pred_embedded? || embedded?, :string, acc)
+
+      {inner_dyn, acc} =
+        cond do
+          is_binary(right) ->
+            text = escape_ends_with(String.downcase(right))
+            {Ecto.Query.dynamic(like(fragment("LOWER(?)", ^left), ^text)), acc}
+
+          is_struct(right, Ash.CiString) ->
+            text = escape_ends_with(String.downcase(right.string))
+            {Ecto.Query.dynamic(like(fragment("LOWER(?)", ^left), ^text)), acc}
+
+          true ->
+            {right, acc} =
+              AshSql.Expr.dynamic_expr(
+                query,
+                right,
+                bindings,
+                pred_embedded? || embedded?,
+                :string,
+                acc
+              )
+
+            {Ecto.Query.dynamic(
+               like(fragment("LOWER(?)", ^left), fragment("('%' || LOWER(?))", ^right))
+             ), acc}
+        end
+
+      if boolean_type?(type) do
+        {:ok, Ecto.Query.dynamic(type(^inner_dyn, :boolean)), acc}
+      else
+        {:ok, inner_dyn, acc}
+      end
+    else
+      :error
+    end
+  end
+
+  def expr(
+        query,
         %Ash.Query.Function.GetPath{
           arguments: [%Ash.Query.Ref{attribute: %{type: type}}, right]
         } = get_path,
@@ -785,6 +901,32 @@ defmodule AshSqlite.SqlImplementation do
   defp boolean_type?(:boolean), do: true
   defp boolean_type?({:boolean, _}), do: true
   defp boolean_type?(_), do: false
+
+  defp ci_string?(%Ash.CiString{}), do: true
+
+  defp ci_string?(%Ash.Query.Ref{attribute: %{type: type, constraints: constraints}}) do
+    ci_string_type?(type, constraints)
+  end
+
+  defp ci_string?(%Ash.Query.Ref{attribute: %{type: type}}) do
+    ci_string_type?(type, [])
+  end
+
+  defp ci_string?(%Ash.Query.Calculation{type: type, constraints: constraints}) do
+    ci_string_type?(type, constraints)
+  end
+
+  defp ci_string?(val) do
+    case Ash.Expr.determine_type(val) do
+      {:ok, {type, constraints}} -> ci_string_type?(type, constraints)
+      {:ok, type} -> ci_string_type?(type, [])
+      _ -> false
+    end
+  end
+
+  defp escape_ends_with(text) do
+    "%" <> String.replace(text, ~r/([\\%_])/u, "\\\\\\0")
+  end
 
   defp ci_string_type?({:parameterized, {inner_type, constraints}}, []) do
     parameterized_ci_string_type?(inner_type, constraints)
