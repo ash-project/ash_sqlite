@@ -31,11 +31,15 @@ defmodule AshSqlite.MultiTenancy.Supervisor do
     end
   end
 
+  # The repo is a configured module, not runtime input.
+  # sobelow_skip ["DOS.ModuleConcat"]
   def start_link({repo, _tenants, _base_repo} = arg) do
     Supervisor.start_link(__MODULE__, arg, name: Module.concat(repo, TenantSupervisor))
   end
 
+  # sobelow_skip ["DOS.ModuleConcat"]
   def registry(repo), do: Module.concat(repo, TenantRegistry)
+  # sobelow_skip ["DOS.ModuleConcat"]
   def tenants(repo), do: Module.concat(repo, Tenants)
 
   @impl true
@@ -79,6 +83,8 @@ defmodule AshSqlite.MultiTenancy.Supervisor do
 
   # A restart, or a second repo sharing the path, reuses the modules already loaded
   # rather than redefining code a running migration may be executing.
+  # Loading the project's own tenant migrations is the point of this function.
+  # sobelow_skip ["RCE.Compile"]
   defp migration_module!(file) do
     modules =
       case Code.require_file(file) do
