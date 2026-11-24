@@ -75,7 +75,7 @@ defmodule AshSqlite.MigrationGenerator do
 
           true ->
             Enum.each(files, fn {file, contents} ->
-              Mix.Generator.create_file(file, contents, force?: true)
+              Mix.Generator.create_file(file, contents, force: true)
             end)
         end
     end
